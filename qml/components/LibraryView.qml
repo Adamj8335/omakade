@@ -33,7 +33,7 @@ Item {
         keyNavigationEnabled: true
         highlightFollowsCurrentItem: true
         highlightMoveDuration: 110
-        cacheBuffer: height
+        cacheBuffer: height * 0.25
         reuseItems: true
         focus: true
         currentIndex: count > 0 ? Math.min(currentIndex, count - 1) : -1

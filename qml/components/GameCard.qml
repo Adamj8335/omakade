@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Window
 
 FocusScope {
     id: root
@@ -74,10 +75,10 @@ FocusScope {
             anchors.fill: parent
             source: root.coverPath
             asynchronous: true
-            cache: true
+            cache: false
             fillMode: Image.PreserveAspectCrop
-            sourceSize.width: Math.ceil(width * 2)
-            sourceSize.height: Math.ceil(height * 2)
+            sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
+            sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
             opacity: status === Image.Ready ? 1 : 0
             Behavior on opacity {
                 enabled: !Preferences.reducedMotion

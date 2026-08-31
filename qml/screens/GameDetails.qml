@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "../components"
 
 Item {
@@ -50,9 +51,10 @@ Item {
         height: Math.min(parent.height * 0.58, 500)
         source: root.game.heroPath || ""
         asynchronous: true
+        cache: false
         fillMode: Image.PreserveAspectCrop
-        sourceSize.width: Math.ceil(width * 2)
-        sourceSize.height: Math.ceil(height * 2)
+        sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
+        sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
         opacity: status === Image.Ready ? 0.48 : 0
     }
 
@@ -109,9 +111,10 @@ Item {
                     anchors.fill: parent
                     source: root.game.coverPath || ""
                     asynchronous: true
+                    cache: false
                     fillMode: Image.PreserveAspectCrop
-                    sourceSize.width: Math.ceil(width * 2)
-                    sourceSize.height: Math.ceil(height * 2)
+                    sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
+                    sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
                     opacity: status === Image.Ready ? 1 : 0
                 }
 
