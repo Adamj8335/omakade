@@ -28,7 +28,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: root.alpha(Theme.darkerBackground, 0.92)
+        color: root.alpha(Theme.darkerBackground, 0.76)
     }
 
     Rectangle {
@@ -95,7 +95,7 @@ Item {
 
             Rectangle {
                 Layout.preferredWidth: Math.min(330, root.width * 0.28)
-                Layout.preferredHeight: Layout.preferredWidth * 1.42
+                Layout.preferredHeight: Layout.preferredWidth * 1.5
                 Layout.alignment: Qt.AlignTop
                 radius: Math.max(6, Theme.cornerRadius)
                 clip: true
@@ -310,6 +310,128 @@ Item {
                             height: parent.height
                             radius: parent.radius
                             color: Theme.accent
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 18
+                    spacing: 10
+                    visible: root.game.source === "Steam" && Achievements.total > 0
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "ACHIEVEMENTS"
+                            color: Theme.brightForeground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 14
+                            font.weight: Font.Bold
+                            font.letterSpacing: 0.7
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: Achievements.unlocked + " / " + Achievements.total
+                            color: Theme.accent
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: Achievements.statusText
+                        color: Theme.mutedText
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: root.width < 1160 ? 1 : 2
+                        columnSpacing: 10
+                        rowSpacing: 10
+
+                        Repeater {
+                            model: Achievements
+
+                            Rectangle {
+                                required property string title
+                                required property string description
+                                required property string iconPath
+                                required property bool unlocked
+                                required property real rarity
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 260
+                                Layout.preferredHeight: 82
+                                radius: Math.max(6, Theme.cornerRadius)
+                                color: root.alpha(Theme.foreground, unlocked ? 0.075 : 0.035)
+                                border.color: unlocked
+                                              ? root.alpha(Theme.accent, 0.34)
+                                              : root.alpha(Theme.foreground, 0.10)
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 11
+                                    spacing: 12
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 54
+                                        Layout.preferredHeight: 54
+                                        radius: 5
+                                        color: root.alpha(Theme.darkerBackground, 0.54)
+                                        border.color: root.alpha(Theme.foreground, 0.12)
+                                        clip: true
+
+                                        Image {
+                                            anchors.fill: parent
+                                            source: iconPath
+                                            asynchronous: true
+                                            fillMode: Image.PreserveAspectFit
+                                            opacity: unlocked ? 1 : 0.42
+                                        }
+                                        Text {
+                                            visible: iconPath.length === 0
+                                            anchors.centerIn: parent
+                                            text: unlocked ? "◆" : "◇"
+                                            color: unlocked ? Theme.accent : Theme.mutedText
+                                            font.pixelSize: 19
+                                        }
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 3
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: title
+                                            color: unlocked ? Theme.brightForeground : Theme.foreground
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: 11
+                                            font.weight: Font.DemiBold
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: description
+                                            color: Theme.mutedText
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: 9
+                                            elide: Text.ElideRight
+                                        }
+                                        Text {
+                                            text: rarity > 0 ? rarity.toFixed(1) + "% OF PLAYERS" : "STEAM"
+                                            color: unlocked ? Theme.accent : root.alpha(Theme.foreground, 0.45)
+                                            font.family: Theme.fontFamily
+                                            font.pixelSize: 8
+                                            font.weight: Font.DemiBold
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

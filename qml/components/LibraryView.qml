@@ -63,9 +63,9 @@ Item {
             }
         }
 
-        readonly property int columns: Math.max(2, Math.floor(width / 188))
+        readonly property int columns: Math.max(2, Math.min(8, Math.floor(width / 210)))
         cellWidth: width / columns
-        cellHeight: Math.round(cellWidth * 1.42) + 64
+        cellHeight: Math.round(cellWidth * 1.5) + 64
 
         ScrollBar.vertical: ScrollBar {
             policy: ScrollBar.AsNeeded

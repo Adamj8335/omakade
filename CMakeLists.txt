@@ -15,6 +15,8 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS Concurrent Core Gui Network Qml Quick Q
 qt_standard_project_setup(REQUIRES 6.8)
 
 add_library(omakade_core STATIC
+  src/achievements/AchievementModel.cpp
+  src/achievements/AchievementModel.h
   src/app/AppSettings.cpp
   src/app/AppSettings.h
   src/app/SingleInstance.cpp

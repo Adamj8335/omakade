@@ -6,8 +6,13 @@
 #include <QColor>
 #include <QFileSystemWatcher>
 #include <QFutureWatcher>
+#include <QNetworkAccessManager>
+#include <QQueue>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QTimer>
+
+class AppSettings;
 
 class SteamGameModel final : public QAbstractListModel {
   Q_OBJECT
@@ -19,7 +24,8 @@ class SteamGameModel final : public QAbstractListModel {
   Q_PROPERTY(QString databasePath READ databasePath CONSTANT)
 
 public:
-  explicit SteamGameModel(const QString& databasePath = {}, QObject* parent = nullptr);
+  explicit SteamGameModel(const QString& databasePath = {}, AppSettings* settings = nullptr,
+                          QObject* parent = nullptr);
   ~SteamGameModel() override;
 
   [[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -48,6 +54,8 @@ private:
     SteamGameRecord steam;
     bool favorite = false;
     bool hidden = false;
+    int achievementsUnlocked = 0;
+    int achievementsTotal = 0;
     QColor accentStart;
     QColor accentEnd;
   };
@@ -60,6 +68,16 @@ private:
   void applyScan(const SteamScanResult& result);
   void rebuildWatchPaths(const SteamScanResult& result);
   void setStatus(const QString& status, const QString& error = {});
+  void requestMissingCovers();
+  void startNextCoverDownloads();
+  void downloadCover(const QString& appId, int attempt);
+  void applyCover(const QString& appId, const QString& path);
+  void pruneCoverCache();
+
+  struct CoverRequest {
+    QString appId;
+    int attempt = 0;
+  };
 
   QVector<Game> m_games;
   QSqlDatabase m_database;
@@ -72,4 +90,9 @@ private:
   bool m_steamDetected = false;
   QString m_statusText;
   QString m_errorText;
+  AppSettings* m_settings = nullptr;
+  QNetworkAccessManager m_network;
+  QQueue<CoverRequest> m_coverQueue;
+  QSet<QString> m_pendingCovers;
+  int m_activeCoverDownloads = 0;
 };

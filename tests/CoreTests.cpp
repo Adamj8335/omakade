@@ -1,3 +1,4 @@
+#include "achievements/AchievementModel.h"
 #include "app/AppSettings.h"
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
@@ -71,7 +72,15 @@ void createSteamFixture(const QString& root, const QString& secondLibrary) {
   writeFile(secondLibrary + QStringLiteral("/steamapps/appmanifest_10.acf"),
             manifest("10", "Counter-Strike", "Counter-Strike"));
   writeFile(root + QStringLiteral("/appcache/librarycache/10/library_600x900.jpg"), "cover");
+  writeFile(root + QStringLiteral("/appcache/librarycache/20/header.jpg"), "landscape");
+  writeFile(root + QStringLiteral("/appcache/librarycache/20/hash/library_capsule.jpg"),
+            "portrait");
   writeFile(root + QStringLiteral("/userdata/42/config/grid/10p.png"), "custom cover");
+  writeFile(
+      root + QStringLiteral("/userdata/42/config/librarycache/10.json"),
+      R"([["achievements",{"data":{"nAchieved":1,"nTotal":2,"vecHighlight":[{"strID":"WIN_ONE","strName":"First Win","strDescription":"Win once","strImage":"","bAchieved":true,"rtUnlocked":1700000000,"flAchieved":42.5}],"vecUnachieved":[{"strID":"WIN_TWO","strName":"Second Win","strDescription":"Win twice","strImage":"","bAchieved":false,"flAchieved":20.0}],"vecAchievedHidden":[]}}]])");
+  writeFile(root + QStringLiteral("/userdata/42/config/librarycache/achievement_progress.json"),
+            R"({"mapCache":[[10,{"unlocked":1,"total":2}]]})");
   writeFile(root + QStringLiteral("/userdata/42/config/localconfig.vdf"),
             "\"UserLocalConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"apps\" { "
             "\"10\" { \"LastPlayed\" \"1700000000\" \"Playtime\" \"125\" } } } } } }\n");
@@ -90,7 +99,9 @@ private slots:
   void valveKeyValuesParsesNestedAndEscapedValues();
   void valveKeyValuesRejectsMalformedInput();
   void steamScannerImportsLibrariesAndCustomArtwork();
+  void steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements();
   void steamModelPersistsFavoritesAndHiddenState();
+  void achievementModelLoadsLocalSteamCache();
   void steamLauncherBuildsSafeUrls();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
@@ -214,6 +225,22 @@ void CoreTests::steamScannerImportsLibrariesAndCustomArtwork() {
   QVERIFY(result.warnings.isEmpty());
 }
 
+void CoreTests::steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/Steam");
+  const QString second = directory.path() + QStringLiteral("/Second Library");
+  createSteamFixture(root, second);
+
+  const SteamScanResult result = SteamScanner::scan({root});
+  QCOMPARE(result.games.at(0).achievementsUnlocked, 1);
+  QCOMPARE(result.games.at(0).achievementsTotal, 2);
+  QCOMPARE(result.games.at(0).achievements.size(), 2);
+  QCOMPARE(result.games.at(0).achievements.at(0).title, QStringLiteral("First Win"));
+  QVERIFY(result.games.at(1).coverPath.endsWith(QStringLiteral("library_capsule.jpg")));
+  QVERIFY(result.games.at(1).heroPath.endsWith(QStringLiteral("header.jpg")));
+}
+
 void CoreTests::steamModelPersistsFavoritesAndHiddenState() {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -245,6 +272,30 @@ void CoreTests::steamModelPersistsFavoritesAndHiddenState() {
   QCOMPARE(reloaded.rowCount(), 2);
   QVERIFY(reloaded.get(0).value(QStringLiteral("favorite")).toBool());
   QVERIFY(reloaded.get(1).value(QStringLiteral("hidden")).toBool());
+}
+
+void CoreTests::achievementModelLoadsLocalSteamCache() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/Steam");
+  const QString second = directory.path() + QStringLiteral("/Library");
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  createSteamFixture(root, second);
+
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  SteamGameModel games(database, &settings);
+  games.refreshFromRoots({root});
+  QTRY_VERIFY_WITH_TIMEOUT(!games.scanning(), 3000);
+  QCOMPARE(games.get(0).value(QStringLiteral("achievementsUnlocked")).toInt(), 1);
+  QCOMPARE(games.get(0).value(QStringLiteral("achievementsTotal")).toInt(), 2);
+
+  AchievementModel achievements(database, &settings);
+  achievements.load(QStringLiteral("10"));
+  QCOMPARE(achievements.unlocked(), 1);
+  QCOMPARE(achievements.total(), 2);
+  QCOMPARE(achievements.rowCount(), 2);
+  QCOMPARE(achievements.data(achievements.index(0), AchievementModel::TitleRole).toString(),
+           QStringLiteral("First Win"));
 }
 
 void CoreTests::steamLauncherBuildsSafeUrls() {

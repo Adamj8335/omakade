@@ -1,3 +1,4 @@
+#include "achievements/AchievementModel.h"
 #include "app/AppSettings.h"
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
@@ -56,12 +57,15 @@ int main(int argc, char* argv[]) {
   if (demoMode || stressMode) {
     games = std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100);
   } else {
-    auto steam = std::make_unique<SteamGameModel>();
+    auto steam = std::make_unique<SteamGameModel>(QString{}, &preferences);
     steamLibrary = steam.get();
     games = std::move(steam);
   }
   LibraryFilterModel library;
   library.setSourceModel(games.get());
+  AchievementModel achievements(steamLibrary == nullptr ? QStringLiteral(":memory:")
+                                                        : steamLibrary->databasePath(),
+                                &preferences);
   SteamLauncher launcher;
 
   QObject::connect(&controller, &ControllerInput::keyRequested, &application,
@@ -89,6 +93,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Launcher"), &launcher);
   engine.rootContext()->setContextProperty(QStringLiteral("Preferences"), &preferences);
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
+  engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"), demoMode || stressMode);
   engine.rootContext()->setContextProperty(QStringLiteral("StartupMilliseconds"),
                                            startupTimer.elapsed());

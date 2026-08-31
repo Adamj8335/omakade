@@ -54,11 +54,21 @@ FocusScope {
     }
 
     Rectangle {
+        anchors.fill: cover
+        anchors.topMargin: 6
+        anchors.leftMargin: 5
+        anchors.rightMargin: -5
+        anchors.bottomMargin: -6
+        radius: cover.radius
+        color: root.alpha(Theme.darkerBackground, 0.34)
+    }
+
+    Rectangle {
         id: cover
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Math.round(width * 1.42)
+        height: Math.round(width * 1.5)
         radius: Math.max(5, Theme.cornerRadius)
         clip: true
         border.width: root.activeFocus ? 2 : 1

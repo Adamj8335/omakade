@@ -1,10 +1,17 @@
 #include "library/SteamGameModel.h"
 
+#include "app/AppSettings.h"
 #include "library/GameRoles.h"
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDirIterator>
+#include <QFile>
 #include <QFileInfo>
+#include <QImage>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QSaveFile>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -14,6 +21,9 @@
 #include <algorithm>
 
 namespace {
+constexpr qint64 kMaximumCoverBytes = 8 * 1024 * 1024;
+constexpr int kMaximumConcurrentCoverDownloads = 4;
+
 QColor colorFor(const QString& appId, int offset) {
   const QByteArray hash = QCryptographicHash::hash(appId.toUtf8(), QCryptographicHash::Sha256);
   return QColor::fromHsl((static_cast<unsigned char>(hash.at(offset)) * 359) / 255, 115,
@@ -23,11 +33,33 @@ QColor colorFor(const QString& appId, int offset) {
 QString localUrl(const QString& path) {
   return path.isEmpty() ? QString{} : QUrl::fromLocalFile(path).toString();
 }
+
+bool isLandscapeHeader(const QString& path) {
+  return QFileInfo(path).completeBaseName().compare(QStringLiteral("header"),
+                                                    Qt::CaseInsensitive) == 0;
+}
+
+QString coverCacheRoot() {
+  return QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) +
+         QStringLiteral("/omakade/covers");
+}
+
+QString coverCachePath(const QString& appId) {
+  return coverCacheRoot() + QLatin1Char('/') + appId + QStringLiteral(".jpg");
+}
+
+QUrl coverUrl(const QString& appId, int attempt) {
+  const QString filename = attempt == 0 ? QStringLiteral("library_600x900_2x.jpg")
+                                        : QStringLiteral("library_600x900.jpg");
+  return QUrl(QStringLiteral("https://shared.steamstatic.com/store_item_assets/steam/apps/%1/%2")
+                  .arg(appId, filename));
+}
 } // namespace
 
-SteamGameModel::SteamGameModel(const QString& databasePath, QObject* parent)
+SteamGameModel::SteamGameModel(const QString& databasePath, AppSettings* settings, QObject* parent)
     : QAbstractListModel(parent),
-      m_connectionName(QStringLiteral("omakade-%1").arg(reinterpret_cast<quintptr>(this))) {
+      m_connectionName(QStringLiteral("omakade-%1").arg(reinterpret_cast<quintptr>(this))),
+      m_settings(settings) {
   m_rescanTimer.setSingleShot(true);
   m_rescanTimer.setInterval(700);
   connect(&m_rescanTimer, &QTimer::timeout, this, &SteamGameModel::refresh);
@@ -44,6 +76,7 @@ SteamGameModel::SteamGameModel(const QString& databasePath, QObject* parent)
   const QString path = databasePath.isEmpty() ? defaultDatabasePath() : databasePath;
   if (openDatabase(path) && ensureSchema()) {
     loadDatabase();
+    QTimer::singleShot(800, this, &SteamGameModel::requestMissingCovers);
   }
 }
 
@@ -186,8 +219,12 @@ QVariant SteamGameModel::valueForRole(const Game& game, int role) const {
   case GameRoles::Hours:
     return game.steam.playtimeMinutes / 60;
   case GameRoles::Progress:
+    return game.achievementsTotal == 0 ? 0
+                                       : (game.achievementsUnlocked * 100) / game.achievementsTotal;
   case GameRoles::AchievementsUnlocked:
+    return game.achievementsUnlocked;
   case GameRoles::AchievementsTotal:
+    return game.achievementsTotal;
   case GameRoles::Year:
     return 0;
   case GameRoles::Favorite:
@@ -248,7 +285,17 @@ bool SteamGameModel::ensureSchema() {
                      "playtime_minutes INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)"),
       QStringLiteral("CREATE TABLE IF NOT EXISTS source_state ("
                      "source TEXT PRIMARY KEY, last_scan INTEGER, last_error TEXT)"),
-      QStringLiteral("PRAGMA user_version = 1"),
+      QStringLiteral("CREATE TABLE IF NOT EXISTS achievement_summary ("
+                     "app_id TEXT PRIMARY KEY REFERENCES games(app_id), unlocked INTEGER NOT NULL, "
+                     "total INTEGER NOT NULL, source TEXT NOT NULL, updated_at INTEGER NOT NULL)"),
+      QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS achievements ("
+          "app_id TEXT NOT NULL REFERENCES games(app_id), api_name TEXT NOT NULL, "
+          "title TEXT NOT NULL, description TEXT, icon_url TEXT, icon_path TEXT, "
+          "unlocked INTEGER NOT NULL, unlock_time INTEGER NOT NULL, rarity REAL NOT NULL, "
+          "hidden INTEGER NOT NULL, current_progress REAL NOT NULL, maximum_progress REAL "
+          "NOT NULL, source TEXT NOT NULL, PRIMARY KEY(app_id, api_name))"),
+      QStringLiteral("PRAGMA user_version = 2"),
   };
   for (const QString& statement : statements) {
     if (!query.exec(statement)) {
@@ -261,11 +308,14 @@ bool SteamGameModel::ensureSchema() {
 
 void SteamGameModel::loadDatabase() {
   QVector<Game> loaded;
+  QVector<QPair<QString, QString>> cachedCoverUpdates;
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral(
           "SELECT g.app_id, g.title, g.favorite, g.hidden, i.install_dir, i.library_path, "
           "i.manifest_path, i.cover_path, i.hero_path, i.logo_path, i.last_played, "
-          "i.playtime_minutes FROM games g JOIN installations i ON i.app_id = g.app_id "
+          "i.playtime_minutes, COALESCE(a.unlocked, 0), COALESCE(a.total, 0) FROM games g "
+          "JOIN installations i ON i.app_id = g.app_id LEFT JOIN achievement_summary a ON "
+          "a.app_id = g.app_id "
           "ORDER BY g.title COLLATE NOCASE"))) {
     setStatus(QStringLiteral("Could not load the game library"), query.lastError().text());
     return;
@@ -282,16 +332,37 @@ void SteamGameModel::loadDatabase() {
         .logoPath = query.value(9).toString(),
         .lastPlayed = query.value(10).toLongLong(),
         .playtimeMinutes = query.value(11).toInt(),
+        .achievementsUnlocked = query.value(12).toInt(),
+        .achievementsTotal = query.value(13).toInt(),
+        .achievements = {},
     };
+    if (isLandscapeHeader(steam.coverPath)) {
+      steam.coverPath.clear();
+    }
+    const QString cachedCover = coverCachePath(steam.appId);
+    if (steam.coverPath.isEmpty() && QFileInfo::exists(cachedCover)) {
+      steam.coverPath = cachedCover;
+      cachedCoverUpdates.append({steam.appId, cachedCover});
+    }
     loaded.append({.steam = steam,
                    .favorite = query.value(2).toBool(),
                    .hidden = query.value(3).toBool(),
+                   .achievementsUnlocked = query.value(12).toInt(),
+                   .achievementsTotal = query.value(13).toInt(),
                    .accentStart = colorFor(steam.appId, 0),
                    .accentEnd = colorFor(steam.appId, 1)});
   }
   beginResetModel();
   m_games = loaded;
   endResetModel();
+  query.finish();
+  for (const auto& [appId, coverPath] : cachedCoverUpdates) {
+    QSqlQuery update(m_database);
+    update.prepare(QStringLiteral("UPDATE installations SET cover_path = ? WHERE app_id = ?"));
+    update.addBindValue(coverPath);
+    update.addBindValue(appId);
+    update.exec();
+  }
 }
 
 void SteamGameModel::applyScan(const SteamScanResult& result) {
@@ -334,6 +405,43 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
     query.addBindValue(game.lastPlayed);
     query.addBindValue(game.playtimeMinutes);
     okay = okay && query.exec();
+
+    if (game.achievementsTotal > 0) {
+      query.prepare(QStringLiteral(
+          "INSERT INTO achievement_summary(app_id, unlocked, total, source, updated_at) "
+          "VALUES(?, ?, ?, 'steam-local', strftime('%s', 'now')) ON CONFLICT(app_id) DO UPDATE SET "
+          "unlocked = excluded.unlocked, total = excluded.total, source = excluded.source, "
+          "updated_at = excluded.updated_at WHERE achievement_summary.source != 'steam-web'"));
+      query.addBindValue(game.appId);
+      query.addBindValue(game.achievementsUnlocked);
+      query.addBindValue(game.achievementsTotal);
+      okay = okay && query.exec();
+    }
+
+    for (const SteamAchievementRecord& achievement : game.achievements) {
+      query.prepare(QStringLiteral(
+          "INSERT INTO achievements(app_id, api_name, title, description, icon_url, icon_path, "
+          "unlocked, unlock_time, rarity, hidden, current_progress, maximum_progress, source) "
+          "VALUES(?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, 'steam-local') ON CONFLICT(app_id, "
+          "api_name) DO UPDATE SET title = excluded.title, description = excluded.description, "
+          "icon_url = excluded.icon_url, unlocked = excluded.unlocked, unlock_time = "
+          "excluded.unlock_time, rarity = excluded.rarity, hidden = excluded.hidden, "
+          "current_progress = excluded.current_progress, maximum_progress = "
+          "excluded.maximum_progress, source = excluded.source WHERE achievements.source != "
+          "'steam-web'"));
+      query.addBindValue(game.appId);
+      query.addBindValue(achievement.apiName);
+      query.addBindValue(achievement.title);
+      query.addBindValue(achievement.description);
+      query.addBindValue(achievement.iconUrl);
+      query.addBindValue(achievement.unlocked);
+      query.addBindValue(achievement.unlockTime);
+      query.addBindValue(achievement.rarity);
+      query.addBindValue(achievement.hidden);
+      query.addBindValue(achievement.currentProgress);
+      query.addBindValue(achievement.maximumProgress);
+      okay = okay && query.exec();
+    }
   }
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error) VALUES('steam', strftime('%s', "
@@ -349,6 +457,7 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
   }
 
   loadDatabase();
+  requestMissingCovers();
   rebuildWatchPaths(result);
   if (!result.warnings.isEmpty()) {
     setStatus(
@@ -415,4 +524,115 @@ void SteamGameModel::setStatus(const QString& status, const QString& error) {
   m_statusText = status;
   m_errorText = error;
   emit statusChanged();
+}
+
+void SteamGameModel::requestMissingCovers() {
+  for (const Game& game : m_games) {
+    if (!game.steam.coverPath.isEmpty() || m_pendingCovers.contains(game.steam.appId)) {
+      continue;
+    }
+    bool numeric = false;
+    game.steam.appId.toULongLong(&numeric);
+    if (!numeric) {
+      continue;
+    }
+    const QString cached = coverCachePath(game.steam.appId);
+    if (QFileInfo::exists(cached)) {
+      applyCover(game.steam.appId, cached);
+      continue;
+    }
+    m_pendingCovers.insert(game.steam.appId);
+    m_coverQueue.enqueue({game.steam.appId, 0});
+  }
+  startNextCoverDownloads();
+}
+
+void SteamGameModel::startNextCoverDownloads() {
+  while (m_activeCoverDownloads < kMaximumConcurrentCoverDownloads && !m_coverQueue.isEmpty()) {
+    const CoverRequest request = m_coverQueue.dequeue();
+    downloadCover(request.appId, request.attempt);
+  }
+}
+
+void SteamGameModel::downloadCover(const QString& appId, int attempt) {
+  QNetworkRequest request(coverUrl(appId, attempt));
+  request.setTransferTimeout(12000);
+  request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                       QNetworkRequest::ManualRedirectPolicy);
+  QNetworkReply* reply = m_network.get(request);
+  ++m_activeCoverDownloads;
+  connect(reply, &QNetworkReply::finished, this, [this, reply, appId, attempt] {
+    const QByteArray contents = reply->readAll();
+    const bool valid = reply->error() == QNetworkReply::NoError && !contents.isEmpty() &&
+                       contents.size() <= kMaximumCoverBytes &&
+                       !QImage::fromData(contents).isNull();
+    bool saved = false;
+    if (valid) {
+      const QString path = coverCachePath(appId);
+      QDir().mkpath(QFileInfo(path).absolutePath());
+      QSaveFile file(path);
+      saved = file.open(QIODevice::WriteOnly) && file.write(contents) == contents.size() &&
+              file.commit();
+      if (saved) {
+        applyCover(appId, path);
+      }
+    }
+    reply->deleteLater();
+    --m_activeCoverDownloads;
+    if (!saved && attempt == 0) {
+      m_coverQueue.enqueue({appId, 1});
+    } else {
+      m_pendingCovers.remove(appId);
+    }
+    pruneCoverCache();
+    startNextCoverDownloads();
+  });
+}
+
+void SteamGameModel::applyCover(const QString& appId, const QString& path) {
+  for (int row = 0; row < m_games.size(); ++row) {
+    if (m_games.at(row).steam.appId != appId) {
+      continue;
+    }
+    m_games[row].steam.coverPath = path;
+    if (m_database.isOpen()) {
+      QSqlQuery query(m_database);
+      query.prepare(QStringLiteral("UPDATE installations SET cover_path = ? WHERE app_id = ?"));
+      query.addBindValue(path);
+      query.addBindValue(appId);
+      query.exec();
+    }
+    emit dataChanged(index(row), index(row), {GameRoles::CoverPath});
+    emit statusChanged();
+    return;
+  }
+}
+
+void SteamGameModel::pruneCoverCache() {
+  const int limitMb = m_settings == nullptr ? 1024 : m_settings->artworkCacheLimitMb();
+  const qint64 limit = static_cast<qint64>(limitMb) * 1024 * 1024;
+  struct CachedFile {
+    QString path;
+    QDateTime modified;
+    qint64 size = 0;
+  };
+  QVector<CachedFile> files;
+  qint64 total = 0;
+  QDirIterator iterator(coverCacheRoot(), QDir::Files);
+  while (iterator.hasNext()) {
+    const QFileInfo info(iterator.next());
+    files.append({info.absoluteFilePath(), info.lastModified(), info.size()});
+    total += info.size();
+  }
+  std::sort(files.begin(), files.end(), [](const CachedFile& left, const CachedFile& right) {
+    return left.modified < right.modified;
+  });
+  for (const CachedFile& file : files) {
+    if (total <= limit) {
+      break;
+    }
+    if (QFile::remove(file.path)) {
+      total -= file.size;
+    }
+  }
 }

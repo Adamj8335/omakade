@@ -20,6 +20,9 @@ ApplicationWindow {
     function openGame(index) {
         selectedIndex = index
         selectedGame = Library.get(index)
+        if (!DemoMode) {
+            Achievements.load(selectedGame.appId)
+        }
         detailOpen = true
     }
 
@@ -123,7 +126,11 @@ ApplicationWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: root.alpha(Theme.darkerBackground, 0.955)
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: root.alpha(Theme.darkerBackground, 0.82) }
+            GradientStop { position: 0.48; color: root.alpha(Theme.darkerBackground, 0.68) }
+            GradientStop { position: 1.0; color: root.alpha(Theme.darkerBackground, 0.84) }
+        }
     }
 
     Rectangle {
@@ -132,7 +139,16 @@ ApplicationWindow {
         radius: width / 2
         x: root.width * 0.62
         y: -height * 0.62
-        color: root.alpha(Theme.accent, 0.055)
+        color: root.alpha(Theme.accent, 0.10)
+    }
+
+    Rectangle {
+        width: root.width * 0.42
+        height: width
+        radius: width / 2
+        x: -width * 0.48
+        y: root.height * 0.48
+        color: root.alpha(Theme.green, 0.055)
     }
 
     Item {
@@ -512,7 +528,7 @@ ApplicationWindow {
                         { label: "LOCAL ARTWORK", value: SteamLibrary ? SteamLibrary.artworkCount + " covers" : "Procedural demo art" },
                         { label: "CONTROLLER", value: Controller.connected ? Controller.name : "Not connected" },
                         { label: "DATABASE", value: SteamLibrary ? SteamLibrary.databasePath : "Not used in demo mode" },
-                        { label: "ARTWORK CACHE", value: "0 MB / " + Preferences.artworkCacheLimitMb + " MB" }
+                        { label: "ACHIEVEMENT ART", value: (Achievements.cacheBytes / 1048576).toFixed(1) + " MB / " + Preferences.artworkCacheLimitMb + " MB" }
                     ]
                     RowLayout {
                         required property var modelData
@@ -546,6 +562,11 @@ ApplicationWindow {
                         compact: true
                         text: "CACHE +"
                         onClicked: Preferences.artworkCacheLimitMb += 128
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "CLEAR ART"
+                        onClicked: Achievements.clearCache()
                     }
                     Item { Layout.fillWidth: true }
                     GlassButton {
