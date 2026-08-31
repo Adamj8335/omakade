@@ -1,0 +1,238 @@
+import QtQuick
+import QtQuick.Controls
+
+FocusScope {
+    id: root
+
+    required property string title
+    required property string subtitle
+    required property int hours
+    required property int progress
+    required property bool favorite
+    required property color accentStart
+    required property color accentEnd
+    required property string coverMark
+    required property string coverPath
+    property bool current: false
+
+    signal activated()
+    signal favoriteToggled()
+
+    function alpha(color, value) {
+        return Qt.rgba(color.r, color.g, color.b, value)
+    }
+
+    activeFocusOnTab: true
+    Accessible.name: title
+    Accessible.description: subtitle + ", " + hours + " hours played"
+    Accessible.role: Accessible.ListItem
+
+    Keys.onReturnPressed: function(event) {
+        root.activated()
+        event.accepted = true
+    }
+    Keys.onEnterPressed: function(event) {
+        root.activated()
+        event.accepted = true
+    }
+    Keys.onSpacePressed: function(event) {
+        root.activated()
+        event.accepted = true
+    }
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_F) {
+            root.favoriteToggled()
+            event.accepted = true
+        }
+    }
+
+    scale: activeFocus ? 1.018 : cardMouse.containsMouse ? 1.01 : 1.0
+    Behavior on scale {
+        enabled: !Preferences.reducedMotion
+        NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+    }
+
+    Rectangle {
+        id: cover
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: Math.round(width * 1.42)
+        radius: Math.max(5, Theme.cornerRadius)
+        clip: true
+        border.width: root.activeFocus ? 2 : 1
+        border.color: root.activeFocus ? Theme.accent : root.alpha(Theme.foreground, 0.15)
+
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: root.accentStart }
+            GradientStop { position: 1.0; color: root.accentEnd }
+        }
+
+        Image {
+            id: artwork
+            anchors.fill: parent
+            source: root.coverPath
+            asynchronous: true
+            cache: true
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.width: Math.ceil(width * 2)
+            sourceSize.height: Math.ceil(height * 2)
+            opacity: status === Image.Ready ? 1 : 0
+            Behavior on opacity {
+                enabled: !Preferences.reducedMotion
+                NumberAnimation { duration: 160 }
+            }
+        }
+
+        Rectangle {
+            visible: artwork.status !== Image.Ready
+            width: cover.width * 0.9
+            height: width
+            radius: width / 2
+            x: cover.width * 0.46
+            y: -height * 0.22
+            color: root.alpha(Theme.brightForeground, 0.10)
+            border.color: root.alpha(Theme.brightForeground, 0.16)
+        }
+
+        Rectangle {
+            visible: artwork.status !== Image.Ready
+            width: cover.width * 0.7
+            height: width
+            radius: width / 2
+            x: -width * 0.38
+            y: cover.height * 0.38
+            color: root.alpha(Theme.darkerBackground, 0.22)
+        }
+
+        Text {
+            visible: artwork.status !== Image.Ready
+            anchors.centerIn: parent
+            text: root.coverMark
+            color: root.alpha(Theme.brightForeground, 0.88)
+            font.family: Theme.fontFamily
+            font.pixelSize: Math.max(38, cover.width * 0.32)
+            font.weight: Font.Light
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: parent.height * 0.42
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: "transparent" }
+                GradientStop { position: 1.0; color: root.alpha(Theme.darkerBackground, 0.84) }
+            }
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 13
+            spacing: 5
+
+            Text {
+                width: parent.width
+                text: root.title.toUpperCase()
+                color: Theme.brightForeground
+                font.family: Theme.fontFamily
+                font.pixelSize: Math.max(12, cover.width * 0.078)
+                font.weight: Font.Bold
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+
+            Rectangle {
+                width: parent.width
+                height: 2
+                radius: 1
+                color: root.alpha(Theme.brightForeground, 0.28)
+
+                Rectangle {
+                    width: parent.width * root.progress / 100
+                    height: parent.height
+                    radius: 1
+                    color: Theme.brightForeground
+                }
+            }
+        }
+
+        Rectangle {
+            visible: root.favorite
+            width: 28
+            height: 28
+            radius: 14
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 9
+            color: root.alpha(Theme.darkerBackground, 0.66)
+            border.color: root.alpha(Theme.brightForeground, 0.22)
+
+            Text {
+                anchors.centerIn: parent
+                text: "♥"
+                color: Theme.brightForeground
+                font.pixelSize: 12
+            }
+        }
+
+        Behavior on border.color {
+            enabled: !Preferences.reducedMotion
+            ColorAnimation { duration: 120 }
+        }
+    }
+
+    Column {
+        anchors.top: cover.bottom
+        anchors.topMargin: 10
+        anchors.left: parent.left
+        anchors.right: parent.right
+        spacing: 3
+
+        Text {
+            width: parent.width
+            text: root.title
+            color: Theme.foreground
+            font.family: Theme.fontFamily
+            font.pixelSize: 13
+            font.weight: Font.DemiBold
+            elide: Text.ElideRight
+        }
+
+        Row {
+            width: parent.width
+            spacing: 7
+
+            Text {
+                text: root.subtitle
+                color: Theme.mutedText
+                font.family: Theme.fontFamily
+                font.pixelSize: 10
+            }
+            Text {
+                text: "·"
+                color: root.alpha(Theme.foreground, 0.32)
+                font.pixelSize: 10
+            }
+            Text {
+                text: root.hours + "h"
+                color: Theme.mutedText
+                font.family: Theme.fontFamily
+                font.pixelSize: 10
+            }
+        }
+    }
+
+    MouseArea {
+        id: cardMouse
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.forceActiveFocus()
+        onDoubleClicked: root.activated()
+    }
+}

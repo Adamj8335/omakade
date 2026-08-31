@@ -1,0 +1,6 @@
+/build/
+/build-*/
+/.cache/
+/.qt/
+compile_commands.json
+

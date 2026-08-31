@@ -1,0 +1,418 @@
+#include "library/SteamGameModel.h"
+
+#include "library/GameRoles.h"
+
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFileInfo>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QStandardPaths>
+#include <QUrl>
+#include <QtConcurrent>
+
+#include <algorithm>
+
+namespace {
+QColor colorFor(const QString& appId, int offset) {
+  const QByteArray hash = QCryptographicHash::hash(appId.toUtf8(), QCryptographicHash::Sha256);
+  return QColor::fromHsl((static_cast<unsigned char>(hash.at(offset)) * 359) / 255, 115,
+                         offset == 0 ? 105 : 72);
+}
+
+QString localUrl(const QString& path) {
+  return path.isEmpty() ? QString{} : QUrl::fromLocalFile(path).toString();
+}
+} // namespace
+
+SteamGameModel::SteamGameModel(const QString& databasePath, QObject* parent)
+    : QAbstractListModel(parent),
+      m_connectionName(QStringLiteral("omakade-%1").arg(reinterpret_cast<quintptr>(this))) {
+  m_rescanTimer.setSingleShot(true);
+  m_rescanTimer.setInterval(700);
+  connect(&m_rescanTimer, &QTimer::timeout, this, &SteamGameModel::refresh);
+  connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, &m_rescanTimer,
+          qOverload<>(&QTimer::start));
+  connect(&m_fileWatcher, &QFileSystemWatcher::directoryChanged, &m_rescanTimer,
+          qOverload<>(&QTimer::start));
+  connect(&m_scanWatcher, &QFutureWatcher<SteamScanResult>::finished, this, [this] {
+    applyScan(m_scanWatcher.result());
+    m_scanning = false;
+    emit scanningChanged();
+  });
+
+  const QString path = databasePath.isEmpty() ? defaultDatabasePath() : databasePath;
+  if (openDatabase(path) && ensureSchema()) {
+    loadDatabase();
+  }
+}
+
+SteamGameModel::~SteamGameModel() {
+  if (m_scanWatcher.isRunning()) {
+    m_scanWatcher.waitForFinished();
+  }
+  m_database.close();
+  m_database = {};
+  QSqlDatabase::removeDatabase(m_connectionName);
+}
+
+int SteamGameModel::rowCount(const QModelIndex& parent) const {
+  return parent.isValid() ? 0 : static_cast<int>(m_games.size());
+}
+
+QVariant SteamGameModel::data(const QModelIndex& index, int role) const {
+  if (!index.isValid() || index.row() < 0 || index.row() >= m_games.size()) {
+    return {};
+  }
+  return valueForRole(m_games.at(index.row()), role);
+}
+
+QHash<int, QByteArray> SteamGameModel::roleNames() const {
+  return {
+      {GameRoles::Title, "title"},
+      {GameRoles::Subtitle, "subtitle"},
+      {GameRoles::Description, "description"},
+      {GameRoles::Hours, "hours"},
+      {GameRoles::Progress, "progress"},
+      {GameRoles::AchievementsUnlocked, "achievementsUnlocked"},
+      {GameRoles::AchievementsTotal, "achievementsTotal"},
+      {GameRoles::Favorite, "favorite"},
+      {GameRoles::Recent, "recent"},
+      {GameRoles::AccentStart, "accentStart"},
+      {GameRoles::AccentEnd, "accentEnd"},
+      {GameRoles::CoverMark, "coverMark"},
+      {GameRoles::Year, "year"},
+      {GameRoles::AppId, "appId"},
+      {GameRoles::CoverPath, "coverPath"},
+      {GameRoles::HeroPath, "heroPath"},
+      {GameRoles::LogoPath, "logoPath"},
+      {GameRoles::InstallPath, "installPath"},
+      {GameRoles::Source, "source"},
+      {GameRoles::Hidden, "hidden"},
+  };
+}
+
+bool SteamGameModel::scanning() const { return m_scanning; }
+
+bool SteamGameModel::steamDetected() const { return m_steamDetected; }
+
+QString SteamGameModel::statusText() const { return m_statusText; }
+
+QString SteamGameModel::errorText() const { return m_errorText; }
+
+int SteamGameModel::artworkCount() const {
+  return std::count_if(m_games.cbegin(), m_games.cend(),
+                       [](const Game& game) { return !game.steam.coverPath.isEmpty(); });
+}
+
+QString SteamGameModel::databasePath() const { return m_databasePath; }
+
+QVariantMap SteamGameModel::get(int row) const {
+  if (row < 0 || row >= m_games.size()) {
+    return {};
+  }
+  QVariantMap result;
+  const auto roles = roleNames();
+  for (auto iterator = roles.cbegin(); iterator != roles.cend(); ++iterator) {
+    result.insert(QString::fromUtf8(iterator.value()),
+                  valueForRole(m_games.at(row), iterator.key()));
+  }
+  return result;
+}
+
+void SteamGameModel::toggleFavorite(int row) {
+  if (row < 0 || row >= m_games.size() || !m_database.isOpen()) {
+    return;
+  }
+  Game& game = m_games[row];
+  game.favorite = !game.favorite;
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral("UPDATE games SET favorite = ? WHERE app_id = ?"));
+  query.addBindValue(game.favorite);
+  query.addBindValue(game.steam.appId);
+  if (!query.exec()) {
+    game.favorite = !game.favorite;
+    setStatus(m_statusText, query.lastError().text());
+    return;
+  }
+  emit dataChanged(index(row), index(row), {GameRoles::Favorite});
+}
+
+void SteamGameModel::toggleHidden(int row) {
+  if (row < 0 || row >= m_games.size() || !m_database.isOpen()) {
+    return;
+  }
+  Game& game = m_games[row];
+  game.hidden = !game.hidden;
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral("UPDATE games SET hidden = ? WHERE app_id = ?"));
+  query.addBindValue(game.hidden);
+  query.addBindValue(game.steam.appId);
+  if (!query.exec()) {
+    game.hidden = !game.hidden;
+    setStatus(m_statusText, query.lastError().text());
+    return;
+  }
+  emit dataChanged(index(row), index(row), {GameRoles::Hidden});
+}
+
+void SteamGameModel::refresh() { refreshFromRoots(SteamScanner::discoverSteamRoots()); }
+
+void SteamGameModel::refreshFromRoots(const QStringList& roots) {
+  if (m_scanning) {
+    return;
+  }
+  m_scanning = true;
+  setStatus(QStringLiteral("Scanning Steam libraries"));
+  emit scanningChanged();
+  m_scanWatcher.setFuture(QtConcurrent::run([roots] { return SteamScanner::scan(roots); }));
+}
+
+QString SteamGameModel::defaultDatabasePath() {
+  const QString directory = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
+                            QStringLiteral("/omakade");
+  QDir().mkpath(directory);
+  return directory + QStringLiteral("/library.sqlite3");
+}
+
+QVariant SteamGameModel::valueForRole(const Game& game, int role) const {
+  switch (role) {
+  case GameRoles::Title:
+    return game.steam.title;
+  case GameRoles::Subtitle:
+    return QStringLiteral("Steam");
+  case GameRoles::Description:
+    return QStringLiteral("Installed locally through Steam.");
+  case GameRoles::Hours:
+    return game.steam.playtimeMinutes / 60;
+  case GameRoles::Progress:
+  case GameRoles::AchievementsUnlocked:
+  case GameRoles::AchievementsTotal:
+  case GameRoles::Year:
+    return 0;
+  case GameRoles::Favorite:
+    return game.favorite;
+  case GameRoles::Recent:
+    return game.steam.lastPlayed > 0;
+  case GameRoles::AccentStart:
+    return game.accentStart;
+  case GameRoles::AccentEnd:
+    return game.accentEnd;
+  case GameRoles::CoverMark:
+    return game.steam.title.left(1).toUpper();
+  case GameRoles::AppId:
+    return game.steam.appId;
+  case GameRoles::CoverPath:
+    return localUrl(game.steam.coverPath);
+  case GameRoles::HeroPath:
+    return localUrl(game.steam.heroPath);
+  case GameRoles::LogoPath:
+    return localUrl(game.steam.logoPath);
+  case GameRoles::InstallPath:
+    return QDir(game.steam.libraryPath + QStringLiteral("/steamapps/common"))
+        .absoluteFilePath(game.steam.installDirectory);
+  case GameRoles::Source:
+    return QStringLiteral("Steam");
+  case GameRoles::Hidden:
+    return game.hidden;
+  default:
+    return {};
+  }
+}
+
+bool SteamGameModel::openDatabase(const QString& path) {
+  m_databasePath = path;
+  if (path != QStringLiteral(":memory:")) {
+    QDir().mkpath(QFileInfo(path).absolutePath());
+  }
+  m_database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), m_connectionName);
+  m_database.setDatabaseName(path);
+  if (!m_database.open()) {
+    setStatus(QStringLiteral("Library database unavailable"), m_database.lastError().text());
+    return false;
+  }
+  return true;
+}
+
+bool SteamGameModel::ensureSchema() {
+  QSqlQuery query(m_database);
+  const QStringList statements = {
+      QStringLiteral("PRAGMA foreign_keys = ON"),
+      QStringLiteral("CREATE TABLE IF NOT EXISTS games ("
+                     "app_id TEXT PRIMARY KEY, title TEXT NOT NULL, favorite INTEGER NOT NULL "
+                     "DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0)"),
+      QStringLiteral("CREATE TABLE IF NOT EXISTS installations ("
+                     "app_id TEXT PRIMARY KEY REFERENCES games(app_id), install_dir TEXT NOT NULL, "
+                     "library_path TEXT NOT NULL, manifest_path TEXT NOT NULL, cover_path TEXT, "
+                     "hero_path TEXT, logo_path TEXT, last_played INTEGER NOT NULL DEFAULT 0, "
+                     "playtime_minutes INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)"),
+      QStringLiteral("CREATE TABLE IF NOT EXISTS source_state ("
+                     "source TEXT PRIMARY KEY, last_scan INTEGER, last_error TEXT)"),
+      QStringLiteral("PRAGMA user_version = 1"),
+  };
+  for (const QString& statement : statements) {
+    if (!query.exec(statement)) {
+      setStatus(QStringLiteral("Could not prepare the library database"), query.lastError().text());
+      return false;
+    }
+  }
+  return true;
+}
+
+void SteamGameModel::loadDatabase() {
+  QVector<Game> loaded;
+  QSqlQuery query(m_database);
+  if (!query.exec(QStringLiteral(
+          "SELECT g.app_id, g.title, g.favorite, g.hidden, i.install_dir, i.library_path, "
+          "i.manifest_path, i.cover_path, i.hero_path, i.logo_path, i.last_played, "
+          "i.playtime_minutes FROM games g JOIN installations i ON i.app_id = g.app_id "
+          "ORDER BY g.title COLLATE NOCASE"))) {
+    setStatus(QStringLiteral("Could not load the game library"), query.lastError().text());
+    return;
+  }
+  while (query.next()) {
+    SteamGameRecord steam{
+        .appId = query.value(0).toString(),
+        .title = query.value(1).toString(),
+        .installDirectory = query.value(4).toString(),
+        .libraryPath = query.value(5).toString(),
+        .manifestPath = query.value(6).toString(),
+        .coverPath = query.value(7).toString(),
+        .heroPath = query.value(8).toString(),
+        .logoPath = query.value(9).toString(),
+        .lastPlayed = query.value(10).toLongLong(),
+        .playtimeMinutes = query.value(11).toInt(),
+    };
+    loaded.append({.steam = steam,
+                   .favorite = query.value(2).toBool(),
+                   .hidden = query.value(3).toBool(),
+                   .accentStart = colorFor(steam.appId, 0),
+                   .accentEnd = colorFor(steam.appId, 1)});
+  }
+  beginResetModel();
+  m_games = loaded;
+  endResetModel();
+}
+
+void SteamGameModel::applyScan(const SteamScanResult& result) {
+  m_steamDetected = !result.steamRoots.isEmpty();
+  if (result.incomplete || (result.steamRoots.isEmpty() && !m_games.isEmpty())) {
+    setStatus(QStringLiteral("Scan interrupted; kept the cached library"),
+              result.warnings.join(QLatin1Char('\n')));
+    return;
+  }
+  if (!m_database.isOpen()) {
+    setStatus(QStringLiteral("Scan finished but the library database is unavailable"), m_errorText);
+    return;
+  }
+
+  if (!m_database.transaction()) {
+    setStatus(QStringLiteral("Could not update the library"), m_database.lastError().text());
+    return;
+  }
+  QSqlQuery query(m_database);
+  bool okay = query.exec(QStringLiteral("DELETE FROM installations"));
+  for (const SteamGameRecord& game : result.games) {
+    query.prepare(QStringLiteral(
+        "INSERT INTO games(app_id, title) VALUES(?, ?) ON CONFLICT(app_id) DO UPDATE SET "
+        "title = excluded.title"));
+    query.addBindValue(game.appId);
+    query.addBindValue(game.title);
+    okay = okay && query.exec();
+
+    query.prepare(QStringLiteral(
+        "INSERT INTO installations(app_id, install_dir, library_path, manifest_path, cover_path, "
+        "hero_path, logo_path, last_played, playtime_minutes, observed_at) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))"));
+    query.addBindValue(game.appId);
+    query.addBindValue(game.installDirectory);
+    query.addBindValue(game.libraryPath);
+    query.addBindValue(game.manifestPath);
+    query.addBindValue(game.coverPath);
+    query.addBindValue(game.heroPath);
+    query.addBindValue(game.logoPath);
+    query.addBindValue(game.lastPlayed);
+    query.addBindValue(game.playtimeMinutes);
+    okay = okay && query.exec();
+  }
+  query.prepare(QStringLiteral(
+      "INSERT INTO source_state(source, last_scan, last_error) VALUES('steam', strftime('%s', "
+      "'now'), ?) ON CONFLICT(source) DO UPDATE SET last_scan = excluded.last_scan, last_error = "
+      "excluded.last_error"));
+  query.addBindValue(result.warnings.join(QLatin1Char('\n')));
+  okay = okay && query.exec();
+
+  if (!okay || !m_database.commit()) {
+    m_database.rollback();
+    setStatus(QStringLiteral("Could not update the library"), query.lastError().text());
+    return;
+  }
+
+  loadDatabase();
+  rebuildWatchPaths(result);
+  if (!result.warnings.isEmpty()) {
+    setStatus(
+        QStringLiteral("Imported %1 installed game(s) with warnings").arg(result.games.size()),
+        result.warnings.join(QLatin1Char('\n')));
+  } else if (!m_steamDetected) {
+    setStatus(QStringLiteral("Steam was not found"));
+  } else {
+    setStatus(QStringLiteral("Imported %1 installed game(s)").arg(result.games.size()));
+  }
+}
+
+void SteamGameModel::rebuildWatchPaths(const SteamScanResult& result) {
+  const QStringList oldFiles = m_fileWatcher.files();
+  const QStringList oldDirectories = m_fileWatcher.directories();
+  if (!oldFiles.isEmpty()) {
+    m_fileWatcher.removePaths(oldFiles);
+  }
+  if (!oldDirectories.isEmpty()) {
+    m_fileWatcher.removePaths(oldDirectories);
+  }
+
+  QStringList files;
+  QStringList directories;
+  for (const SteamGameRecord& game : result.games) {
+    files.append(game.manifestPath);
+    directories.append(QFileInfo(game.manifestPath).absolutePath());
+  }
+  for (const QString& root : result.steamRoots) {
+    for (const QString& relative : {QStringLiteral("/config/libraryfolders.vdf"),
+                                    QStringLiteral("/steamapps/libraryfolders.vdf")}) {
+      const QString folders = root + relative;
+      if (QFileInfo::exists(folders)) {
+        files.append(folders);
+      }
+    }
+    directories.append(root + QStringLiteral("/appcache/librarycache"));
+    QDir userdata(root + QStringLiteral("/userdata"));
+    for (const QString& user : userdata.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+      const QString userConfig = userdata.absoluteFilePath(user + QStringLiteral("/config"));
+      const QString localConfig = userConfig + QStringLiteral("/localconfig.vdf");
+      const QString grid = userConfig + QStringLiteral("/grid");
+      if (QFileInfo::exists(localConfig)) {
+        files.append(localConfig);
+      }
+      if (QFileInfo(grid).isDir()) {
+        directories.append(grid);
+      }
+    }
+  }
+  for (const QString& library : result.libraryPaths) {
+    const QString steamapps = library + QStringLiteral("/steamapps");
+    if (QFileInfo(steamapps).isDir()) {
+      directories.append(steamapps);
+    }
+  }
+  files.removeDuplicates();
+  directories.removeDuplicates();
+  m_fileWatcher.addPaths(files);
+  m_fileWatcher.addPaths(directories);
+}
+
+void SteamGameModel::setStatus(const QString& status, const QString& error) {
+  m_statusText = status;
+  m_errorText = error;
+  emit statusChanged();
+}

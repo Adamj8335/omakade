@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Omakade
+Comment=Your games, beautifully together
+Exec=omakade
+Icon=io.github.omakade.Omakade
+Terminal=false
+Categories=Game;
+Keywords=Games;Launcher;Steam;Library;
+StartupNotify=true
+StartupWMClass=io.github.omakade.Omakade
+
