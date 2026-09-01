@@ -43,6 +43,15 @@ set_tests_properties(omakade_render_smoke PROPERTIES
   TIMEOUT 10
 )
 
+add_test(NAME omakade_render_space_separated_options
+  COMMAND omakade --render-screenshot ${CMAKE_CURRENT_BINARY_DIR}/omakade-render-spaced.png
+          --render-size 820x590
+)
+set_tests_properties(omakade_render_space_separated_options PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 10
+)
+
 add_test(NAME omakade_owned_layout_render
   COMMAND omakade --owned-layout-test
           --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-owned-layout.png

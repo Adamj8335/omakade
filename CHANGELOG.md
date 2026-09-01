@@ -10,6 +10,7 @@
 - Loads owned-game covers as they enter the visible library instead of fetching
   an entire account at once.
 - Fixed narrow game-details layouts and prerelease owned-library cache upgrades.
+- Prevented space-separated screenshot options from creating an invisible main instance.
 - Pinned third-party workflow actions and enabled monthly dependency updates.
 - Added end-to-end navigation coverage and owned-library regression tests.
 
