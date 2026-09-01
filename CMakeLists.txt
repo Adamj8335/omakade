@@ -45,6 +45,8 @@ add_library(omakade_core STATIC
   src/launch/GameLauncher.h
   src/launch/SteamLauncher.cpp
   src/launch/SteamLauncher.h
+  src/metadata/IgdbApi.cpp
+  src/metadata/IgdbApi.h
   src/sources/steam/SteamScanner.cpp
   src/sources/steam/SteamScanner.h
   src/sources/steam/ValveKeyValues.cpp

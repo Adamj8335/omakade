@@ -12,6 +12,7 @@
 #include "library/MockGameModel.h"
 #include "library/SteamGameModel.h"
 #include "library/UnifiedGameModel.h"
+#include "metadata/IgdbApi.h"
 #include "sources/heroic/HeroicScanner.h"
 #include "sources/lutris/LutrisScanner.h"
 #include "sources/steam/SteamScanner.h"
@@ -181,6 +182,7 @@ private slots:
   void heroicModelIsRepeatableAndPreservesLocalState();
   void malformedHeroicDataDoesNotReplaceCachedGames();
   void heroicLauncherBuildsSafeCommands();
+  void igdbApiBuildsSafeQueriesAndParsesInsights();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
   void secondInstanceRequestsActivation();
@@ -773,6 +775,39 @@ void CoreTests::heroicLauncherBuildsSafeCommands() {
                .isValid());
   QVERIFY(!GameLauncher::heroicCommand(QStringLiteral("good"), QStringLiteral("unknown"), false)
                .isValid());
+}
+
+void CoreTests::igdbApiBuildsSafeQueriesAndParsesInsights() {
+  const QByteArray mappingQuery = IgdbApi::steamMappingQuery(QStringLiteral("1245620"));
+  QVERIFY(mappingQuery.contains("uid = \"1245620\""));
+  QVERIFY(mappingQuery.contains("external_game_source.name = \"Steam\""));
+  QVERIFY(IgdbApi::steamMappingQuery(QStringLiteral("1; limit 500")).isEmpty());
+  QVERIFY(IgdbApi::gameQuery(0).isEmpty());
+  QVERIFY(IgdbApi::timeToBeatQuery(-1).isEmpty());
+
+  qint64 gameId = 0;
+  QString error;
+  QVERIFY(IgdbApi::parseSteamMapping(R"([{"id":9,"game":1942}])", &gameId, &error));
+  QCOMPARE(gameId, 1942);
+
+  IgdbGameInsight insight;
+  QVERIFY(IgdbApi::parseGame(
+      R"([{"id":1942,"name":"The Witcher 3","aggregated_rating":92.6,"aggregated_rating_count":47}])",
+      &insight, &error));
+  QCOMPARE(insight.gameId, 1942);
+  QCOMPARE(insight.title, QStringLiteral("The Witcher 3"));
+  QCOMPARE(insight.criticScore, 93);
+  QCOMPARE(insight.criticReviewCount, 47);
+
+  QVERIFY(IgdbApi::parseTimeToBeat(
+      R"([{"game_id":1942,"hastily":184200,"normally":370800,"completely":624600,"count":382}])",
+      &insight, &error));
+  QCOMPARE(insight.rushedSeconds, 184200);
+  QCOMPARE(insight.normalSeconds, 370800);
+  QCOMPARE(insight.completeSeconds, 624600);
+  QCOMPARE(insight.timeSampleCount, 382);
+  QVERIFY(!IgdbApi::parseTimeToBeat(R"([{"game_id":7,"normally":20}])", &insight, &error));
+  QVERIFY(!IgdbApi::parseGame("not json", &insight, &error));
 }
 
 void CoreTests::stressLibraryContainsOneThousandGames() {
