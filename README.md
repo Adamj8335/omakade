@@ -39,6 +39,20 @@ Omakade reads launcher data without modifying it. Core discovery, browsing,
 artwork, and launching work offline. Run `omakade --demo` to explore the UI
 with a deterministic fictional library.
 
+## Install on Omarchy or Arch
+
+Download the package and `SHA256SUMS` from the
+[latest release](https://github.com/tsouth89/omakade/releases/latest), then run:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+sudo pacman -U ./omakade-1.0.0-1-x86_64.pkg.tar.zst
+```
+
+Omakade keeps its local library and settings when the package is upgraded or
+removed. The owning launchers remain responsible for games, accounts, updates,
+cloud saves, DRM, and compatibility tools.
+
 ## Build
 
 Requirements:

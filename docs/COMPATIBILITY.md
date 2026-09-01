@@ -31,7 +31,7 @@ Verified offscreen on August 31, 2026:
 
 These deterministic renders verify layout, clipping, card aspect ratios, and
 theme contrast without changing the active desktop. A render smoke test runs in
-CI. Real display and compositor checks remain separate acceptance work.
+CI. Additional real-user reports expand compatibility coverage after v1.
 
 ## Contract-tested sources
 
