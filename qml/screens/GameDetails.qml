@@ -14,6 +14,7 @@ Item {
     required property var installations
     required property var selectedInstallation
     property bool collectionEditorOpen: false
+    property bool navigationEnabled: true
     signal backRequested()
     signal favoriteRequested()
     signal playRequested()
@@ -32,25 +33,6 @@ Item {
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
-    }
-
-    function focusAdjacent(forward) {
-        const window = root.Window.window
-        let current = window ? window.activeFocusItem : null
-        let candidate = current ? current.nextItemInFocusChain(forward) : playButton
-        let attempts = 0
-        while (candidate && candidate !== current && attempts < 100) {
-            if (candidate.visible && candidate.enabled && candidate.activeFocusOnTab) {
-                candidate.forceActiveFocus(forward ? Qt.TabFocusReason
-                                                   : Qt.BacktabFocusReason)
-                Qt.callLater(function() { root.revealFocusedItem(candidate) })
-                return
-            }
-            candidate = candidate.nextItemInFocusChain(forward)
-            ++attempts
-        }
-        playButton.forceActiveFocus(Qt.TabFocusReason)
-        Qt.callLater(function() { root.revealFocusedItem(playButton) })
     }
 
     function revealFocusedItem(item) {
@@ -80,27 +62,20 @@ Item {
         event.accepted = true
     }
     Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_F) {
+        if (root.navigationEnabled && event.key === Qt.Key_F) {
             root.favoriteRequested()
             event.accepted = true
         }
     }
 
-    Shortcut {
-        sequence: "Down"
-        onActivated: root.focusAdjacent(true)
-    }
-    Shortcut {
-        sequence: "Right"
-        onActivated: root.focusAdjacent(true)
-    }
-    Shortcut {
-        sequence: "Up"
-        onActivated: root.focusAdjacent(false)
-    }
-    Shortcut {
-        sequence: "Left"
-        onActivated: root.focusAdjacent(false)
+    Connections {
+        target: root.Window.window
+        enabled: root.navigationEnabled && target !== null
+        function onActiveFocusItemChanged() {
+            Qt.callLater(function() {
+                root.revealFocusedItem(root.Window.window.activeFocusItem)
+            })
+        }
     }
 
     Rectangle {

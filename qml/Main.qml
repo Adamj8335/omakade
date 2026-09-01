@@ -20,6 +20,94 @@ ApplicationWindow {
     property bool collectionDeleteOpen: false
     property string pendingCollectionDelete: ""
 
+    function isWithin(item, container) {
+        while (item) {
+            if (item === container) {
+                return true
+            }
+            item = item.parent
+        }
+        return false
+    }
+
+    function navigationContainer() {
+        if (collectionDeleteOpen) {
+            return collectionDeleteOverlay
+        }
+        if (linkDialogOpen) {
+            return linkDialogOverlay
+        }
+        if (diagnosticsOpen) {
+            return settingsOverlay
+        }
+        if (detailOpen && detailsLoader.item) {
+            return detailsLoader.item
+        }
+        return null
+    }
+
+    function focusWithin(container, forward, preferred) {
+        if (!container) {
+            return
+        }
+        if (preferred && preferred.visible && preferred.enabled) {
+            preferred.forceActiveFocus(forward ? Qt.TabFocusReason
+                                               : Qt.BacktabFocusReason)
+            revealNavigationItem(container, preferred)
+            return
+        }
+        const current = root.activeFocusItem
+        const origin = root.isWithin(current, container) ? current : container
+        let candidate = origin.nextItemInFocusChain(forward)
+        for (let attempts = 0; candidate && attempts < 300; ++attempts) {
+            if (root.isWithin(candidate, container) && candidate.visible
+                    && candidate.enabled && candidate.activeFocusOnTab) {
+                candidate.forceActiveFocus(forward ? Qt.TabFocusReason
+                                                   : Qt.BacktabFocusReason)
+                revealNavigationItem(container, candidate)
+                return
+            }
+            candidate = candidate.nextItemInFocusChain(forward)
+        }
+    }
+
+    function revealInScrollView(scrollView, item) {
+        const flickable = scrollView ? scrollView.contentItem : null
+        if (!flickable || !item) {
+            return
+        }
+        const position = item.mapToItem(flickable, 0, 0)
+        const margin = 16
+        if (position.y < margin) {
+            flickable.contentY = Math.max(flickable.originY,
+                                          flickable.contentY + position.y - margin)
+        } else if (position.y + item.height > flickable.height - margin) {
+            flickable.contentY = Math.min(
+                        flickable.originY + Math.max(0, flickable.contentHeight - flickable.height),
+                        flickable.contentY + position.y + item.height - flickable.height + margin)
+        }
+    }
+
+    function revealNavigationItem(container, item) {
+        if (container === settingsOverlay) {
+            root.revealInScrollView(settingsScroll, item)
+        } else if (container === linkDialogOverlay && root.isWithin(item, candidateList)) {
+            candidateList.positionViewAtIndex(candidateList.currentIndex, ListView.Contain)
+        } else if (container === detailsLoader.item) {
+            container.revealFocusedItem(item)
+        }
+    }
+
+    function restoreFocus(item) {
+        if (item && item.visible && item.enabled) {
+            Qt.callLater(item.forceActiveFocus)
+        } else if (detailOpen && detailsLoader.item) {
+            Qt.callLater(function() { root.focusWithin(detailsLoader.item, true) })
+        } else {
+            Qt.callLater(libraryView.focusGrid)
+        }
+    }
+
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
     }
@@ -206,7 +294,8 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+F"
-        enabled: !root.detailOpen
+        enabled: !root.detailOpen && !root.diagnosticsOpen && !root.linkDialogOpen
+                 && !root.collectionDeleteOpen
         onActivated: searchField.forceActiveFocus()
     }
     Shortcut {
@@ -223,7 +312,18 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Ctrl+D"
+        enabled: !root.linkDialogOpen && !root.collectionDeleteOpen
         onActivated: root.diagnosticsOpen = !root.diagnosticsOpen
+    }
+    Shortcut {
+        sequence: "Tab"
+        enabled: root.navigationContainer() !== null
+        onActivated: root.focusWithin(root.navigationContainer(), true)
+    }
+    Shortcut {
+        sequence: "Shift+Tab"
+        enabled: root.navigationContainer() !== null
+        onActivated: root.focusWithin(root.navigationContainer(), false)
     }
     Shortcut {
         sequence: "Escape"
@@ -240,27 +340,39 @@ ApplicationWindow {
             } else if (searchField.text.length > 0) {
                 searchField.clear()
                 libraryView.focusGrid()
+            } else if (!libraryView.gridFocused) {
+                libraryView.focusGrid()
             }
         }
     }
+
+    Binding {
+        target: Controller
+        property: "focusNavigation"
+        value: root.detailOpen || root.diagnosticsOpen || root.linkDialogOpen
+               || root.collectionDeleteOpen || !libraryView.gridFocused
+    }
     Shortcut {
         sequence: "Return"
-        enabled: !root.detailOpen && !searchField.activeFocus && libraryView.currentIndex >= 0
+        enabled: root.navigationContainer() === null && libraryView.gridFocused
+                 && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
     Shortcut {
         sequence: "Enter"
-        enabled: !root.detailOpen && !searchField.activeFocus && libraryView.currentIndex >= 0
+        enabled: root.navigationContainer() === null && libraryView.gridFocused
+                 && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
     Shortcut {
         sequence: "Space"
-        enabled: !root.detailOpen && !searchField.activeFocus && libraryView.currentIndex >= 0
+        enabled: root.navigationContainer() === null && libraryView.gridFocused
+                 && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
 
     onActiveChanged: {
-        if (active && !detailOpen && !searchField.activeFocus) {
+        if (active && root.navigationContainer() === null && !searchField.activeFocus) {
             Qt.callLater(libraryView.focusGrid)
         }
     }
@@ -694,6 +806,7 @@ ApplicationWindow {
                                 : "Install a game in Steam, Lutris, Heroic, Faugus, or RetroArch, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
+                onToolbarRequested: searchField.forceActiveFocus(Qt.BacktabFocusReason)
                 onRefreshRequested: {
                     if (SteamLibrary && Preferences.steamEnabled) {
                         SteamLibrary.refresh()
@@ -731,6 +844,8 @@ ApplicationWindow {
             game: root.selectedGame
             installations: root.selectedInstallations
             selectedInstallation: root.selectedInstallation
+            navigationEnabled: !root.linkDialogOpen && !root.diagnosticsOpen
+                               && !root.collectionDeleteOpen
             onBackRequested: root.closeDetails()
             onFavoriteRequested: {
                 Library.toggleFavorite(root.selectedIndex)
@@ -799,13 +914,19 @@ ApplicationWindow {
     }
 
     Rectangle {
+        id: linkDialogOverlay
+        property var previousFocus: null
         anchors.fill: parent
         visible: root.linkDialogOpen
         z: 25
         color: root.alpha(Theme.darkerBackground, 0.72)
         onVisibleChanged: {
             if (visible) {
+                previousFocus = root.activeFocusItem
                 Qt.callLater(linkSearch.forceActiveFocus)
+            } else if (previousFocus) {
+                root.restoreFocus(previousFocus)
+                previousFocus = null
             }
         }
 
@@ -859,10 +980,22 @@ ApplicationWindow {
                 color: Theme.foreground
                 font.family: Theme.fontFamily
                 onTextChanged: root.linkResults = Library.linkCandidates(root.selectedIndex, text)
+                Keys.onDownPressed: function(event) {
+                    if (candidateList.count > 0) {
+                        candidateList.currentIndex = 0
+                        const candidate = candidateList.itemAtIndex(0)
+                        if (candidate) {
+                            candidate.forceActiveFocus(Qt.TabFocusReason)
+                        }
+                        event.accepted = true
+                    }
+                }
                 background: Rectangle {
                     radius: Math.max(5, Theme.cornerRadius)
                     color: root.alpha(Theme.foreground, 0.05)
-                    border.color: root.alpha(Theme.foreground, 0.18)
+                    border.width: linkSearch.activeFocus ? 2 : 1
+                    border.color: linkSearch.activeFocus
+                                  ? Theme.accent : root.alpha(Theme.foreground, 0.18)
                 }
             }
             ListView {
@@ -875,11 +1008,18 @@ ApplicationWindow {
 
                 delegate: Button {
                     required property var modelData
+                    required property int index
                     width: candidateList.width
                     height: 58
                     focusPolicy: Qt.StrongFocus
                     Accessible.name: "Link " + modelData.title + " from " + modelData.source
                     onClicked: root.linkCandidate(modelData)
+                    onActiveFocusChanged: {
+                        if (activeFocus) {
+                            candidateList.currentIndex = index
+                            candidateList.positionViewAtIndex(index, ListView.Contain)
+                        }
+                    }
 
                     contentItem: Column {
                         anchors.left: parent.left
@@ -965,10 +1105,21 @@ ApplicationWindow {
     }
 
     Rectangle {
+        id: settingsOverlay
+        property var previousFocus: null
         anchors.fill: parent
         visible: root.diagnosticsOpen
         z: 20
         color: root.alpha(Theme.darkerBackground, 0.72)
+        onVisibleChanged: {
+            if (visible) {
+                previousFocus = root.activeFocusItem
+                Qt.callLater(function() { root.focusWithin(settingsOverlay, true) })
+            } else if (previousFocus) {
+                root.restoreFocus(previousFocus)
+                previousFocus = null
+            }
+        }
 
         MouseArea {
             anchors.fill: parent
@@ -986,6 +1137,7 @@ ApplicationWindow {
             MouseArea { anchors.fill: parent }
 
             ScrollView {
+                id: settingsScroll
                 anchors.fill: parent
                 anchors.margins: 28
                 rightPadding: 18
@@ -1200,7 +1352,10 @@ ApplicationWindow {
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
-                            border.color: root.alpha(Theme.foreground, 0.15)
+                            border.width: steamIdField.activeFocus ? 2 : 1
+                            border.color: steamIdField.activeFocus
+                                          ? Theme.accent
+                                          : root.alpha(Theme.foreground, 0.15)
                         }
                     }
                     GlassButton {
@@ -1224,7 +1379,10 @@ ApplicationWindow {
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
-                            border.color: root.alpha(Theme.foreground, 0.15)
+                            border.width: apiKeyField.activeFocus ? 2 : 1
+                            border.color: apiKeyField.activeFocus
+                                          ? Theme.accent
+                                          : root.alpha(Theme.foreground, 0.15)
                         }
                     }
                     GlassButton {
@@ -1289,7 +1447,10 @@ ApplicationWindow {
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
-                            border.color: root.alpha(Theme.foreground, 0.15)
+                            border.width: igdbClientIdField.activeFocus ? 2 : 1
+                            border.color: igdbClientIdField.activeFocus
+                                          ? Theme.accent
+                                          : root.alpha(Theme.foreground, 0.15)
                         }
                     }
                     GlassButton {
@@ -1313,7 +1474,10 @@ ApplicationWindow {
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
-                            border.color: root.alpha(Theme.foreground, 0.15)
+                            border.width: igdbSecretField.activeFocus ? 2 : 1
+                            border.color: igdbSecretField.activeFocus
+                                          ? Theme.accent
+                                          : root.alpha(Theme.foreground, 0.15)
                         }
                     }
                     GlassButton {
@@ -1435,10 +1599,23 @@ ApplicationWindow {
     }
 
     Rectangle {
+        id: collectionDeleteOverlay
+        property var previousFocus: null
         anchors.fill: parent
         visible: root.collectionDeleteOpen
         z: 35
         color: root.alpha(Theme.darkerBackground, 0.76)
+        onVisibleChanged: {
+            if (visible) {
+                previousFocus = root.activeFocusItem
+                Qt.callLater(function() {
+                    root.focusWithin(collectionDeleteOverlay, true, collectionCancelButton)
+                })
+            } else if (previousFocus) {
+                root.restoreFocus(previousFocus)
+                previousFocus = null
+            }
+        }
 
         MouseArea {
             anchors.fill: parent
@@ -1482,6 +1659,7 @@ ApplicationWindow {
                 RowLayout {
                     Layout.alignment: Qt.AlignRight
                     GlassButton {
+                        id: collectionCancelButton
                         text: "CANCEL"
                         onClicked: {
                             root.collectionDeleteOpen = false
@@ -1509,6 +1687,20 @@ ApplicationWindow {
         function onAchievementsUpdated(appId) {
             if (root.detailOpen && root.selectedInstallation.appId === appId) {
                 root.selectedGame = Library.get(root.selectedIndex)
+            }
+        }
+    }
+
+    Connections {
+        target: Controller
+        function onFavoriteRequested() {
+            if (root.detailOpen && !root.diagnosticsOpen && !root.linkDialogOpen
+                    && !root.collectionDeleteOpen) {
+                Library.toggleFavorite(root.selectedIndex)
+                root.selectedGame = Library.get(root.selectedIndex)
+            } else if (!root.detailOpen && root.navigationContainer() === null
+                       && libraryView.gridFocused && libraryView.currentIndex >= 0) {
+                Library.toggleFavorite(libraryView.currentIndex)
             }
         }
     }

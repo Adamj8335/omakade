@@ -10,6 +10,7 @@ Item {
     required property var libraryModel
     property alias currentIndex: grid.currentIndex
     readonly property int count: grid.count
+    readonly property bool gridFocused: grid.activeFocus
     property bool scanning: false
     property string emptyTitle: "No games found"
     property string emptyMessage: "Try a different search or library view."
@@ -17,6 +18,7 @@ Item {
     signal gameActivated(int index)
     signal favoriteToggled(int index)
     signal refreshRequested()
+    signal toolbarRequested()
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -96,6 +98,12 @@ Item {
         Keys.onSpacePressed: function(event) {
             if (currentIndex >= 0) {
                 root.gameActivated(currentIndex)
+                event.accepted = true
+            }
+        }
+        Keys.onUpPressed: function(event) {
+            if (currentIndex >= 0 && currentIndex < columns) {
+                root.toolbarRequested()
                 event.accepted = true
             }
         }

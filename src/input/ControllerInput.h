@@ -16,6 +16,8 @@ class ControllerInput final : public QObject {
   Q_PROPERTY(QString primaryGlyph READ primaryGlyph NOTIFY controllerChanged)
   Q_PROPERTY(QString backGlyph READ backGlyph NOTIFY controllerChanged)
   Q_PROPERTY(QString favoriteGlyph READ favoriteGlyph NOTIFY controllerChanged)
+  Q_PROPERTY(bool focusNavigation READ focusNavigation WRITE setFocusNavigation NOTIFY
+                 focusNavigationChanged)
 
 public:
   explicit ControllerInput(QObject* parent = nullptr);
@@ -27,10 +29,14 @@ public:
   [[nodiscard]] QString primaryGlyph() const;
   [[nodiscard]] QString backGlyph() const;
   [[nodiscard]] QString favoriteGlyph() const;
+  [[nodiscard]] bool focusNavigation() const;
+  void setFocusNavigation(bool enabled);
   void start();
 
 signals:
   void controllerChanged();
+  void focusNavigationChanged();
+  void favoriteRequested();
   void keyRequested(int key, int modifiers);
 
 private:
@@ -38,6 +44,7 @@ private:
   void openAvailableControllers();
   void closeController(SDL_JoystickID id);
   void handleButton(int button);
+  void emitDirection(int key);
   void updateAxisKey();
   [[nodiscard]] QString buttonLabel(SDL_GamepadButton button, const QString& fallback) const;
 
@@ -49,4 +56,5 @@ private:
   int m_axisY = 0;
   int m_axisKey = 0;
   bool m_sdlReady = false;
+  bool m_focusNavigation = false;
 };

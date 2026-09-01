@@ -1407,7 +1407,8 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   description.type = SDL_JOYSTICK_TYPE_GAMEPAD;
   description.naxes = SDL_GAMEPAD_AXIS_COUNT;
   description.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
-  description.button_mask = 1U << SDL_GAMEPAD_BUTTON_SOUTH;
+  description.button_mask = (1U << SDL_GAMEPAD_BUTTON_SOUTH)
+                            | (1U << SDL_GAMEPAD_BUTTON_WEST);
   description.axis_mask = (1U << SDL_GAMEPAD_AXIS_LEFTX) | (1U << SDL_GAMEPAD_AXIS_LEFTY);
   description.name = "Omakade test controller";
   const SDL_JoystickID id = SDL_AttachVirtualJoystick(&description);
@@ -1418,6 +1419,7 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   QTRY_VERIFY_WITH_TIMEOUT(controller.connected(), 1000);
   const int connectedCount = controller.controllerCount();
   QSignalSpy keys(&controller, &ControllerInput::keyRequested);
+  QSignalSpy favorites(&controller, &ControllerInput::favoriteRequested);
   SDL_Joystick* joystick = SDL_OpenJoystick(id);
   QVERIFY(joystick != nullptr);
   QVERIFY(SDL_SetJoystickVirtualButton(joystick, SDL_GAMEPAD_BUTTON_SOUTH, true));
@@ -1425,10 +1427,28 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   QTRY_VERIFY_WITH_TIMEOUT(!keys.isEmpty(), 1000);
   QCOMPARE(keys.first().at(0).toInt(), static_cast<int>(Qt::Key_Return));
 
+  SDL_Event favorite{};
+  favorite.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+  favorite.gbutton.which = id;
+  favorite.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
+  QVERIFY(SDL_PushEvent(&favorite));
+  QTRY_COMPARE_WITH_TIMEOUT(favorites.size(), 1, 1000);
+
   keys.clear();
   QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTX, 20000));
   SDL_UpdateJoysticks();
   QTRY_VERIFY_WITH_TIMEOUT(!keys.isEmpty(), 1000);
+  QCOMPARE(keys.first().at(0).toInt(), static_cast<int>(Qt::Key_Right));
+
+  keys.clear();
+  controller.setFocusNavigation(true);
+  QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTX, 0));
+  SDL_UpdateJoysticks();
+  QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTX, -20000));
+  SDL_UpdateJoysticks();
+  QTRY_VERIFY_WITH_TIMEOUT(!keys.isEmpty(), 1000);
+  QCOMPARE(keys.first().at(0).toInt(), static_cast<int>(Qt::Key_Backtab));
+  QCOMPARE(keys.first().at(1).toInt(), static_cast<int>(Qt::ShiftModifier));
 
   SDL_CloseJoystick(joystick);
   SDL_Event removed{};

@@ -12,7 +12,7 @@ ControllerInput::ControllerInput(QObject* parent) : QObject(parent) {
   m_repeatTimer.setInterval(320);
   connect(&m_repeatTimer, &QTimer::timeout, this, [this] {
     if (m_axisKey != 0) {
-      emit keyRequested(m_axisKey, Qt::NoModifier);
+      emitDirection(m_axisKey);
       m_repeatTimer.setInterval(90);
     }
   });
@@ -70,6 +70,16 @@ QString ControllerInput::backGlyph() const {
 
 QString ControllerInput::favoriteGlyph() const {
   return buttonLabel(SDL_GAMEPAD_BUTTON_WEST, QStringLiteral("WEST"));
+}
+
+bool ControllerInput::focusNavigation() const { return m_focusNavigation; }
+
+void ControllerInput::setFocusNavigation(bool enabled) {
+  if (m_focusNavigation == enabled) {
+    return;
+  }
+  m_focusNavigation = enabled;
+  emit focusNavigationChanged();
 }
 
 void ControllerInput::pollEvents() {
@@ -143,26 +153,36 @@ void ControllerInput::handleButton(int button) {
     emit keyRequested(Qt::Key_Escape, Qt::NoModifier);
     break;
   case SDL_GAMEPAD_BUTTON_WEST:
-    emit keyRequested(Qt::Key_F, Qt::NoModifier);
+    emit favoriteRequested();
     break;
   case SDL_GAMEPAD_BUTTON_START:
     emit keyRequested(Qt::Key_F11, Qt::NoModifier);
     break;
   case SDL_GAMEPAD_BUTTON_DPAD_UP:
-    emit keyRequested(Qt::Key_Up, Qt::NoModifier);
+    emitDirection(Qt::Key_Up);
     break;
   case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
-    emit keyRequested(Qt::Key_Down, Qt::NoModifier);
+    emitDirection(Qt::Key_Down);
     break;
   case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
-    emit keyRequested(Qt::Key_Left, Qt::NoModifier);
+    emitDirection(Qt::Key_Left);
     break;
   case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
-    emit keyRequested(Qt::Key_Right, Qt::NoModifier);
+    emitDirection(Qt::Key_Right);
     break;
   default:
     break;
   }
+}
+
+void ControllerInput::emitDirection(int key) {
+  if (!m_focusNavigation) {
+    emit keyRequested(key, Qt::NoModifier);
+    return;
+  }
+  const bool forward = key == Qt::Key_Down || key == Qt::Key_Right;
+  emit keyRequested(forward ? Qt::Key_Tab : Qt::Key_Backtab,
+                    forward ? Qt::NoModifier : Qt::ShiftModifier);
 }
 
 void ControllerInput::updateAxisKey() {
@@ -181,7 +201,7 @@ void ControllerInput::updateAxisKey() {
     m_repeatTimer.stop();
     m_repeatTimer.setInterval(320);
   } else {
-    emit keyRequested(key, Qt::NoModifier);
+    emitDirection(key);
     m_repeatTimer.start();
   }
 }

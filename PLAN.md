@@ -751,6 +751,24 @@ Gate:
 - Maintainer response path exists
 - Visual evidence and acceptance results are ready for upstream review
 
+### M6: Controller-first couch mode
+
+Status: planned for the next feature release. Input fixes to the existing
+desktop interface remain patch work and do not pull this milestone forward.
+
+Deliver:
+
+- A controller-first fullscreen library and game-detail layout
+- Large-screen navigation, readable focus states, and persistent button hints
+- Controller-friendly search and text entry
+- Controller access to filters, settings, dialogs, and every launch action
+
+Gate:
+
+- The full browse, inspect, organize, and launch journey works from a couch
+  without reaching for a keyboard or mouse
+- Leaving couch mode restores the prior desktop layout and focus position
+
 ## Explicitly deferred
 
 - Installing, updating, repairing, or moving games
