@@ -41,6 +41,7 @@ public:
   Q_INVOKABLE void storeApiKey(QString apiKey);
   Q_INVOKABLE void removeApiKey();
   Q_INVOKABLE void refreshAchievements(const QString& appId);
+  Q_INVOKABLE void refreshAchievementsIfStale(const QString& appId);
 
 signals:
   void accountChanged();
@@ -79,6 +80,7 @@ private:
   bool m_busy = false;
   QString m_statusText;
   QString m_state = QStringLiteral("local");
+  QString m_pendingAutoRefreshAppId;
   QNetworkAccessManager m_network;
   QHash<QNetworkReply*, QByteArray> m_responseBuffers;
   ApiRequestState m_api;

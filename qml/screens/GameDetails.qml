@@ -13,6 +13,7 @@ Item {
     required property var game
     required property var installations
     required property var selectedInstallation
+    property bool collectionEditorOpen: false
     signal backRequested()
     signal favoriteRequested()
     signal playRequested()
@@ -34,7 +35,12 @@ Item {
     }
 
     Keys.onEscapePressed: function(event) {
-        root.backRequested()
+        if (root.collectionEditorOpen) {
+            root.collectionEditorOpen = false
+            collectionField.clear()
+        } else {
+            root.backRequested()
+        }
         event.accepted = true
     }
 
@@ -433,12 +439,21 @@ Item {
                                         onClicked: root.collectionToggled(modelData, !selected)
                                     }
                                 }
+                                GlassButton {
+                                    compact: true
+                                    text: "+ NEW COLLECTION"
+                                    onClicked: {
+                                        root.collectionEditorOpen = true
+                                        Qt.callLater(collectionField.forceActiveFocus)
+                                    }
+                                }
                             }
                         }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
+                        visible: root.collectionEditorOpen
                         spacing: 8
                         Text {
                             text: "NEW"
@@ -477,6 +492,14 @@ Item {
                             text: "CREATE + ADD"
                             onClicked: {
                                 root.collectionCreateRequested(collectionField.text)
+                                collectionField.clear()
+                            }
+                        }
+                        GlassButton {
+                            compact: true
+                            text: "CANCEL"
+                            onClicked: {
+                                root.collectionEditorOpen = false
                                 collectionField.clear()
                             }
                         }
@@ -578,13 +601,6 @@ Item {
                         }
                         Item { Layout.fillWidth: true }
                         GlassButton {
-                            visible: Achievements.total > 1
-                            compact: true
-                            text: Achievements.sortMode === 0
-                                  ? "SORT: STATUS" : "SORT: UNLOCK DATE"
-                            onClicked: Achievements.sortMode = (Achievements.sortMode + 1) % 2
-                        }
-                        GlassButton {
                             compact: true
                             text: Insights && Insights.configured
                                   ? (Insights.busy ? "REFRESHING" : "REFRESH")
@@ -592,7 +608,7 @@ Item {
                             enabled: Insights && !Insights.busy
                             onClicked: {
                                 if (Insights.configured) {
-                                    Insights.refreshSteam(root.game.appId)
+                                    Insights.refreshSteam(root.selectedInstallation.appId)
                                 } else {
                                     root.connectRequested()
                                 }
@@ -723,6 +739,13 @@ Item {
                         }
                         Item { Layout.fillWidth: true }
                         GlassButton {
+                            visible: Achievements.total > 1
+                            compact: true
+                            text: Achievements.sortMode === 0
+                                  ? "SORT: STATUS" : "SORT: UNLOCK DATE"
+                            onClicked: Achievements.sortMode = (Achievements.sortMode + 1) % 2
+                        }
+                        GlassButton {
                             visible: SteamAccount !== null
                             compact: true
                             text: SteamAccount && SteamAccount.hasApiKey
@@ -731,7 +754,8 @@ Item {
                             enabled: !SteamAccount || !SteamAccount.busy
                             onClicked: {
                                 if (SteamAccount.hasApiKey) {
-                                    SteamAccount.refreshAchievements(root.game.appId)
+                                    SteamAccount.refreshAchievements(
+                                                root.selectedInstallation.appId)
                                 } else {
                                     root.connectRequested()
                                 }

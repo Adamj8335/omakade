@@ -11,6 +11,7 @@
 #include <QRegularExpression>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QTimer>
 #include <QUrlQuery>
 #include <QtConcurrent>
 
@@ -36,6 +37,7 @@ const SecretSchema* legacySteamSchema() {
 
 constexpr auto kSecretService = "steam-web-api";
 constexpr qsizetype kMaximumApiResponseBytes = 4 * 1024 * 1024;
+constexpr qint64 kAchievementRefreshSeconds = 15 * 60;
 
 SteamSecretResult lookupSecret(bool includeSecret) {
   GError* error = nullptr;
@@ -189,6 +191,32 @@ void SteamAccountService::refreshAchievements(const QString& appId) {
   }
   m_refreshAppId = appId;
   beginSecretOperation(SecretAction::LookupForRefresh);
+}
+
+void SteamAccountService::refreshAchievementsIfStale(const QString& appId) {
+  bool numericAppId = false;
+  appId.toULongLong(&numericAppId);
+  if (!numericAppId) {
+    return;
+  }
+  if (m_busy) {
+    m_pendingAutoRefreshAppId = appId;
+    return;
+  }
+  if (!m_hasApiKey || steamId().isEmpty() || !m_database.isOpen()) {
+    return;
+  }
+
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "SELECT updated_at FROM achievement_summary WHERE app_id = ? AND source = 'steam-web'"));
+  query.addBindValue(appId);
+  const qint64 now = QDateTime::currentSecsSinceEpoch();
+  if (query.exec() && query.next() &&
+      now - query.value(0).toLongLong() < kAchievementRefreshSeconds) {
+    return;
+  }
+  refreshAchievements(appId);
 }
 
 QString SteamAccountService::discoverSteamId() {
@@ -469,6 +497,11 @@ void SteamAccountService::setBusy(bool busy) {
   }
   m_busy = busy;
   emit busyChanged();
+  if (!m_busy && !m_pendingAutoRefreshAppId.isEmpty()) {
+    const QString appId = m_pendingAutoRefreshAppId;
+    m_pendingAutoRefreshAppId.clear();
+    QTimer::singleShot(0, this, [this, appId] { refreshAchievementsIfStale(appId); });
+  }
 }
 
 void SteamAccountService::setStatus(const QString& state, const QString& text) {

@@ -45,10 +45,10 @@ Download the package and `SHA256SUMS` from the
 [latest release](https://github.com/tsouth89/omakade/releases/latest), then run:
 
 ```bash
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.0/omakade-1.1.0-1-x86_64.pkg.tar.zst
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.0/SHA256SUMS
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.1/omakade-1.1.1-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.1/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.1.1-1-x86_64.pkg.tar.zst
 ```
 
 Omakade keeps its local library and settings when the package is upgraded or

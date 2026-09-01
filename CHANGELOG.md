@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1
+
+- Refreshes stale Steam achievements automatically when game details open.
+- Hides the new collection field behind a compact action.
+- Moves achievement sorting into the Achievements header.
+- Uses the selected Steam installation for linked-game achievements and insights.
+
 ## 1.1.0
 
 - Added native and Flatpak Faugus library discovery, artwork, playtime, filters, and settings.

@@ -37,10 +37,13 @@ ApplicationWindow {
         selectedInstallations = Library.installations(index)
         selectedInstallation = selectedInstallations.length > 0
                                ? selectedInstallations[0] : selectedGame
-        if (!DemoMode && selectedGame.source === "Steam") {
-            Achievements.load(selectedGame.appId)
+        if (!DemoMode && selectedInstallation.source === "Steam") {
+            Achievements.load(selectedInstallation.appId)
+            if (SteamAccount) {
+                SteamAccount.refreshAchievementsIfStale(selectedInstallation.appId)
+            }
             if (Insights) {
-                Insights.loadSteam(selectedGame.appId)
+                Insights.loadSteam(selectedInstallation.appId)
             }
         } else {
             Achievements.load("")
@@ -133,6 +136,9 @@ ApplicationWindow {
         selectedInstallation = installation
         if (!DemoMode && installation.source === "Steam") {
             Achievements.load(installation.appId)
+            if (SteamAccount) {
+                SteamAccount.refreshAchievementsIfStale(installation.appId)
+            }
             if (Insights) {
                 Insights.loadSteam(installation.appId)
             }
@@ -764,6 +770,7 @@ ApplicationWindow {
                         && Library.setCollectionMembership(root.selectedIndex, name, true)) {
                     root.refreshAfterOrganization()
                     root.showToast("Added to " + name)
+                    detailsLoader.item.collectionEditorOpen = false
                 } else {
                     root.showToast("That collection already exists or is invalid")
                 }
@@ -1473,7 +1480,7 @@ ApplicationWindow {
         target: SteamAccount
         enabled: SteamAccount !== null
         function onAchievementsUpdated(appId) {
-            if (root.detailOpen && root.selectedGame.appId === appId) {
+            if (root.detailOpen && root.selectedInstallation.appId === appId) {
                 root.selectedGame = Library.get(root.selectedIndex)
             }
         }
