@@ -24,6 +24,10 @@ Item {
     signal installationSelected(var installation)
     signal linkRequested()
     signal unlinkRequested()
+    signal completionStatusRequested(string status)
+    signal tagsRequested(string tags)
+    signal collectionToggled(string name, bool included)
+    signal collectionCreateRequested(string name)
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -302,6 +306,152 @@ Item {
                     GlassButton {
                         text: root.game.hidden ? "UNHIDE" : "HIDE"
                         onClicked: root.hiddenRequested()
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 8
+                    visible: !DemoMode
+                    spacing: 9
+
+                    Text {
+                        text: "ORGANIZE"
+                        color: Theme.brightForeground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                        font.letterSpacing: 0.6
+                    }
+
+                    RowLayout {
+                        spacing: 6
+                        Text {
+                            text: "STATUS"
+                            color: Theme.mutedText
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            Layout.preferredWidth: 76
+                        }
+                        Repeater {
+                            model: ["backlog", "playing", "completed", "abandoned"]
+                            GlassButton {
+                                required property string modelData
+                                compact: true
+                                text: modelData.toUpperCase()
+                                selected: (root.game.completionStatus || "") === modelData
+                                onClicked: root.completionStatusRequested(
+                                               selected ? "" : modelData)
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            text: "TAGS"
+                            color: Theme.mutedText
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            Layout.preferredWidth: 76
+                        }
+                        TextField {
+                            id: tagsField
+                            Layout.fillWidth: true
+                            placeholderText: "Co-op, cozy, difficult"
+                            text: root.game.tags ? root.game.tags.join(", ") : ""
+                            color: Theme.foreground
+                            placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                            font.family: Theme.fontFamily
+                            selectByMouse: true
+                            background: Rectangle {
+                                radius: Math.max(5, Theme.cornerRadius)
+                                color: root.alpha(Theme.foreground, 0.045)
+                                border.color: tagsField.activeFocus
+                                              ? Theme.accent
+                                              : root.alpha(Theme.foreground, 0.15)
+                            }
+                            Keys.onReturnPressed: root.tagsRequested(text)
+                            Keys.onEnterPressed: root.tagsRequested(text)
+                        }
+                        GlassButton {
+                            compact: true
+                            text: "SAVE"
+                            onClicked: root.tagsRequested(tagsField.text)
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text {
+                            text: "COLLECTIONS"
+                            color: Theme.mutedText
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            Layout.preferredWidth: 76
+                        }
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 38
+                            contentHeight: availableHeight
+                            ScrollBar.vertical.policy: ScrollBar.AlwaysOff
+                            ScrollBar.horizontal.policy: ScrollBar.AsNeeded
+                            Row {
+                                spacing: 6
+                                Repeater {
+                                    model: Library.collectionNames
+                                    GlassButton {
+                                        required property string modelData
+                                        compact: true
+                                        text: modelData.toUpperCase()
+                                        selected: root.game.collections
+                                                  ? root.game.collections.indexOf(modelData) >= 0
+                                                  : false
+                                        onClicked: root.collectionToggled(modelData, !selected)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Item { Layout.preferredWidth: 76 }
+                        TextField {
+                            id: collectionField
+                            Layout.fillWidth: true
+                            placeholderText: "New collection"
+                            color: Theme.foreground
+                            placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                            font.family: Theme.fontFamily
+                            selectByMouse: true
+                            background: Rectangle {
+                                radius: Math.max(5, Theme.cornerRadius)
+                                color: root.alpha(Theme.foreground, 0.045)
+                                border.color: collectionField.activeFocus
+                                              ? Theme.accent
+                                              : root.alpha(Theme.foreground, 0.15)
+                            }
+                            Keys.onReturnPressed: {
+                                root.collectionCreateRequested(text)
+                                clear()
+                            }
+                            Keys.onEnterPressed: {
+                                root.collectionCreateRequested(text)
+                                clear()
+                            }
+                        }
+                        GlassButton {
+                            compact: true
+                            text: "CREATE + ADD"
+                            onClicked: {
+                                root.collectionCreateRequested(collectionField.text)
+                                collectionField.clear()
+                            }
+                        }
                     }
                 }
 

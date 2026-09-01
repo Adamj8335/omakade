@@ -10,6 +10,7 @@ FocusScope {
     required property int hours
     required property int progress
     required property bool favorite
+    required property string completionStatus
     required property color accentStart
     required property color accentEnd
     required property string coverMark
@@ -169,6 +170,34 @@ FocusScope {
                     radius: 1
                     color: Theme.brightForeground
                 }
+            }
+        }
+
+        Rectangle {
+            visible: root.completionStatus.length > 0
+            height: 25
+            width: statusText.implicitWidth + 18
+            radius: 13
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.margins: 9
+            color: root.completionStatus === "completed"
+                   ? root.alpha(Theme.green, 0.82)
+                   : root.completionStatus === "playing"
+                     ? root.alpha(Theme.accent, 0.82)
+                     : root.completionStatus === "backlog"
+                       ? root.alpha(Theme.yellow, 0.78)
+                       : root.alpha(Theme.darkerBackground, 0.72)
+            border.color: root.alpha(Theme.brightForeground, 0.20)
+
+            Text {
+                id: statusText
+                anchors.centerIn: parent
+                text: root.completionStatus.toUpperCase()
+                color: Theme.brightForeground
+                font.family: Theme.fontFamily
+                font.pixelSize: 8
+                font.weight: Font.Bold
             }
         }
 

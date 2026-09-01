@@ -178,6 +178,7 @@ private slots:
   void customCoverPersistsAndResets();
   void explicitLinksPersistAndPreserveInstallations();
   void launchActivityPersistsAndSortsExactly();
+  void organizationPersistsAndFilters();
   void lutrisLauncherBuildsSafeCommands();
   void heroicScannerImportsEpicGogAndAmazon();
   void heroicModelIsRepeatableAndPreservesLocalState();
@@ -408,7 +409,7 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QSqlQuery query(verify);
     QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
     QVERIFY(query.next());
-    QCOMPARE(query.value(0).toInt(), 5);
+    QCOMPARE(query.value(0).toInt(), 6);
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('achievement_summary', 'achievements')")));
@@ -422,6 +423,11 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('artwork_overrides', 'game_link_members', 'launch_activity')")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 3);
+    QVERIFY(query.exec(
+        QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
+                       "('game_organization', 'collections', 'collection_games')")));
     QVERIFY(query.next());
     QCOMPARE(query.value(0).toInt(), 3);
     verify.close();
@@ -639,6 +645,18 @@ void CoreTests::explicitLinksPersistAndPreserveInstallations() {
              QStringLiteral("Lutris"));
     QCOMPARE(installations.at(1).toMap().value(QStringLiteral("appId")).toString(),
              QStringLiteral("7"));
+    QVERIFY(games.setCompletionStatus(0, QStringLiteral("completed")));
+    QVERIFY(games.setTags(0, QStringLiteral("cross-platform")));
+    QVERIFY(games.createCollection(QStringLiteral("Finished")));
+    QVERIFY(games.setCollectionMembership(0, QStringLiteral("Finished"), true));
+    for (const QVariant& installation : games.installations(0)) {
+      QCOMPARE(installation.toMap().value(QStringLiteral("completionStatus")).toString(),
+               QStringLiteral("completed"));
+      QCOMPARE(installation.toMap().value(QStringLiteral("tags")).toStringList(),
+               QStringList({QStringLiteral("cross-platform")}));
+      QCOMPARE(installation.toMap().value(QStringLiteral("collections")).toStringList(),
+               QStringList({QStringLiteral("Finished")}));
+    }
     games.toggleFavorite(0);
     QVERIFY(!demo.data(demo.index(0), GameRoles::Favorite).toBool());
 
@@ -657,6 +675,10 @@ void CoreTests::explicitLinksPersistAndPreserveInstallations() {
   games.addSourceModel(&lutris);
   QCOMPARE(games.rowCount(), 2);
   QCOMPARE(games.installations(0).size(), 2);
+  QCOMPARE(games.data(games.index(0), GameRoles::CompletionStatus).toString(),
+           QStringLiteral("completed"));
+  QCOMPARE(games.data(games.index(0), GameRoles::Collections).toStringList(),
+           QStringList({QStringLiteral("Finished")}));
   QVERIFY(games.unlinkGames(0));
   QCOMPARE(games.rowCount(), 3);
 }
@@ -705,6 +727,73 @@ void CoreTests::launchActivityPersistsAndSortsExactly() {
   library.setSortMode(LibraryFilterModel::SortMode::RecentlyPlayed);
   QCOMPARE(library.get(0).value(QStringLiteral("appId")).toString(),
            QStringLiteral("demo-10"));
+}
+
+void CoreTests::organizationPersistsAndFilters() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+
+  {
+    MockGameModel demo(nullptr, 20);
+    UnifiedGameModel games(database);
+    games.addSourceModel(&demo);
+    LibraryFilterModel library;
+    library.setSourceModel(&games);
+    int gameRow = -1;
+    for (int row = 0; row < library.rowCount(); ++row) {
+      if (library.get(row).value(QStringLiteral("appId")) == QStringLiteral("demo-10")) {
+        gameRow = row;
+        break;
+      }
+    }
+    QVERIFY(gameRow >= 0);
+    QVERIFY(!library.setCompletionStatus(gameRow, QStringLiteral("finished-ish")));
+    QVERIFY(library.setCompletionStatus(gameRow, QStringLiteral("Playing")));
+    QVERIFY(library.setTags(gameRow, QStringLiteral("Co-op, RPG, co-OP, Long game")));
+    QVERIFY(library.createCollection(QStringLiteral("Weekend")));
+    QVERIFY(!library.createCollection(QStringLiteral("weekend")));
+    QVERIFY(library.setCollectionMembership(gameRow, QStringLiteral("Weekend"), true));
+
+    const QVariantMap game = library.get(gameRow);
+    QCOMPARE(game.value(QStringLiteral("completionStatus")).toString(),
+             QStringLiteral("playing"));
+    QCOMPARE(game.value(QStringLiteral("tags")).toStringList(),
+             QStringList({QStringLiteral("Co-op"), QStringLiteral("Long game"),
+                          QStringLiteral("RPG")}));
+    QCOMPARE(game.value(QStringLiteral("collections")).toStringList(),
+             QStringList({QStringLiteral("Weekend")}));
+    QCOMPARE(library.collectionNames(), QStringList({QStringLiteral("Weekend")}));
+    QCOMPARE(library.tagNames(),
+             QStringList({QStringLiteral("Co-op"), QStringLiteral("Long game"),
+                          QStringLiteral("RPG")}));
+
+    library.setCompletionFilter(QStringLiteral("playing"));
+    QCOMPARE(library.rowCount(), 1);
+    library.setCompletionFilter({});
+    library.setCollectionFilter(QStringLiteral("Weekend"));
+    QCOMPARE(library.rowCount(), 1);
+    library.setCollectionFilter({});
+    library.setTagFilter(QStringLiteral("rpg"));
+    QCOMPARE(library.rowCount(), 1);
+    library.setSearchText(QStringLiteral("Long game"));
+    QCOMPARE(library.rowCount(), 1);
+  }
+
+  MockGameModel demo(nullptr, 20);
+  UnifiedGameModel games(database);
+  games.addSourceModel(&demo);
+  LibraryFilterModel library;
+  library.setSourceModel(&games);
+  library.setCompletionFilter(QStringLiteral("playing"));
+  QCOMPARE(library.rowCount(), 1);
+  QCOMPARE(library.get(0).value(QStringLiteral("appId")).toString(),
+           QStringLiteral("demo-10"));
+  QCOMPARE(library.get(0).value(QStringLiteral("collections")).toStringList(),
+           QStringList({QStringLiteral("Weekend")}));
+  QVERIFY(library.deleteCollection(QStringLiteral("weekend")));
+  QVERIFY(library.collectionNames().isEmpty());
+  QVERIFY(library.get(0).value(QStringLiteral("collections")).toStringList().isEmpty());
 }
 
 void CoreTests::lutrisLauncherBuildsSafeCommands() {

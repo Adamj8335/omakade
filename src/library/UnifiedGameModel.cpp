@@ -8,6 +8,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QSaveFile>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -27,6 +29,48 @@ QString runnerFor(const QModelIndex& game) {
   const QString runner = game.data(GameRoles::Runner).toString();
   return runner.isNull() ? QStringLiteral("") : runner;
 }
+
+QString normalizedStatus(const QString& status) {
+  const QString value = status.trimmed().toLower();
+  static const QSet<QString> allowed = {QString{}, QStringLiteral("backlog"),
+                                        QStringLiteral("playing"), QStringLiteral("completed"),
+                                        QStringLiteral("abandoned")};
+  return allowed.contains(value) ? value : QString{};
+}
+
+QStringList normalizedTags(const QString& input) {
+  QStringList result;
+  for (QString tag : input.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+    tag = tag.trimmed().simplified().left(32);
+    if (tag.isEmpty()) {
+      continue;
+    }
+    const bool duplicate = std::any_of(result.cbegin(), result.cend(), [&tag](const QString& item) {
+      return item.compare(tag, Qt::CaseInsensitive) == 0;
+    });
+    if (!duplicate) {
+      result.append(tag);
+    }
+    if (result.size() == 20) {
+      break;
+    }
+  }
+  return result;
+}
+
+QString normalizedCollectionName(const QString& input) {
+  QString name = input.trimmed().simplified();
+  if (name.isEmpty() || name.size() > 48) {
+    return {};
+  }
+  for (const QChar character : name) {
+    if (character.category() == QChar::Other_Control) {
+      return {};
+    }
+  }
+  return name;
+}
+
 } // namespace
 
 UnifiedGameModel::UnifiedGameModel(const QString& databasePath, QObject* parent)
@@ -88,6 +132,32 @@ QVariant UnifiedGameModel::data(const QModelIndex& index, int role) const {
     }
     return sources.join(QStringLiteral(" + "));
   }
+  if (role == GameRoles::CompletionStatus) {
+    for (const SourceRow& member : members) {
+      const QString status = m_organizationForGame.value(gameKey(member)).status;
+      if (!status.isEmpty()) {
+        return status;
+      }
+    }
+    return QString{};
+  }
+  if (role == GameRoles::Tags || role == GameRoles::Collections) {
+    QStringList values;
+    for (const SourceRow& member : members) {
+      const QStringList memberValues = role == GameRoles::Tags
+                                           ? m_organizationForGame.value(gameKey(member)).tags
+                                           : m_collectionsForGame.value(gameKey(member));
+      for (const QString& value : memberValues) {
+        if (std::none_of(values.cbegin(), values.cend(), [&value](const QString& item) {
+              return item.compare(value, Qt::CaseInsensitive) == 0;
+            })) {
+          values.append(value);
+        }
+      }
+    }
+    values.sort(Qt::CaseInsensitive);
+    return values;
+  }
   if (role == GameRoles::Favorite || role == GameRoles::Hidden) {
     bool value = role == GameRoles::Hidden;
     for (const SourceRow& member : members) {
@@ -128,6 +198,9 @@ QHash<int, QByteArray> UnifiedGameModel::roleNames() const {
   roles.insert(GameRoles::CustomCover, "customCover");
   roles.insert(GameRoles::Linked, "linked");
   roles.insert(GameRoles::LinkedSources, "linkedSources");
+  roles.insert(GameRoles::CompletionStatus, "completionStatus");
+  roles.insert(GameRoles::Tags, "tags");
+  roles.insert(GameRoles::Collections, "collections");
   return roles;
 }
 
@@ -402,6 +475,185 @@ bool UnifiedGameModel::recordLaunch(int row, const QString& sourceName, const QS
   return true;
 }
 
+bool UnifiedGameModel::setCompletionStatus(int row, const QString& status) {
+  const SourceRow source = mapRow(row);
+  const QString normalized = normalizedStatus(status);
+  if (source.model == nullptr || !m_database.isOpen() ||
+      (!status.trimmed().isEmpty() && normalized.isEmpty()) || !m_database.transaction()) {
+    return false;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "INSERT INTO game_organization(source, runner, app_id, completion_status, tags_json) "
+      "VALUES(?, ?, ?, ?, '[]') ON CONFLICT(source, runner, app_id) DO UPDATE SET "
+      "completion_status = excluded.completion_status"));
+  const QVector<SourceRow> members = groupRows(source);
+  for (const SourceRow& member : members) {
+    const QModelIndex game = member.model->index(member.row, 0);
+    query.bindValue(0, game.data(GameRoles::Source).toString());
+    query.bindValue(1, runnerFor(game));
+    query.bindValue(2, game.data(GameRoles::AppId).toString());
+    query.bindValue(3, normalized);
+    if (!query.exec()) {
+      m_database.rollback();
+      return false;
+    }
+  }
+  if (!m_database.commit()) {
+    return false;
+  }
+  for (const SourceRow& member : members) {
+    m_organizationForGame[gameKey(member)].status = normalized;
+  }
+  emit dataChanged(index(row), index(row), {GameRoles::CompletionStatus});
+  return true;
+}
+
+bool UnifiedGameModel::setTags(int row, const QString& tags) {
+  const SourceRow source = mapRow(row);
+  if (source.model == nullptr || !m_database.isOpen()) {
+    return false;
+  }
+  const QStringList normalized = normalizedTags(tags);
+  QJsonArray jsonTags;
+  for (const QString& tag : normalized) {
+    jsonTags.append(tag);
+  }
+  const QString json = QString::fromUtf8(QJsonDocument(jsonTags).toJson(QJsonDocument::Compact));
+  if (!m_database.transaction()) {
+    return false;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "INSERT INTO game_organization(source, runner, app_id, completion_status, tags_json) "
+      "VALUES(?, ?, ?, '', ?) ON CONFLICT(source, runner, app_id) DO UPDATE SET tags_json = "
+      "excluded.tags_json"));
+  const QVector<SourceRow> members = groupRows(source);
+  for (const SourceRow& member : members) {
+    const QModelIndex game = member.model->index(member.row, 0);
+    query.bindValue(0, game.data(GameRoles::Source).toString());
+    query.bindValue(1, runnerFor(game));
+    query.bindValue(2, game.data(GameRoles::AppId).toString());
+    query.bindValue(3, json);
+    if (!query.exec()) {
+      m_database.rollback();
+      return false;
+    }
+  }
+  if (!m_database.commit()) {
+    return false;
+  }
+  for (const SourceRow& member : members) {
+    m_organizationForGame[gameKey(member)].tags = normalized;
+  }
+  emit dataChanged(index(row), index(row), {GameRoles::Tags});
+  emit collectionsChanged();
+  return true;
+}
+
+bool UnifiedGameModel::createCollection(const QString& name) {
+  const QString normalized = normalizedCollectionName(name);
+  if (normalized.isEmpty() || !m_database.isOpen()) {
+    return false;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral("INSERT INTO collections(name, created_at) VALUES(?, ?)"));
+  query.addBindValue(normalized);
+  query.addBindValue(QDateTime::currentSecsSinceEpoch());
+  if (!query.exec()) {
+    return false;
+  }
+  loadCollections();
+  emit collectionsChanged();
+  return true;
+}
+
+bool UnifiedGameModel::deleteCollection(const QString& name) {
+  QString storedName;
+  for (const QString& collection : m_collectionNames) {
+    if (collection.compare(name.trimmed(), Qt::CaseInsensitive) == 0) {
+      storedName = collection;
+      break;
+    }
+  }
+  if (storedName.isEmpty() || !m_database.isOpen() || !m_database.transaction()) {
+    return false;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral("DELETE FROM collection_games WHERE collection_name = ?"));
+  query.addBindValue(storedName);
+  bool okay = query.exec();
+  query.prepare(QStringLiteral("DELETE FROM collections WHERE name = ?"));
+  query.addBindValue(storedName);
+  okay = okay && query.exec();
+  if (!okay || !m_database.commit()) {
+    m_database.rollback();
+    return false;
+  }
+  loadCollections();
+  if (!m_rows.isEmpty()) {
+    emit dataChanged(index(0), index(m_rows.size() - 1), {GameRoles::Collections});
+  }
+  emit collectionsChanged();
+  return true;
+}
+
+bool UnifiedGameModel::setCollectionMembership(int row, const QString& name, bool included) {
+  const SourceRow source = mapRow(row);
+  QString storedName;
+  for (const QString& collection : m_collectionNames) {
+    if (collection.compare(name.trimmed(), Qt::CaseInsensitive) == 0) {
+      storedName = collection;
+      break;
+    }
+  }
+  if (source.model == nullptr || storedName.isEmpty() || !m_database.isOpen() ||
+      !m_database.transaction()) {
+    return false;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(included
+                    ? QStringLiteral("INSERT OR IGNORE INTO collection_games(collection_name, "
+                                     "source, runner, app_id) VALUES(?, ?, ?, ?)")
+                    : QStringLiteral("DELETE FROM collection_games WHERE collection_name = ? AND "
+                                     "source = ? AND runner = ? AND app_id = ?"));
+  const QVector<SourceRow> members = groupRows(source);
+  for (const SourceRow& member : members) {
+    const QModelIndex game = member.model->index(member.row, 0);
+    query.bindValue(0, storedName);
+    query.bindValue(1, game.data(GameRoles::Source).toString());
+    query.bindValue(2, runnerFor(game));
+    query.bindValue(3, game.data(GameRoles::AppId).toString());
+    if (!query.exec()) {
+      m_database.rollback();
+      return false;
+    }
+  }
+  if (!m_database.commit()) {
+    return false;
+  }
+  loadCollections();
+  emit dataChanged(index(row), index(row), {GameRoles::Collections});
+  return true;
+}
+
+QStringList UnifiedGameModel::collectionNames() const { return m_collectionNames; }
+
+QStringList UnifiedGameModel::tagNames() const {
+  QStringList result;
+  for (const OrganizationState& state : m_organizationForGame) {
+    for (const QString& tag : state.tags) {
+      if (std::none_of(result.cbegin(), result.cend(), [&tag](const QString& item) {
+            return item.compare(tag, Qt::CaseInsensitive) == 0;
+          })) {
+        result.append(tag);
+      }
+    }
+  }
+  result.sort(Qt::CaseInsensitive);
+  return result;
+}
+
 UnifiedGameModel::SourceRow UnifiedGameModel::mapRow(int row) const {
   if (row < 0 || row >= m_rows.size()) {
     return {};
@@ -477,6 +729,10 @@ QVariantMap UnifiedGameModel::gameMap(const SourceRow& source) const {
                                      m_lastLaunchForGame.value(gameKey(source)));
   result.insert(QStringLiteral("lastPlayed"), lastPlayed);
   result.insert(QStringLiteral("recent"), lastPlayed > 0);
+  result.insert(QStringLiteral("completionStatus"),
+                m_organizationForGame.value(gameKey(source)).status);
+  result.insert(QStringLiteral("tags"), m_organizationForGame.value(gameKey(source)).tags);
+  result.insert(QStringLiteral("collections"), m_collectionsForGame.value(gameKey(source)));
   return result;
 }
 
@@ -527,16 +783,35 @@ bool UnifiedGameModel::openArtworkDatabase(const QString& path) {
           "NULL DEFAULT 1, PRIMARY KEY(source, runner, app_id))"))) {
     return false;
   }
+  if (!query.exec(QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS game_organization (source TEXT NOT NULL, runner TEXT NOT "
+          "NULL, app_id TEXT NOT NULL, completion_status TEXT NOT NULL DEFAULT '', tags_json TEXT "
+          "NOT NULL DEFAULT '[]', PRIMARY KEY(source, runner, app_id))"))) {
+    return false;
+  }
+  if (!query.exec(QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS collections (name TEXT PRIMARY KEY COLLATE NOCASE, "
+          "created_at INTEGER NOT NULL)"))) {
+    return false;
+  }
+  if (!query.exec(QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS collection_games (collection_name TEXT NOT NULL, source "
+          "TEXT NOT NULL, runner TEXT NOT NULL, app_id TEXT NOT NULL, PRIMARY KEY(collection_name, "
+          "source, runner, app_id))"))) {
+    return false;
+  }
   int schemaVersion = 0;
   if (query.exec(QStringLiteral("PRAGMA user_version")) && query.next()) {
     schemaVersion = query.value(0).toInt();
   }
-  if (schemaVersion < 4 && !query.exec(QStringLiteral("PRAGMA user_version = 4"))) {
+  if (schemaVersion < 6 && !query.exec(QStringLiteral("PRAGMA user_version = 6"))) {
     return false;
   }
   loadArtworkOverrides();
   loadLinks();
   loadLaunchActivity();
+  loadOrganization();
+  loadCollections();
   return true;
 }
 
@@ -583,5 +858,48 @@ void UnifiedGameModel::loadLaunchActivity() {
     const QString key = query.value(0).toString() + QChar::Null + query.value(1).toString() +
                         QChar::Null + query.value(2).toString();
     m_lastLaunchForGame.insert(key, query.value(3).toLongLong());
+  }
+}
+
+void UnifiedGameModel::loadOrganization() {
+  m_organizationForGame.clear();
+  QSqlQuery query(m_database);
+  if (!query.exec(QStringLiteral(
+          "SELECT source, runner, app_id, completion_status, tags_json FROM game_organization"))) {
+    return;
+  }
+  while (query.next()) {
+    const QString key = query.value(0).toString() + QChar::Null + query.value(1).toString() +
+                        QChar::Null + query.value(2).toString();
+    QStringList tags;
+    const QJsonArray values = QJsonDocument::fromJson(query.value(4).toByteArray()).array();
+    for (const QJsonValue& value : values) {
+      if (value.isString()) {
+        tags.append(value.toString());
+      }
+    }
+    m_organizationForGame.insert(
+        key, {.status = normalizedStatus(query.value(3).toString()), .tags = tags});
+  }
+}
+
+void UnifiedGameModel::loadCollections() {
+  m_collectionNames.clear();
+  m_collectionsForGame.clear();
+  QSqlQuery query(m_database);
+  if (query.exec(QStringLiteral("SELECT name FROM collections ORDER BY name COLLATE NOCASE"))) {
+    while (query.next()) {
+      m_collectionNames.append(query.value(0).toString());
+    }
+  }
+  if (!query.exec(QStringLiteral(
+          "SELECT collection_name, source, runner, app_id FROM collection_games ORDER BY "
+          "collection_name COLLATE NOCASE"))) {
+    return;
+  }
+  while (query.next()) {
+    const QString key = query.value(1).toString() + QChar::Null + query.value(2).toString() +
+                        QChar::Null + query.value(3).toString();
+    m_collectionsForGame[key].append(query.value(0).toString());
   }
 }

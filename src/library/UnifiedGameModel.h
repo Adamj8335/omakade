@@ -2,11 +2,14 @@
 
 #include <QAbstractListModel>
 #include <QSqlDatabase>
+#include <QStringList>
 #include <QUrl>
 #include <QVector>
 
 class UnifiedGameModel final : public QAbstractListModel {
   Q_OBJECT
+  Q_PROPERTY(QStringList collectionNames READ collectionNames NOTIFY collectionsChanged)
+  Q_PROPERTY(QStringList tagNames READ tagNames NOTIFY collectionsChanged)
 
 public:
   explicit UnifiedGameModel(const QString& databasePath = {}, QObject* parent = nullptr);
@@ -28,6 +31,16 @@ public:
   Q_INVOKABLE bool linkGames(int row, const QString& source, const QString& runner,
                              const QString& appId);
   Q_INVOKABLE bool unlinkGames(int row);
+  Q_INVOKABLE bool setCompletionStatus(int row, const QString& status);
+  Q_INVOKABLE bool setTags(int row, const QString& tags);
+  Q_INVOKABLE bool createCollection(const QString& name);
+  Q_INVOKABLE bool deleteCollection(const QString& name);
+  Q_INVOKABLE bool setCollectionMembership(int row, const QString& name, bool included);
+  [[nodiscard]] QStringList collectionNames() const;
+  [[nodiscard]] QStringList tagNames() const;
+
+signals:
+  void collectionsChanged();
 
 private:
   struct SourceRow {
@@ -44,6 +57,13 @@ private:
   void loadArtworkOverrides();
   void loadLinks();
   void loadLaunchActivity();
+  void loadOrganization();
+  void loadCollections();
+
+  struct OrganizationState {
+    QString status;
+    QStringList tags;
+  };
 
   QVector<QAbstractItemModel*> m_models;
   QVector<SourceRow> m_rows;
@@ -55,4 +75,7 @@ private:
   QHash<QString, QString> m_groupForGame;
   QHash<QString, QString> m_primaryForGroup;
   QHash<QString, qint64> m_lastLaunchForGame;
+  QHash<QString, OrganizationState> m_organizationForGame;
+  QHash<QString, QStringList> m_collectionsForGame;
+  QStringList m_collectionNames;
 };

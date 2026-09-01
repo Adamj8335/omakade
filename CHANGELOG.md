@@ -6,6 +6,8 @@
 - Made Recently Played sort by exact activity time instead of a yes or no flag.
 - Added optional IGDB critic aggregates and game-length estimates with an
   offline cache and Secret Service credential storage.
+- Added custom collections, tags, completion states, card badges, and smart
+  organization filters.
 
 ## 0.5.0
 

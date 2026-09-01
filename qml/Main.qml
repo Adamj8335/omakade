@@ -17,6 +17,8 @@ ApplicationWindow {
     property bool smokeReady: false
     property bool diagnosticsOpen: false
     property bool linkDialogOpen: false
+    property bool collectionDeleteOpen: false
+    property string pendingCollectionDelete: ""
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -50,6 +52,46 @@ ApplicationWindow {
     function showToast(message) {
         toast.message = message
         toastTimer.restart()
+    }
+
+    function nextFilter(current, values) {
+        if (!values || values.length === 0) {
+            return ""
+        }
+        const index = values.indexOf(current)
+        return index < 0 ? values[0] : index + 1 < values.length ? values[index + 1] : ""
+    }
+
+    function filterLabel(prefix, value) {
+        if (!value || value.length === 0) {
+            return prefix
+        }
+        const shortened = value.length > 16 ? value.substring(0, 15) + "…" : value
+        return prefix + ": " + shortened.toUpperCase()
+    }
+
+    function confirmCollectionDelete() {
+        const name = pendingCollectionDelete
+        const source = selectedGame.source || ""
+        const runner = selectedGame.runner || ""
+        const appId = selectedGame.appId || ""
+        if (Library.deleteCollection(name)) {
+            if (detailOpen) {
+                refreshSelected(source, runner, appId)
+            }
+            showToast("Deleted " + name)
+        }
+        collectionDeleteOpen = false
+        pendingCollectionDelete = ""
+    }
+
+    function refreshAfterOrganization() {
+        const source = selectedGame.source
+        const runner = selectedGame.runner || ""
+        const appId = selectedGame.appId
+        if (!refreshSelected(source, runner, appId)) {
+            closeDetails()
+        }
     }
 
     function playSelected() {
@@ -170,6 +212,9 @@ ApplicationWindow {
         onActivated: {
             if (root.linkDialogOpen) {
                 root.linkDialogOpen = false
+            } else if (root.collectionDeleteOpen) {
+                root.collectionDeleteOpen = false
+                root.pendingCollectionDelete = ""
             } else if (root.diagnosticsOpen) {
                 root.diagnosticsOpen = false
             } else if (root.detailOpen) {
@@ -519,6 +564,63 @@ ApplicationWindow {
                 }
             }
 
+            RowLayout {
+                Layout.fillWidth: true
+                visible: !DemoMode
+                spacing: 6
+
+                Text {
+                    text: "ORGANIZE"
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                }
+                GlassButton {
+                    compact: true
+                    text: root.filterLabel("STATUS", Library.completionFilter)
+                    selected: Library.completionFilter !== ""
+                    onClicked: {
+                        Library.completionFilter = root.nextFilter(
+                                    Library.completionFilter,
+                                    ["backlog", "playing", "completed", "abandoned"])
+                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                    }
+                }
+                GlassButton {
+                    compact: true
+                    text: root.filterLabel("COLLECTION", Library.collectionFilter)
+                    selected: Library.collectionFilter !== ""
+                    onClicked: {
+                        Library.collectionFilter = root.nextFilter(
+                                    Library.collectionFilter, Library.collectionNames)
+                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                    }
+                }
+                GlassButton {
+                    compact: true
+                    text: root.filterLabel("TAG", Library.tagFilter)
+                    selected: Library.tagFilter !== ""
+                    onClicked: {
+                        Library.tagFilter = root.nextFilter(Library.tagFilter, Library.tagNames)
+                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                    }
+                }
+                GlassButton {
+                    compact: true
+                    visible: Library.completionFilter !== "" || Library.collectionFilter !== ""
+                             || Library.tagFilter !== ""
+                    text: "CLEAR"
+                    onClicked: {
+                        Library.completionFilter = ""
+                        Library.collectionFilter = ""
+                        Library.tagFilter = ""
+                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                    }
+                }
+                Item { Layout.fillWidth: true }
+            }
+
             LibraryView {
                 id: libraryView
                 Layout.fillWidth: true
@@ -532,7 +634,9 @@ ApplicationWindow {
                             : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
                               ? "Steam was not found"
                               : Library.mode === 3 ? "No hidden games" : "No installed games"
-                emptyMessage: Library.sourceFilter === "Heroic" && HeroicLibrary && HeroicLibrary.errorText.length > 0
+                emptyMessage: Library.completionFilter !== "" || Library.collectionFilter !== "" || Library.tagFilter !== ""
+                              ? "Clear or change the organization filters to see more games."
+                              : Library.sourceFilter === "Heroic" && HeroicLibrary && HeroicLibrary.errorText.length > 0
                               ? HeroicLibrary.errorText
                               : Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
                               ? LutrisLibrary.errorText
@@ -607,6 +711,33 @@ ApplicationWindow {
             onHiddenRequested: {
                 Library.toggleHidden(root.selectedIndex)
                 root.closeDetails()
+            }
+            onCompletionStatusRequested: status => {
+                if (Library.setCompletionStatus(root.selectedIndex, status)) {
+                    root.refreshAfterOrganization()
+                    root.showToast(status.length > 0 ? "Status updated" : "Status cleared")
+                }
+            }
+            onTagsRequested: tags => {
+                if (Library.setTags(root.selectedIndex, tags)) {
+                    root.refreshAfterOrganization()
+                    root.showToast("Tags updated")
+                }
+            }
+            onCollectionToggled: function(name, included) {
+                if (Library.setCollectionMembership(root.selectedIndex, name, included)) {
+                    root.refreshAfterOrganization()
+                    root.showToast(included ? "Added to " + name : "Removed from " + name)
+                }
+            }
+            onCollectionCreateRequested: name => {
+                if (Library.createCollection(name)
+                        && Library.setCollectionMembership(root.selectedIndex, name, true)) {
+                    root.refreshAfterOrganization()
+                    root.showToast("Added to " + name)
+                } else {
+                    root.showToast("That collection already exists or is invalid")
+                }
             }
         }
     }
@@ -1036,6 +1167,48 @@ ApplicationWindow {
                     text: "CREATE IGDB CREDENTIALS"
                     onClicked: Qt.openUrlExternally("https://dev.twitch.tv/console/apps")
                 }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: root.alpha(Theme.foreground, 0.12)
+                }
+                Text {
+                    text: "LIBRARY COLLECTIONS"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    visible: Library.collectionNames.length === 0
+                    text: "Create collections from a game's details."
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                }
+                Repeater {
+                    model: Library.collectionNames
+                    RowLayout {
+                        required property string modelData
+                        Layout.fillWidth: true
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData
+                            color: Theme.foreground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                        GlassButton {
+                            compact: true
+                            text: "DELETE"
+                            onClicked: {
+                                root.pendingCollectionDelete = modelData
+                                root.collectionDeleteOpen = true
+                            }
+                        }
+                    }
+                }
                 RowLayout {
                     Layout.topMargin: 8
                     spacing: 8
@@ -1062,6 +1235,70 @@ ApplicationWindow {
                     }
                 }
             }
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        visible: root.collectionDeleteOpen
+        z: 35
+        color: root.alpha(Theme.darkerBackground, 0.76)
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                root.collectionDeleteOpen = false
+                root.pendingCollectionDelete = ""
+            }
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(460, parent.width - 48)
+            height: 210
+            radius: Math.max(8, Theme.cornerRadius)
+            color: root.alpha(Theme.background, 0.98)
+            border.color: root.alpha(Theme.foreground, 0.22)
+
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 24
+                spacing: 12
+                Text {
+                    text: "DELETE COLLECTION?"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 16
+                    font.weight: Font.Bold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "Remove “" + root.pendingCollectionDelete
+                          + "” and its game memberships? This does not remove any games."
+                    color: Theme.foreground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+                Item { Layout.fillHeight: true }
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    GlassButton {
+                        text: "CANCEL"
+                        onClicked: {
+                            root.collectionDeleteOpen = false
+                            root.pendingCollectionDelete = ""
+                        }
+                    }
+                    GlassButton {
+                        text: "DELETE"
+                        primary: true
+                        onClicked: root.confirmCollectionDelete()
+                    }
+                }
             }
         }
     }

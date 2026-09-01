@@ -11,6 +11,13 @@ class LibraryFilterModel final : public QSortFilterProxyModel {
   Q_PROPERTY(bool showHidden READ showHidden WRITE setShowHidden NOTIFY showHiddenChanged)
   Q_PROPERTY(
       QString sourceFilter READ sourceFilter WRITE setSourceFilter NOTIFY sourceFilterChanged)
+  Q_PROPERTY(QString completionFilter READ completionFilter WRITE setCompletionFilter NOTIFY
+                 organizationFilterChanged)
+  Q_PROPERTY(QString collectionFilter READ collectionFilter WRITE setCollectionFilter NOTIFY
+                 organizationFilterChanged)
+  Q_PROPERTY(QString tagFilter READ tagFilter WRITE setTagFilter NOTIFY organizationFilterChanged)
+  Q_PROPERTY(QStringList collectionNames READ collectionNames NOTIFY organizationNamesChanged)
+  Q_PROPERTY(QStringList tagNames READ tagNames NOTIFY organizationNamesChanged)
 
 public:
   enum class Mode { All = 0, Favorites, Recent, Hidden };
@@ -19,6 +26,7 @@ public:
   Q_ENUM(SortMode)
 
   explicit LibraryFilterModel(QObject* parent = nullptr);
+  void setSourceModel(QAbstractItemModel* sourceModel) override;
 
   [[nodiscard]] QString searchText() const;
   void setSearchText(const QString& value);
@@ -31,6 +39,14 @@ public:
   void setShowHidden(bool value);
   [[nodiscard]] QString sourceFilter() const;
   void setSourceFilter(const QString& value);
+  [[nodiscard]] QString completionFilter() const;
+  void setCompletionFilter(const QString& value);
+  [[nodiscard]] QString collectionFilter() const;
+  void setCollectionFilter(const QString& value);
+  [[nodiscard]] QString tagFilter() const;
+  void setTagFilter(const QString& value);
+  [[nodiscard]] QStringList collectionNames() const;
+  [[nodiscard]] QStringList tagNames() const;
 
   Q_INVOKABLE QVariantMap get(int row) const;
   Q_INVOKABLE void toggleFavorite(int row);
@@ -44,6 +60,11 @@ public:
   Q_INVOKABLE bool linkGames(int row, const QString& source, const QString& runner,
                              const QString& appId);
   Q_INVOKABLE bool unlinkGames(int row);
+  Q_INVOKABLE bool setCompletionStatus(int row, const QString& status);
+  Q_INVOKABLE bool setTags(int row, const QString& tags);
+  Q_INVOKABLE bool createCollection(const QString& name);
+  Q_INVOKABLE bool deleteCollection(const QString& name);
+  Q_INVOKABLE bool setCollectionMembership(int row, const QString& name, bool included);
 
 signals:
   void searchTextChanged();
@@ -51,6 +72,8 @@ signals:
   void sortModeChanged();
   void showHiddenChanged();
   void sourceFilterChanged();
+  void organizationFilterChanged();
+  void organizationNamesChanged();
 
 protected:
   [[nodiscard]] bool filterAcceptsRow(int sourceRow,
@@ -63,4 +86,7 @@ private:
   SortMode m_sortMode = SortMode::Title;
   bool m_showHidden = false;
   QString m_sourceFilter;
+  QString m_completionFilter;
+  QString m_collectionFilter;
+  QString m_tagFilter;
 };

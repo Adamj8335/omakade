@@ -30,5 +30,8 @@ enum Role {
   CustomCover,
   Linked,
   LinkedSources,
+  CompletionStatus,
+  Tags,
+  Collections,
 };
 }

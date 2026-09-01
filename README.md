@@ -23,6 +23,7 @@ The 0.5 preview includes:
 - One-click details and delegated launching through the owning platform
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
+- Collections, tags, completion states, and smart organization filters
 - Local Steam achievements plus optional Web API enrichment
 - Optional IGDB critic aggregates and game-length estimates
 - Local, downloaded, and user-selected cover artwork

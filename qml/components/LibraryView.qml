@@ -84,6 +84,7 @@ Item {
             required property int hours
             required property int progress
             required property bool favorite
+            required property string completionStatus
             required property color accentStart
             required property color accentEnd
             required property string coverMark
@@ -103,6 +104,7 @@ Item {
                 hours: delegateRoot.hours
                 progress: delegateRoot.progress
                 favorite: delegateRoot.favorite
+                completionStatus: delegateRoot.completionStatus
                 accentStart: delegateRoot.accentStart
                 accentEnd: delegateRoot.accentEnd
                 coverMark: delegateRoot.coverMark

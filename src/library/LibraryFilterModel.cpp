@@ -10,6 +10,21 @@ LibraryFilterModel::LibraryFilterModel(QObject* parent) : QSortFilterProxyModel(
   sort(0);
 }
 
+void LibraryFilterModel::setSourceModel(QAbstractItemModel* source) {
+  if (sourceModel() != nullptr) {
+    disconnect(sourceModel(), nullptr, this, nullptr);
+  }
+  QSortFilterProxyModel::setSourceModel(source);
+  if (auto* games = qobject_cast<UnifiedGameModel*>(source)) {
+    connect(games, &UnifiedGameModel::collectionsChanged, this, [this] {
+      beginFilterChange();
+      endFilterChange(Direction::Rows);
+      emit organizationNamesChanged();
+    });
+  }
+  emit organizationNamesChanged();
+}
+
 LibraryFilterModel::SortMode LibraryFilterModel::sortMode() const { return m_sortMode; }
 
 void LibraryFilterModel::setSortMode(SortMode value) {
@@ -45,6 +60,55 @@ void LibraryFilterModel::setSourceFilter(const QString& value) {
   beginFilterChange();
   endFilterChange(Direction::Rows);
   emit sourceFilterChanged();
+}
+
+QString LibraryFilterModel::completionFilter() const { return m_completionFilter; }
+
+void LibraryFilterModel::setCompletionFilter(const QString& value) {
+  const QString normalized = value.trimmed().toLower();
+  if (m_completionFilter == normalized) {
+    return;
+  }
+  m_completionFilter = normalized;
+  beginFilterChange();
+  endFilterChange(Direction::Rows);
+  emit organizationFilterChanged();
+}
+
+QString LibraryFilterModel::collectionFilter() const { return m_collectionFilter; }
+
+void LibraryFilterModel::setCollectionFilter(const QString& value) {
+  const QString normalized = value.trimmed();
+  if (m_collectionFilter.compare(normalized, Qt::CaseInsensitive) == 0) {
+    return;
+  }
+  m_collectionFilter = normalized;
+  beginFilterChange();
+  endFilterChange(Direction::Rows);
+  emit organizationFilterChanged();
+}
+
+QString LibraryFilterModel::tagFilter() const { return m_tagFilter; }
+
+void LibraryFilterModel::setTagFilter(const QString& value) {
+  const QString normalized = value.trimmed();
+  if (m_tagFilter.compare(normalized, Qt::CaseInsensitive) == 0) {
+    return;
+  }
+  m_tagFilter = normalized;
+  beginFilterChange();
+  endFilterChange(Direction::Rows);
+  emit organizationFilterChanged();
+}
+
+QStringList LibraryFilterModel::collectionNames() const {
+  const auto* games = qobject_cast<const UnifiedGameModel*>(sourceModel());
+  return games == nullptr ? QStringList{} : games->collectionNames();
+}
+
+QStringList LibraryFilterModel::tagNames() const {
+  const auto* games = qobject_cast<const UnifiedGameModel*>(sourceModel());
+  return games == nullptr ? QStringList{} : games->tagNames();
 }
 
 QString LibraryFilterModel::searchText() const { return m_searchText; }
@@ -163,6 +227,40 @@ bool LibraryFilterModel::unlinkGames(int row) {
   return games->unlinkGames(mapToSource(index(row, 0)).row());
 }
 
+bool LibraryFilterModel::setCompletionStatus(int row, const QString& status) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  return games != nullptr && row >= 0 && row < rowCount() &&
+         games->setCompletionStatus(mapToSource(index(row, 0)).row(), status);
+}
+
+bool LibraryFilterModel::setTags(int row, const QString& tags) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  return games != nullptr && row >= 0 && row < rowCount() &&
+         games->setTags(mapToSource(index(row, 0)).row(), tags);
+}
+
+bool LibraryFilterModel::createCollection(const QString& name) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  return games != nullptr && games->createCollection(name);
+}
+
+bool LibraryFilterModel::deleteCollection(const QString& name) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || !games->deleteCollection(name)) {
+    return false;
+  }
+  if (m_collectionFilter.compare(name.trimmed(), Qt::CaseInsensitive) == 0) {
+    setCollectionFilter({});
+  }
+  return true;
+}
+
+bool LibraryFilterModel::setCollectionMembership(int row, const QString& name, bool included) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  return games != nullptr && row >= 0 && row < rowCount() &&
+         games->setCollectionMembership(mapToSource(index(row, 0)).row(), name, included);
+}
+
 bool LibraryFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
   const QModelIndex sourceIndex = sourceModel()->index(sourceRow, 0, sourceParent);
 
@@ -193,14 +291,35 @@ bool LibraryFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sour
     return false;
   }
 
+  if (!m_completionFilter.isEmpty() &&
+      sourceIndex.data(GameRoles::CompletionStatus).toString() != m_completionFilter) {
+    return false;
+  }
+  const auto containsCaseInsensitive = [](const QStringList& values, const QString& expected) {
+    return std::any_of(values.cbegin(), values.cend(), [&expected](const QString& value) {
+      return value.compare(expected, Qt::CaseInsensitive) == 0;
+    });
+  };
+  if (!m_collectionFilter.isEmpty() &&
+      !containsCaseInsensitive(sourceIndex.data(GameRoles::Collections).toStringList(),
+                               m_collectionFilter)) {
+    return false;
+  }
+  if (!m_tagFilter.isEmpty() &&
+      !containsCaseInsensitive(sourceIndex.data(GameRoles::Tags).toStringList(), m_tagFilter)) {
+    return false;
+  }
+
   if (m_searchText.isEmpty()) {
     return true;
   }
 
   const QString title = sourceIndex.data(GameRoles::Title).toString();
   const QString subtitle = sourceIndex.data(GameRoles::Subtitle).toString();
+  const QString tags = sourceIndex.data(GameRoles::Tags).toStringList().join(QLatin1Char(' '));
   return title.contains(m_searchText, Qt::CaseInsensitive) ||
-         subtitle.contains(m_searchText, Qt::CaseInsensitive);
+         subtitle.contains(m_searchText, Qt::CaseInsensitive) ||
+         tags.contains(m_searchText, Qt::CaseInsensitive);
 }
 
 bool LibraryFilterModel::lessThan(const QModelIndex& left, const QModelIndex& right) const {
