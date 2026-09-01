@@ -439,6 +439,10 @@ ApplicationWindow {
                 root.pendingCollectionDelete = ""
             } else if (root.diagnosticsOpen) {
                 root.diagnosticsOpen = false
+            } else if (root.detailOpen && detailsLoader.item
+                       && detailsLoader.item.collectionEditorOpen) {
+                // The window shortcut sees Escape before the details page does.
+                detailsLoader.item.collectionEditorOpen = false
             } else if (root.detailOpen) {
                 root.closeDetails()
             } else if (searchField.text.length > 0) {

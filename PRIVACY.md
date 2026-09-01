@@ -7,8 +7,9 @@ system, or required online service.
 
 Omakade reads Steam library manifests, artwork caches, playtime, recent-play
 state, and achievement caches. It also reads installed-game manifests and
-cached artwork from Lutris and Heroic, plus configured playlists, thumbnails,
-and runtime logs from RetroArch. It never writes into source launcher directories.
+cached artwork from Lutris and Heroic, Heroic's sideloaded game list and play
+timestamps, plus configured playlists, thumbnails, and runtime logs from
+RetroArch. It never writes into source launcher directories.
 
 Omakade retains:
 

@@ -87,6 +87,7 @@ private:
   QString m_appId;
   QString m_refreshAppId;
   QByteArray m_accessToken;
+  qint64 m_accessTokenExpiry = 0;
   IgdbGameInsight m_insight;
   qint64 m_updatedAt = 0;
   bool m_hasClientSecret = false;

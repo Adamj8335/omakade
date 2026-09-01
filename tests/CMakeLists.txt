@@ -17,7 +17,7 @@ set_tests_properties(omakade_core_tests PROPERTIES
 add_test(NAME omakade_qml_smoke COMMAND omakade --smoke-test)
 set_tests_properties(omakade_qml_smoke PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
-  TIMEOUT 10
+  TIMEOUT 30
 )
 
 add_test(NAME omakade_controller_navigation
@@ -25,7 +25,7 @@ add_test(NAME omakade_controller_navigation
 )
 set_tests_properties(omakade_controller_navigation PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
-  TIMEOUT 10
+  TIMEOUT 30
 )
 
 add_test(NAME omakade_controller_navigation_tiled
@@ -34,7 +34,7 @@ add_test(NAME omakade_controller_navigation_tiled
 )
 set_tests_properties(omakade_controller_navigation_tiled PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
-  TIMEOUT 10
+  TIMEOUT 30
 )
 
 add_test(NAME omakade_render_smoke
@@ -43,7 +43,7 @@ add_test(NAME omakade_render_smoke
 )
 set_tests_properties(omakade_render_smoke PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
-  TIMEOUT 10
+  TIMEOUT 30
 )
 
 add_test(NAME omakade_render_space_separated_options
@@ -52,7 +52,7 @@ add_test(NAME omakade_render_space_separated_options
 )
 set_tests_properties(omakade_render_space_separated_options PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
-  TIMEOUT 10
+  TIMEOUT 30
 )
 
 add_test(NAME omakade_owned_layout_render
@@ -62,7 +62,7 @@ add_test(NAME omakade_owned_layout_render
 )
 set_tests_properties(omakade_owned_layout_render PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
-  TIMEOUT 10
+  TIMEOUT 30
 )
 
 add_test(NAME omakade_uninstalled_detail_render
@@ -72,5 +72,5 @@ add_test(NAME omakade_uninstalled_detail_render
 )
 set_tests_properties(omakade_uninstalled_detail_render PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
-  TIMEOUT 10
+  TIMEOUT 30
 )

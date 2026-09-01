@@ -23,7 +23,8 @@ into one quiet, cover-focused home that follows the active Omarchy theme.
 
 Omakade includes:
 
-- Native and Flatpak Steam, Lutris, Heroic, Faugus, and RetroArch discovery
+- Native and Flatpak Steam, Lutris, Heroic, Faugus, and RetroArch discovery,
+  including games sideloaded into Heroic
 - One-click details and delegated launching through the owning platform
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
@@ -108,7 +109,7 @@ Requirements:
 - Ninja
 - C++20 compiler
 - Qt 6.8 or newer with Concurrent, Core, Gui, Network, Qml, Quick, Quick
-  Controls, SQL, and Test
+  Controls, SQL, and Test, plus the SVG and image format plugins
 - SDL 3
 - libsecret
 

@@ -162,6 +162,15 @@ void GameInsightsService::refreshSteam(const QString& appId) {
   }
   m_appId = appId;
   m_refreshAppId = appId;
+  // Twitch app tokens last weeks. Reuse the one from this session instead of reading the
+  // client secret and requesting a new token for every game.
+  if (!m_accessToken.isEmpty() && QDateTime::currentSecsSinceEpoch() < m_accessTokenExpiry - 60) {
+    m_busy = true;
+    m_statusText = QStringLiteral("Refreshing IGDB");
+    emit changed();
+    requestMapping();
+    return;
+  }
   beginSecretOperation(SecretAction::Lookup);
 }
 
@@ -294,13 +303,17 @@ void GameInsightsService::finishRequest(QNetworkReply* reply) {
   const RequestKind kind = static_cast<RequestKind>(reply->property("kind").toInt());
   reply->deleteLater();
   if (m_refreshAppId != m_appId) {
-    m_accessToken.fill('\0');
     m_busy = false;
     const QString currentAppId = m_appId;
     loadSteam(currentAppId);
     return;
   }
   if (failed) {
+    if (kind == RequestKind::Token || status == 401 || status == 403) {
+      m_accessToken.fill('\0');
+      m_accessToken.clear();
+      m_accessTokenExpiry = 0;
+    }
     fail(kind == RequestKind::Token && (status == 400 || status == 401)
              ? QStringLiteral("IGDB rejected those credentials")
              : QStringLiteral("IGDB could not refresh game insights"));
@@ -310,6 +323,9 @@ void GameInsightsService::finishRequest(QNetworkReply* reply) {
   if (kind == RequestKind::Token) {
     const QJsonObject token = QJsonDocument::fromJson(contents).object();
     m_accessToken = token.value(QStringLiteral("access_token")).toString().toLatin1();
+    m_accessTokenExpiry = QDateTime::currentSecsSinceEpoch() +
+                          qBound<qint64>(0, token.value(QStringLiteral("expires_in")).toInteger(),
+                                         60LL * 24 * 60 * 60);
     contents.fill('\0');
     if (m_accessToken.isEmpty()) {
       fail(QStringLiteral("IGDB returned an invalid access token"));
@@ -342,7 +358,6 @@ void GameInsightsService::finishRequest(QNetworkReply* reply) {
       fail(QStringLiteral("Omakade could not cache IGDB data"));
       return;
     }
-    m_accessToken.fill('\0');
     m_busy = false;
     m_statusText = QStringLiteral("Updated from IGDB");
     emit changed();
@@ -350,7 +365,6 @@ void GameInsightsService::finishRequest(QNetworkReply* reply) {
 }
 
 void GameInsightsService::fail(const QString& message) {
-  m_accessToken.fill('\0');
   m_busy = false;
   m_statusText = message;
   emit changed();

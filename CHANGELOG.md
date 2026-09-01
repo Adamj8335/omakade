@@ -29,6 +29,9 @@
   archived content name.
 - Ignored a leftover Lutris database whose native or Flatpak launcher is no longer
   installed, and checked Flatpak launchers without blocking the interface.
+- Made Escape close the new-collection editor before closing game details, reused the
+  IGDB access token within a session, and declared the Qt SVG and image format plugins
+  the package needs.
 - Prevented space-separated screenshot options from creating an invisible main instance.
 - Pinned third-party workflow actions and enabled monthly dependency updates.
 - Added end-to-end navigation coverage and owned-library regression tests.
