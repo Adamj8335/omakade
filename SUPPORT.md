@@ -11,5 +11,6 @@ Please include these details with a bug report:
 Open diagnostics with `Ctrl+D` to see library and cache status. Do not post a
 Steam Web API key, full configuration directory, or private account data.
 
-Omakade never installs, updates, moves, or removes games. Problems with those
+Omakade can ask Steam to begin installing an owned game. Steam remains
+responsible for installation, updates, moves, and removal. Problems with those
 actions belong to the launcher that owns the game.

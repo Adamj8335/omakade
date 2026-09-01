@@ -1,6 +1,7 @@
 #pragma once
 
 #include "achievements/SteamAchievementApi.h"
+#include "library/SteamOwnedGamesApi.h"
 
 #include <QFutureWatcher>
 #include <QHash>
@@ -25,6 +26,7 @@ class SteamAccountService final : public QObject {
   Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY statusChanged)
   Q_PROPERTY(QString state READ state NOTIFY statusChanged)
+  Q_PROPERTY(int ownedGameCount READ ownedGameCount NOTIFY ownedGamesUpdated)
 
 public:
   explicit SteamAccountService(const QString& databasePath, AppSettings* settings,
@@ -36,21 +38,24 @@ public:
   [[nodiscard]] bool busy() const;
   [[nodiscard]] QString statusText() const;
   [[nodiscard]] QString state() const;
+  [[nodiscard]] int ownedGameCount() const;
 
   Q_INVOKABLE void setSteamId(const QString& steamId);
   Q_INVOKABLE void storeApiKey(QString apiKey);
   Q_INVOKABLE void removeApiKey();
   Q_INVOKABLE void refreshAchievements(const QString& appId);
   Q_INVOKABLE void refreshAchievementsIfStale(const QString& appId);
+  Q_INVOKABLE void refreshOwnedGames();
 
 signals:
   void accountChanged();
   void busyChanged();
   void statusChanged();
   void achievementsUpdated(const QString& appId);
+  void ownedGamesUpdated();
 
 private:
-  enum class SecretAction { Detect, Store, Remove, LookupForRefresh };
+  enum class SecretAction { Detect, Store, Remove, LookupForRefresh, LookupForOwnedGames };
   struct ApiRequestState {
     QByteArray player;
     QByteArray schema;
@@ -64,9 +69,13 @@ private:
   void beginSecretOperation(SecretAction action, const QByteArray& value = {});
   void finishSecretOperation();
   void startApiRequests(QByteArray apiKey);
+  void startOwnedGamesRequest(QByteArray apiKey);
   void handleApiReply(QNetworkReply* reply);
+  void handleOwnedGamesReply(QNetworkReply* reply);
   void finishApiRequests();
   bool persistAchievements(const SteamAchievementApiResult& result);
+  bool persistOwnedGames(const QString& steamId, const QVector<SteamOwnedGameRecord>& games);
+  void loadOwnedGameCount();
   void setBusy(bool busy);
   void setStatus(const QString& state, const QString& text);
 
@@ -81,6 +90,7 @@ private:
   QString m_statusText;
   QString m_state = QStringLiteral("local");
   QString m_pendingAutoRefreshAppId;
+  int m_ownedGameCount = 0;
   QNetworkAccessManager m_network;
   QHash<QNetworkReply*, QByteArray> m_responseBuffers;
   ApiRequestState m_api;

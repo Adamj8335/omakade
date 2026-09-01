@@ -338,14 +338,17 @@ Item {
                     }
                 }
 
-                RowLayout {
-                    spacing: 10
+                GridLayout {
+                    columns: root.width < 1050 ? 2 : 4
+                    columnSpacing: 10
+                    rowSpacing: 8
 
                     GlassButton {
                         id: playButton
                         objectName: "playButton"
-                        text: "PLAY"
-                        iconText: "▶"
+                        text: root.selectedInstallation.installed === false
+                              ? "INSTALL IN STEAM" : "PLAY"
+                        iconText: root.selectedInstallation.installed === false ? "↓" : "▶"
                         primary: true
                         onClicked: root.playRequested()
                         Component.onCompleted: forceActiveFocus()

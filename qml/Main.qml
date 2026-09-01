@@ -19,6 +19,10 @@ ApplicationWindow {
     property bool linkDialogOpen: false
     property bool collectionDeleteOpen: false
     property string pendingCollectionDelete: ""
+    readonly property bool libraryScanning: SteamLibrary ? SteamLibrary.scanning : false
+    readonly property int ownedGameCount: SteamAccount
+                                          ? SteamAccount.ownedGameCount
+                                          : OwnedGameCountOverride
 
     function isWithin(item, container) {
         while (item) {
@@ -73,12 +77,22 @@ ApplicationWindow {
 
     function focusSpatial(container, key) {
         if (!container) {
-            return
+            return false
         }
         const current = root.activeFocusItem
         if (!root.isWithin(current, container)) {
             root.focusWithin(container, true)
-            return
+            return true
+        }
+        const targetProperty = key === Qt.Key_Up ? "controllerUpTarget"
+                             : key === Qt.Key_Down ? "controllerDownTarget"
+                             : key === Qt.Key_Left ? "controllerLeftTarget"
+                             : "controllerRightTarget"
+        const explicitTarget = current[targetProperty]
+        if (explicitTarget && explicitTarget.visible && explicitTarget.enabled) {
+            explicitTarget.forceActiveFocus(Qt.TabFocusReason)
+            root.revealNavigationItem(container, explicitTarget)
+            return true
         }
         const currentCenter = current.mapToItem(container, current.width / 2,
                                                 current.height / 2)
@@ -88,7 +102,8 @@ ApplicationWindow {
         for (let attempts = 0; candidate && candidate !== current
              && attempts < 300; ++attempts) {
             if (root.isWithin(candidate, container) && candidate.visible
-                    && candidate.enabled && candidate.activeFocusOnTab) {
+                    && candidate.enabled && candidate.activeFocusOnTab
+                    && candidate["controllerNavigation"] !== false) {
                 const center = candidate.mapToItem(container, candidate.width / 2,
                                                    candidate.height / 2)
                 const dx = center.x - currentCenter.x
@@ -121,6 +136,27 @@ ApplicationWindow {
         if (best) {
             best.forceActiveFocus(Qt.TabFocusReason)
             root.revealNavigationItem(container, best)
+            return true
+        }
+        return false
+    }
+
+    function rescanLibraries() {
+        if (SteamLibrary && Preferences.steamEnabled) SteamLibrary.refresh()
+        if (LutrisLibrary && Preferences.lutrisEnabled) LutrisLibrary.refresh()
+        if (HeroicLibrary && Preferences.heroicEnabled) HeroicLibrary.refresh()
+        if (FaugusLibrary && Preferences.faugusEnabled) FaugusLibrary.refresh()
+        if (RetroArchLibrary && Preferences.retroArchEnabled) RetroArchLibrary.refresh()
+    }
+
+    function toggleLibraryControls() {
+        if (root.navigationContainer() !== null) {
+            return
+        }
+        if (libraryView.gridFocused) {
+            sortButton.forceActiveFocus(Qt.TabFocusReason)
+        } else {
+            libraryView.focusGrid()
         }
     }
 
@@ -172,12 +208,20 @@ ApplicationWindow {
         return new Date(seconds * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat)
     }
 
+    function preferredInstallation(installations, fallback) {
+        for (let index = 0; index < installations.length; ++index) {
+            if (installations[index].installed !== false) {
+                return installations[index]
+            }
+        }
+        return installations.length > 0 ? installations[0] : fallback
+    }
+
     function openGame(index) {
         selectedIndex = index
         selectedGame = Library.get(index)
         selectedInstallations = Library.installations(index)
-        selectedInstallation = selectedInstallations.length > 0
-                               ? selectedInstallations[0] : selectedGame
+        selectedInstallation = preferredInstallation(selectedInstallations, selectedGame)
         if (!DemoMode && selectedInstallation.source === "Steam") {
             Achievements.load(selectedInstallation.appId)
             if (SteamAccount) {
@@ -248,6 +292,12 @@ ApplicationWindow {
     function playSelected() {
         if (DemoMode) {
             showToast("Demo games cannot be launched")
+        } else if (selectedInstallation.installed === false) {
+            if (Launcher.install(selectedInstallation.source, selectedInstallation.appId)) {
+                showToast("Opening Steam to install " + selectedGame.title)
+            } else {
+                showToast(Launcher.lastError)
+            }
         } else if (Launcher.launch(selectedInstallation.source, selectedInstallation.appId,
                                    selectedInstallation.flatpak || false,
                                    selectedInstallation.runner || "",
@@ -300,8 +350,7 @@ ApplicationWindow {
                 selectedIndex = index
                 selectedGame = game
                 selectedInstallations = Library.installations(index)
-                selectedInstallation = selectedInstallations.length > 0
-                                       ? selectedInstallations[0] : selectedGame
+                selectedInstallation = preferredInstallation(selectedInstallations, selectedGame)
                 return true
             }
         }
@@ -367,6 +416,11 @@ ApplicationWindow {
         sequence: "Ctrl+D"
         enabled: !root.linkDialogOpen && !root.collectionDeleteOpen
         onActivated: root.diagnosticsOpen = !root.diagnosticsOpen
+    }
+    Shortcut {
+        sequence: "F6"
+        enabled: root.navigationContainer() === null
+        onActivated: root.toggleLibraryControls()
     }
     Shortcut {
         sequence: "Tab"
@@ -531,6 +585,8 @@ ApplicationWindow {
                     visible: root.width >= 1040
 
                     GlassButton {
+                        id: allModeButton
+                        objectName: "allModeButton"
                         text: "ALL"
                         compact: true
                         selected: Library.mode === 0
@@ -540,6 +596,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: favoritesModeButton
+                        objectName: "favoritesModeButton"
                         text: "FAVORITES"
                         compact: true
                         selected: Library.mode === 1
@@ -549,6 +607,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: recentModeButton
+                        objectName: "recentModeButton"
                         text: "RECENT"
                         compact: true
                         selected: Library.mode === 2
@@ -558,6 +618,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: hiddenModeButton
+                        objectName: "hiddenModeButton"
                         text: "HIDDEN"
                         compact: true
                         visible: !DemoMode
@@ -572,6 +634,7 @@ ApplicationWindow {
                 TextField {
                     id: searchField
                     objectName: "searchField"
+                    property bool controllerNavigation: false
                     Layout.preferredWidth: Math.min(300, root.width * 0.26)
                     Layout.minimumWidth: 190
                     Layout.preferredHeight: 38
@@ -624,6 +687,8 @@ ApplicationWindow {
                 }
 
                 GlassButton {
+                    id: settingsButton
+                    objectName: "settingsButton"
                     text: "SETTINGS"
                     compact: true
                     onClicked: root.diagnosticsOpen = true
@@ -635,29 +700,46 @@ ApplicationWindow {
                 visible: root.width < 1040
                 spacing: 6
                 GlassButton {
+                    id: narrowAllModeButton
+                    objectName: "narrowAllModeButton"
                     text: "ALL"
                     compact: true
                     selected: Library.mode === 0
-                    onClicked: Library.mode = 0
+                    onClicked: {
+                        Library.mode = 0
+                        libraryView.focusGrid()
+                    }
                 }
                 GlassButton {
                     text: "FAVORITES"
                     compact: true
                     selected: Library.mode === 1
-                    onClicked: Library.mode = 1
+                    onClicked: {
+                        Library.mode = 1
+                        libraryView.focusGrid()
+                    }
                 }
                 GlassButton {
                     text: "RECENT"
                     compact: true
                     selected: Library.mode === 2
-                    onClicked: Library.mode = 2
+                    onClicked: {
+                        Library.mode = 2
+                        libraryView.focusGrid()
+                    }
                 }
                 GlassButton {
+                    id: narrowHiddenModeButton
+                    objectName: "narrowHiddenModeButton"
+                    property Item controllerDownTarget: retroArchSourceButton
                     text: "HIDDEN"
                     compact: true
                     visible: !DemoMode
                     selected: Library.mode === 3
-                    onClicked: Library.mode = 3
+                    onClicked: {
+                        Library.mode = 3
+                        libraryView.focusGrid()
+                    }
                 }
                 Item { Layout.fillWidth: true }
             }
@@ -670,6 +752,11 @@ ApplicationWindow {
                     spacing: 5
                     visible: !DemoMode
                     GlassButton {
+                        id: allSourcesButton
+                        objectName: "allSourcesButton"
+                        property Item controllerDownTarget: root.ownedGameCount > 0
+                                                            ? installedAvailabilityButton
+                                                            : statusFilterButton
                         text: "ALL SOURCES"
                         compact: true
                         selected: Library.sourceFilter === ""
@@ -679,6 +766,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: steamSourceButton
+                        objectName: "steamSourceButton"
                         text: "STEAM"
                         compact: true
                         visible: Preferences.steamEnabled
@@ -689,6 +778,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: lutrisSourceButton
+                        objectName: "lutrisSourceButton"
                         text: "LUTRIS"
                         compact: true
                         visible: Preferences.lutrisEnabled
@@ -699,6 +790,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: heroicSourceButton
+                        objectName: "heroicSourceButton"
                         text: "HEROIC"
                         compact: true
                         visible: Preferences.heroicEnabled
@@ -709,6 +802,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: faugusSourceButton
+                        objectName: "faugusSourceButton"
                         text: "FAUGUS"
                         compact: true
                         visible: Preferences.faugusEnabled
@@ -719,6 +814,8 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: retroArchSourceButton
+                        objectName: "retroArchSourceButton"
                         text: "RETROARCH"
                         compact: true
                         visible: Preferences.retroArchEnabled
@@ -756,19 +853,81 @@ ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 GlassButton {
+                    id: sortButton
+                    objectName: "sortButton"
+                    property Item controllerLeftTarget: root.width < 1040
+                                                         ? retroArchSourceButton
+                                                         : hiddenModeButton
+                    property Item controllerRightTarget: rescanButton
                     compact: true
                     text: Library.sortMode === 0 ? "SORT: TITLE" : Library.sortMode === 1 ? "SORT: RECENT" : "SORT: PLAYTIME"
                     onClicked: Library.sortMode = (Library.sortMode + 1) % 3
                 }
+                GlassButton {
+                    id: rescanButton
+                    objectName: "rescanButton"
+                    property Item controllerUpTarget: settingsButton
+                    compact: true
+                    text: root.libraryScanning ? "SCANNING" : "RESCAN"
+                    enabled: !root.libraryScanning
+                    onClicked: root.rescanLibraries()
+                }
                 Text {
                     text: Controller.connected
-                          ? Controller.primaryGlyph + "  OPEN   ·   " + Controller.favoriteGlyph + "  FAVORITE   ·   " + Controller.backGlyph + "  BACK"
-                          : "ENTER  OPEN   ·   F  FAVORITE"
+                          ? Controller.primaryGlyph + "  OPEN   ·   " + Controller.favoriteGlyph + "  FAVORITE   ·   " + Controller.toolbarGlyph + "  CONTROLS   ·   " + Controller.backGlyph + "  BACK"
+                          : "ENTER  OPEN   ·   F  FAVORITE   ·   F6  CONTROLS"
                     color: root.alpha(Theme.foreground, 0.42)
                     font.family: Theme.fontFamily
                     font.pixelSize: 8
                     visible: root.width > 930
                 }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                visible: !DemoMode && root.ownedGameCount > 0
+                spacing: 6
+
+                Text {
+                    text: "AVAILABILITY"
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                }
+                GlassButton {
+                    id: installedAvailabilityButton
+                    objectName: "installedAvailabilityButton"
+                    compact: true
+                    text: "INSTALLED"
+                    selected: Library.availability === 0
+                    onClicked: {
+                        Library.availability = 0
+                        libraryView.focusGrid()
+                    }
+                }
+                GlassButton {
+                    compact: true
+                    text: "ALL GAMES"
+                    selected: Library.availability === 1
+                    onClicked: {
+                        Library.availability = 1
+                        libraryView.focusGrid()
+                    }
+                }
+                GlassButton {
+                    id: readyAvailabilityButton
+                    objectName: "readyAvailabilityButton"
+                    property Item controllerDownTarget: statusFilterButton
+                    compact: true
+                    text: "READY TO INSTALL"
+                    selected: Library.availability === 2
+                    onClicked: {
+                        Library.availability = 2
+                        libraryView.focusGrid()
+                    }
+                }
+                Item { Layout.fillWidth: true }
             }
 
             RowLayout {
@@ -784,6 +943,8 @@ ApplicationWindow {
                     font.weight: Font.DemiBold
                 }
                 GlassButton {
+                    id: statusFilterButton
+                    objectName: "statusFilterButton"
                     compact: true
                     text: root.filterLabel("STATUS", Library.completionFilter)
                     selected: Library.completionFilter !== ""
@@ -795,6 +956,8 @@ ApplicationWindow {
                     }
                 }
                 GlassButton {
+                    id: collectionFilterButton
+                    objectName: "collectionFilterButton"
                     compact: true
                     text: root.filterLabel("COLLECTION", Library.collectionFilter)
                     selected: Library.collectionFilter !== ""
@@ -805,6 +968,8 @@ ApplicationWindow {
                     }
                 }
                 GlassButton {
+                    id: tagFilterButton
+                    objectName: "tagFilterButton"
                     compact: true
                     text: root.filterLabel("TAG", Library.tagFilter)
                     selected: Library.tagFilter !== ""
@@ -845,7 +1010,10 @@ ApplicationWindow {
                             ? "Lutris was not found"
                             : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
                               ? "Steam was not found"
-                              : Library.mode === 3 ? "No hidden games" : "No installed games"
+                              : Library.mode === 3 ? "No hidden games"
+                              : Library.availability === 2 ? "No games ready to install"
+                              : Library.availability === 1 ? "No games in this library"
+                              : "No installed games"
                 emptyMessage: Library.completionFilter !== "" || Library.collectionFilter !== "" || Library.tagFilter !== ""
                               ? "Clear or change the organization filters to see more games."
                               : Library.sourceFilter === "Faugus" && FaugusLibrary && FaugusLibrary.errorText.length > 0
@@ -861,22 +1029,13 @@ ApplicationWindow {
                                 : "Install a game in Steam, Lutris, Heroic, Faugus, or RetroArch, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
+                onCoverRequested: function(source, appId) {
+                    if (source === "Steam" && SteamLibrary) {
+                        SteamLibrary.requestCover(appId)
+                    }
+                }
                 onRefreshRequested: {
-                    if (SteamLibrary && Preferences.steamEnabled) {
-                        SteamLibrary.refresh()
-                    }
-                    if (LutrisLibrary && Preferences.lutrisEnabled) {
-                        LutrisLibrary.refresh()
-                    }
-                    if (HeroicLibrary && Preferences.heroicEnabled) {
-                        HeroicLibrary.refresh()
-                    }
-                    if (FaugusLibrary && Preferences.faugusEnabled) {
-                        FaugusLibrary.refresh()
-                    }
-                    if (RetroArchLibrary && Preferences.retroArchEnabled) {
-                        RetroArchLibrary.refresh()
-                    }
+                    root.rescanLibraries()
                 }
             }
         }
@@ -1192,6 +1351,8 @@ ApplicationWindow {
 
             ScrollView {
                 id: settingsScroll
+                objectName: "settingsScroll"
+                readonly property real navigationContentY: contentItem ? contentItem.contentY : 0
                 anchors.fill: parent
                 anchors.margins: 28
                 rightPadding: 18
@@ -1396,6 +1557,7 @@ ApplicationWindow {
                     enabled: SteamAccount !== null
                     TextField {
                         id: steamIdField
+                        property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Steam ID"
                         text: SteamAccount ? SteamAccount.steamId : ""
@@ -1423,6 +1585,7 @@ ApplicationWindow {
                     enabled: SteamAccount !== null && !SteamAccount.busy
                     TextField {
                         id: apiKeyField
+                        property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: SteamAccount && SteamAccount.hasApiKey
                                          ? "API key stored securely" : "Steam Web API key"
@@ -1459,6 +1622,35 @@ ApplicationWindow {
                     text: "GET A KEY FROM STEAM"
                     onClicked: Qt.openUrlExternally("https://steamcommunity.com/dev/apikey")
                 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    GlassButton {
+                        compact: true
+                        enabled: SteamAccount !== null && !SteamAccount.busy
+                                 && SteamAccount.hasApiKey
+                                 && SteamAccount.steamId.length > 0
+                        text: SteamAccount && SteamAccount.busy
+                              ? "SYNCING STEAM LIBRARY" : "SYNC OWNED STEAM LIBRARY"
+                        onClicked: SteamAccount.refreshOwnedGames()
+                    }
+                    Text {
+                        visible: SteamAccount && SteamAccount.ownedGameCount > 0
+                        text: SteamAccount
+                              ? SteamAccount.ownedGameCount + " OWNED GAMES CACHED" : ""
+                        color: Theme.mutedText
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "OWNED LIBRARY SYNC REQUIRES PUBLIC STEAM GAME DETAILS"
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 8
+                    wrapMode: Text.Wrap
+                }
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
@@ -1492,6 +1684,7 @@ ApplicationWindow {
                     enabled: Insights !== null && !Insights.busy
                     TextField {
                         id: igdbClientIdField
+                        property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Twitch developer client ID"
                         text: Insights ? Insights.clientId : ""
@@ -1518,6 +1711,7 @@ ApplicationWindow {
                     enabled: Insights !== null && !Insights.busy
                     TextField {
                         id: igdbSecretField
+                        property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: Insights && Insights.hasClientSecret
                                          ? "Client secret stored securely" : "Twitch developer client secret"
@@ -1751,17 +1945,35 @@ ApplicationWindow {
                 root.selectedGame = Library.get(root.selectedIndex)
             }
         }
+        function onOwnedGamesUpdated() {
+            if (SteamAccount.ownedGameCount === 0) {
+                Library.availability = 0
+            }
+            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+            if (root.detailOpen
+                    && !root.refreshSelected(root.selectedGame.source,
+                                             root.selectedGame.runner || "",
+                                             root.selectedGame.appId)) {
+                root.closeDetails()
+            }
+        }
     }
 
     Connections {
         target: Controller
         function onFocusDirectionRequested(key) {
             const container = root.navigationContainer()
-            if (!container && !libraryView.gridFocused && key === Qt.Key_Down) {
+            if (!container && !libraryView.gridFocused
+                    && !root.focusSpatial(librarySurface, key)
+                    && key === Qt.Key_Down) {
                 libraryView.focusGrid()
-                return
             }
-            root.focusSpatial(container || librarySurface, key)
+            if (container) {
+                root.focusSpatial(container, key)
+            }
+        }
+        function onToolbarRequested() {
+            root.toggleLibraryControls()
         }
         function onFavoriteRequested() {
             if (root.detailOpen && !root.diagnosticsOpen && !root.linkDialogOpen

@@ -78,7 +78,10 @@ SteamGameModel::SteamGameModel(const QString& databasePath, AppSettings* setting
   if (openDatabase(path) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
-    QTimer::singleShot(800, this, &SteamGameModel::requestMissingCovers);
+    QTimer::singleShot(800, this, [this] { requestMissingCovers(); });
+  }
+  if (m_settings != nullptr) {
+    connect(m_settings, &AppSettings::steamIdChanged, this, &SteamGameModel::reloadOwnedGames);
   }
 }
 
@@ -127,6 +130,7 @@ QHash<int, QByteArray> SteamGameModel::roleNames() const {
       {GameRoles::Runner, "runner"},
       {GameRoles::Flatpak, "flatpak"},
       {GameRoles::Hidden, "hidden"},
+      {GameRoles::Installed, "installed"},
   };
 }
 
@@ -224,6 +228,34 @@ void SteamGameModel::reloadAchievementSummary(const QString& appId) {
   }
 }
 
+void SteamGameModel::reloadOwnedGames() {
+  loadDatabase();
+  QSet<QString> currentAppIds;
+  for (const Game& game : m_games) {
+    currentAppIds.insert(game.steam.appId);
+  }
+  QQueue<CoverRequest> retained;
+  while (!m_coverQueue.isEmpty()) {
+    const CoverRequest request = m_coverQueue.dequeue();
+    if (currentAppIds.contains(request.appId)) {
+      retained.enqueue(request);
+    } else {
+      m_pendingCovers.remove(request.appId);
+    }
+  }
+  m_coverQueue = retained;
+}
+
+void SteamGameModel::requestCover(const QString& appId) {
+  for (const Game& game : m_games) {
+    if (game.steam.appId == appId) {
+      requestCoverForGame(game);
+      startNextCoverDownloads();
+      return;
+    }
+  }
+}
+
 void SteamGameModel::refreshFromRoots(const QStringList& roots) {
   if (m_scanning) {
     return;
@@ -248,7 +280,8 @@ QVariant SteamGameModel::valueForRole(const Game& game, int role) const {
   case GameRoles::Subtitle:
     return QStringLiteral("Steam");
   case GameRoles::Description:
-    return QStringLiteral("Installed locally through Steam.");
+    return game.installed ? QStringLiteral("Installed locally through Steam.")
+                          : QStringLiteral("Owned on Steam and ready to install.");
   case GameRoles::Hours:
     return game.steam.playtimeMinutes / 60;
   case GameRoles::Progress:
@@ -281,6 +314,9 @@ QVariant SteamGameModel::valueForRole(const Game& game, int role) const {
   case GameRoles::LogoPath:
     return localUrl(game.steam.logoPath);
   case GameRoles::InstallPath:
+    if (!game.installed) {
+      return QString{};
+    }
     return QDir(game.steam.libraryPath + QStringLiteral("/steamapps/common"))
         .absoluteFilePath(game.steam.installDirectory);
   case GameRoles::Source:
@@ -291,6 +327,8 @@ QVariant SteamGameModel::valueForRole(const Game& game, int role) const {
     return false;
   case GameRoles::Hidden:
     return game.hidden;
+  case GameRoles::Installed:
+    return game.installed;
   default:
     return {};
   }
@@ -347,6 +385,10 @@ bool SteamGameModel::ensureSchema() {
           "DEFAULT 0, normal_seconds INTEGER NOT NULL DEFAULT 0, complete_seconds INTEGER NOT "
           "NULL DEFAULT 0, time_sample_count INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT "
           "NULL, PRIMARY KEY(source, app_id, provider))"),
+      QStringLiteral("CREATE TABLE IF NOT EXISTS owned_games ("
+                     "steam_id TEXT NOT NULL, app_id TEXT NOT NULL REFERENCES games(app_id), "
+                     "playtime_minutes INTEGER NOT NULL DEFAULT 0, synced_at INTEGER NOT NULL, "
+                     "PRIMARY KEY(steam_id, app_id))"),
   };
   for (const QString& statement : statements) {
     if (!query.exec(statement)) {
@@ -366,7 +408,24 @@ bool SteamGameModel::ensureSchema() {
     setStatus(QStringLiteral("Could not update source diagnostics"), query.lastError().text());
     return false;
   }
-  if (schemaVersion < 7 && !query.exec(QStringLiteral("PRAGMA user_version = 7"))) {
+  bool ownedGamesHaveSteamId = false;
+  if (query.exec(QStringLiteral("PRAGMA table_info(owned_games)"))) {
+    while (query.next()) {
+      ownedGamesHaveSteamId =
+          ownedGamesHaveSteamId || query.value(1).toString() == QStringLiteral("steam_id");
+    }
+  }
+  if (!ownedGamesHaveSteamId) {
+    if (!query.exec(QStringLiteral("DROP TABLE owned_games")) ||
+        !query.exec(QStringLiteral("CREATE TABLE owned_games ("
+                                   "steam_id TEXT NOT NULL, app_id TEXT NOT NULL REFERENCES "
+                                   "games(app_id), playtime_minutes INTEGER NOT NULL DEFAULT 0, "
+                                   "synced_at INTEGER NOT NULL, PRIMARY KEY(steam_id, app_id))"))) {
+      setStatus(QStringLiteral("Could not update the owned-games cache"), query.lastError().text());
+      return false;
+    }
+  }
+  if (schemaVersion < 9 && !query.exec(QStringLiteral("PRAGMA user_version = 9"))) {
     setStatus(QStringLiteral("Could not update the library database version"),
               query.lastError().text());
     return false;
@@ -394,13 +453,18 @@ void SteamGameModel::loadDatabase() {
   QVector<Game> loaded;
   QVector<QPair<QString, QString>> cachedCoverUpdates;
   QSqlQuery query(m_database);
-  if (!query.exec(QStringLiteral(
-          "SELECT g.app_id, g.title, g.favorite, g.hidden, i.install_dir, i.library_path, "
-          "i.manifest_path, i.cover_path, i.hero_path, i.logo_path, i.last_played, "
-          "i.playtime_minutes, COALESCE(a.unlocked, 0), COALESCE(a.total, 0) FROM games g "
-          "JOIN installations i ON i.app_id = g.app_id LEFT JOIN achievement_summary a ON "
-          "a.app_id = g.app_id "
-          "ORDER BY g.title COLLATE NOCASE"))) {
+  query.prepare(QStringLiteral(
+      "SELECT g.app_id, g.title, g.favorite, g.hidden, i.install_dir, i.library_path, "
+      "i.manifest_path, i.cover_path, i.hero_path, i.logo_path, i.last_played, "
+      "MAX(COALESCE(i.playtime_minutes, 0), COALESCE(o.playtime_minutes, 0)), "
+      "COALESCE(a.unlocked, 0), COALESCE(a.total, 0), i.app_id IS NOT NULL FROM games g "
+      "LEFT JOIN installations i ON i.app_id = g.app_id LEFT JOIN owned_games o ON "
+      "o.app_id = g.app_id AND o.steam_id = ? LEFT JOIN achievement_summary a ON "
+      "a.app_id = g.app_id "
+      "WHERE i.app_id IS NOT NULL OR o.app_id IS NOT NULL "
+      "ORDER BY g.title COLLATE NOCASE"));
+  query.addBindValue(m_settings == nullptr ? QString{} : m_settings->steamId());
+  if (!query.exec()) {
     setStatus(QStringLiteral("Could not load the game library"), query.lastError().text());
     return;
   }
@@ -433,6 +497,7 @@ void SteamGameModel::loadDatabase() {
                    .hidden = query.value(3).toBool(),
                    .achievementsUnlocked = query.value(12).toInt(),
                    .achievementsTotal = query.value(13).toInt(),
+                   .installed = query.value(14).toBool(),
                    .accentStart = colorFor(steam.appId, 0),
                    .accentEnd = colorFor(steam.appId, 1)});
   }
@@ -622,23 +687,29 @@ void SteamGameModel::setStatus(const QString& status, const QString& error) {
 
 void SteamGameModel::requestMissingCovers() {
   for (const Game& game : m_games) {
-    if (!game.steam.coverPath.isEmpty() || m_pendingCovers.contains(game.steam.appId)) {
-      continue;
+    if (game.installed) {
+      requestCoverForGame(game);
     }
-    bool numeric = false;
-    game.steam.appId.toULongLong(&numeric);
-    if (!numeric) {
-      continue;
-    }
-    const QString cached = coverCachePath(game.steam.appId);
-    if (QFileInfo::exists(cached)) {
-      applyCover(game.steam.appId, cached);
-      continue;
-    }
-    m_pendingCovers.insert(game.steam.appId);
-    m_coverQueue.enqueue({game.steam.appId, 0});
   }
   startNextCoverDownloads();
+}
+
+void SteamGameModel::requestCoverForGame(const Game& game) {
+  if (!game.steam.coverPath.isEmpty() || m_pendingCovers.contains(game.steam.appId)) {
+    return;
+  }
+  bool numeric = false;
+  game.steam.appId.toULongLong(&numeric);
+  if (!numeric) {
+    return;
+  }
+  const QString cached = coverCachePath(game.steam.appId);
+  if (QFileInfo::exists(cached)) {
+    applyCover(game.steam.appId, cached);
+    return;
+  }
+  m_pendingCovers.insert(game.steam.appId);
+  m_coverQueue.enqueue({game.steam.appId, 0});
 }
 
 void SteamGameModel::startNextCoverDownloads() {

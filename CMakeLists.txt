@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Omakade VERSION 1.2.3 LANGUAGES CXX)
+project(Omakade VERSION 1.3.0 LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
@@ -43,6 +43,8 @@ add_library(omakade_core STATIC
   src/library/MockGameModel.h
   src/library/SteamGameModel.cpp
   src/library/SteamGameModel.h
+  src/library/SteamOwnedGamesApi.cpp
+  src/library/SteamOwnedGamesApi.h
   src/library/UnifiedGameModel.cpp
   src/library/UnifiedGameModel.h
   src/launch/GameLauncher.cpp
@@ -141,7 +143,7 @@ install(FILES resources/icons/io.github.tsouth89.Omakade.svg
 install(FILES packaging/io.github.tsouth89.Omakade.metainfo.xml
   DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo
 )
-install(FILES LICENSE
+install(FILES LICENSE COPYRIGHT
   DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/omakade
 )
 install(FILES README.md PRIVACY.md SUPPORT.md CHANGELOG.md docs/COMPATIBILITY.md

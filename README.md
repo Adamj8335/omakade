@@ -1,7 +1,7 @@
 # Omakade
 
 [![CI](https://github.com/tsouth89/omakade/actions/workflows/ci.yml/badge.svg)](https://github.com/tsouth89/omakade/actions/workflows/ci.yml)
-[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-8cd3cb.svg)](LICENSE)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-8cd3cb.svg)](COPYRIGHT)
 
 **Your games, beautifully together.**
 
@@ -31,6 +31,7 @@ Omakade includes:
 - Optional close-after-launch behavior
 - Collections, tags, completion states, and smart organization filters
 - Local Steam achievements plus optional Web API enrichment
+- Optional Steam owned-library sync with installed and ready-to-install views
 - Optional IGDB critic aggregates and game-length estimates
 - Local, downloaded, and user-selected cover artwork
 - Explicit linking for games installed through multiple sources
@@ -45,6 +46,16 @@ with a deterministic fictional library.
 
 ## Install on Omarchy or Arch
 
+### Install or upgrade from the Omarchy Package Repository
+
+On Omarchy, install Omakade from OPR with:
+
+```bash
+sudo pacman -S omarchy/omakade
+```
+
+After that, Omakade updates with normal Omarchy system updates.
+
 ### Install or upgrade from the terminal
 
 These commands download Omakade and its checksum into the current directory,
@@ -52,22 +63,22 @@ verify the package, and install it. If Omakade is already installed, `pacman -U`
 upgrades it in place without removing your settings or library data:
 
 ```bash
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.2.3/omakade-1.2.3-1-x86_64.pkg.tar.zst
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.2.3/SHA256SUMS
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.3.0/omakade-1.3.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.3.0/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.2.3-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.3.0-1-x86_64.pkg.tar.zst
 ```
 
 ### Install or upgrade from a browser download
 
 1. Open the [latest release](https://github.com/tsouth89/omakade/releases/latest).
-2. Under **Assets**, download `omakade-1.2.3-1-x86_64.pkg.tar.zst` and
+2. Under **Assets**, download `omakade-1.3.0-1-x86_64.pkg.tar.zst` and
    `SHA256SUMS` into the same folder.
 3. Open a terminal in that folder and run:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.2.3-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.3.0-1-x86_64.pkg.tar.zst
 ```
 
 Launch Omakade from the application launcher or run `omakade` in a terminal.
@@ -113,8 +124,10 @@ to return, and F11 to toggle fullscreen. `Ctrl+M` toggles reduced motion and
 
 Core library discovery, local achievements, artwork, search, organization,
 controller navigation, and launching require no Steam API key or network
-connection. Optional Steam and IGDB credentials are stored by Secret Service,
-and cached game insights stay available offline.
+connection. An optional Steam connection can sync public owned games and hand
+uninstalled titles to Steam for installation. Optional Steam and IGDB
+credentials are stored by Secret Service, and cached metadata stays available
+offline.
 
 See [PRIVACY.md](PRIVACY.md) for retained data and external requests,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and the current

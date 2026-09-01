@@ -17,6 +17,7 @@
 
 #include <QAbstractItemModel>
 #include <QDebug>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QIcon>
@@ -25,8 +26,8 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
-#include <QQuickStyle>
 #include <QQuickItem>
+#include <QQuickStyle>
 #include <QQuickWindow>
 #include <QTimer>
 #include <QWindow>
@@ -72,6 +73,10 @@ int main(int argc, char* argv[]) {
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
   const bool navigationTest =
       application.arguments().contains(QStringLiteral("--controller-navigation-test"));
+  const bool ownedLayoutTest =
+      application.arguments().contains(QStringLiteral("--owned-layout-test"));
+  const bool uninstalledLayoutTest =
+      application.arguments().contains(QStringLiteral("--uninstalled-layout-test"));
   const bool demoMode = smokeTest || renderMode ||
                         application.arguments().contains(QStringLiteral("--demo"));
   const bool benchmarkMode = application.arguments().contains(QStringLiteral("--benchmark"));
@@ -83,7 +88,12 @@ int main(int argc, char* argv[]) {
   if (!smokeTest && !renderMode && !navigationTest && !singleInstance.claimOrNotify()) {
     return EXIT_SUCCESS;
   }
-  AppSettings preferences;
+  const QString settingsPath =
+      navigationTest || renderMode || smokeTest
+          ? QDir::tempPath() +
+                QStringLiteral("/omakade-test-%1.toml").arg(QCoreApplication::applicationPid())
+          : QString{};
+  AppSettings preferences(settingsPath);
   ControllerInput controller;
   std::unique_ptr<QAbstractItemModel> games;
   std::unique_ptr<LutrisGameModel> lutrisGames;
@@ -97,7 +107,8 @@ int main(int argc, char* argv[]) {
   RetroArchGameModel* retroArchLibrary = nullptr;
   QString libraryDatabasePath;
   if (demoMode || stressMode || navigationTest) {
-    games = std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100);
+    games =
+        std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100, uninstalledLayoutTest);
   } else {
     auto steam = std::make_unique<SteamGameModel>(QString{}, &preferences);
     steamLibrary = steam.get();
@@ -138,6 +149,9 @@ int main(int argc, char* argv[]) {
                    applySourcePreferences);
   LibraryFilterModel library;
   library.setSourceModel(&unifiedGames);
+  if (uninstalledLayoutTest) {
+    library.setAvailability(LibraryFilterModel::Availability::AllGames);
+  }
   AchievementModel achievements(steamLibrary == nullptr ? QStringLiteral(":memory:")
                                                         : steamLibrary->databasePath(),
                                 &preferences);
@@ -150,6 +164,8 @@ int main(int argc, char* argv[]) {
                      [&achievements](const QString& appId) { achievements.load(appId); });
     QObject::connect(steamAccount.get(), &SteamAccountService::achievementsUpdated, steamLibrary,
                      &SteamGameModel::reloadAchievementSummary);
+    QObject::connect(steamAccount.get(), &SteamAccountService::ownedGamesUpdated, steamLibrary,
+                     &SteamGameModel::reloadOwnedGames);
     gameInsights =
         std::make_unique<GameInsightsService>(steamLibrary->databasePath(), &preferences);
   }
@@ -187,11 +203,14 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamAccount"), steamAccount.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Insights"), gameInsights.get());
-  engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"), demoMode || stressMode);
+  engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"),
+                                           (demoMode || stressMode) && !ownedLayoutTest);
   engine.rootContext()->setContextProperty(QStringLiteral("StartupMilliseconds"),
                                            startupTimer.elapsed());
   engine.rootContext()->setContextProperty(QStringLiteral("AppVersion"),
                                            QCoreApplication::applicationVersion());
+  engine.rootContext()->setContextProperty(QStringLiteral("OwnedGameCountOverride"),
+                                           ownedLayoutTest ? 250 : 0);
 
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,
@@ -204,14 +223,18 @@ int main(int argc, char* argv[]) {
     qCritical() << "Omakade failed to create its QML root object";
     return EXIT_FAILURE;
   }
+  if (uninstalledLayoutTest) {
+    QMetaObject::invokeMethod(engine.rootObjects().constFirst(), "openGame",
+                              Q_ARG(QVariant, QVariant(0)));
+  }
 
   auto* rootWindow = qobject_cast<QWindow*>(engine.rootObjects().constFirst());
   if (auto* quickWindow = qobject_cast<QQuickWindow*>(rootWindow)) {
+    const QStringList dimensions = renderSize.split(QLatin1Char('x'));
+    if ((renderMode || navigationTest) && dimensions.size() == 2) {
+      quickWindow->resize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
+    }
     if (renderMode) {
-      const QStringList dimensions = renderSize.split(QLatin1Char('x'));
-      if (dimensions.size() == 2) {
-        quickWindow->resize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
-      }
       QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
         const QImage screenshot = quickWindow->grabWindow();
         if (screenshot.isNull() || !screenshot.save(screenshotPath)) {
@@ -234,7 +257,7 @@ int main(int argc, char* argv[]) {
         Qt::SingleShotConnection);
 
     if (navigationTest) {
-      QTimer::singleShot(150, quickWindow, [quickWindow, &application, &controller] {
+      QTimer::singleShot(150, quickWindow, [quickWindow, &application, &controller, ownedLayoutTest] {
         auto fail = [&application](const QString& message) {
           qCritical().noquote() << message;
           application.exit(EXIT_FAILURE);
@@ -248,92 +271,344 @@ int main(int argc, char* argv[]) {
         grid->setProperty("currentIndex", 0);
         grid->forceActiveFocus();
         controller.keyRequested(Qt::Key_Up, Qt::NoModifier);
-        QTimer::singleShot(50, quickWindow,
-                           [quickWindow, &application, &controller, grid, search, fail] {
-          if (!grid->hasActiveFocus() || search->hasActiveFocus()
-              || grid->property("currentIndex").toInt() != 0) {
-            fail(QStringLiteral("Controller Up left the first library row"));
-            return;
-          }
-          controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
-          QTimer::singleShot(100, quickWindow, [quickWindow, &application, &controller, fail] {
-            auto* play = quickWindow->findChild<QQuickItem*>(QStringLiteral("playButton"));
-            if (!quickWindow->property("detailOpen").toBool() || play == nullptr
-                || !play->hasActiveFocus()) {
-              fail(QStringLiteral("Game details did not focus Play"));
-              return;
-            }
-            const QPointF initial = play->mapToScene(QPointF(play->width() / 2, play->height() / 2));
-            controller.focusDirectionRequested(Qt::Key_Up);
-            QTimer::singleShot(50, quickWindow,
-                               [quickWindow, &application, &controller, initial, fail] {
-              QQuickItem* movedUp = quickWindow->activeFocusItem();
-              if (movedUp == nullptr) {
-                fail(QStringLiteral("Controller Up cleared detail focus"));
+        QTimer::singleShot(
+            50, quickWindow,
+            [quickWindow, &application, &controller, grid, search, fail, ownedLayoutTest] {
+              if (!grid->hasActiveFocus() || search->hasActiveFocus() ||
+                  grid->property("currentIndex").toInt() != 0) {
+                fail(QStringLiteral("Controller Up left the first library row"));
                 return;
               }
-              const QPointF up = movedUp->mapToScene(
-                  QPointF(movedUp->width() / 2, movedUp->height() / 2));
-              if (up.y() >= initial.y() - 3) {
-                fail(QStringLiteral("Controller Up did not move up on game details"));
+              auto* sort = quickWindow->findChild<QQuickItem*>(QStringLiteral("sortButton"));
+              auto* rescan = quickWindow->findChild<QQuickItem*>(QStringLiteral("rescanButton"));
+              auto* settings =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsButton"));
+              const bool narrow = quickWindow->width() < 1040;
+              auto* allMode = quickWindow->findChild<QQuickItem*>(
+                  narrow ? QStringLiteral("narrowAllModeButton") : QStringLiteral("allModeButton"));
+              auto* hiddenMode = quickWindow->findChild<QQuickItem*>(
+                  narrow ? QStringLiteral("narrowHiddenModeButton")
+                         : QStringLiteral("hiddenModeButton"));
+              auto* allSources =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("allSourcesButton"));
+              auto* retroArchSource =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("retroArchSourceButton"));
+              auto* statusFilter =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("statusFilterButton"));
+              auto* installedAvailability = quickWindow->findChild<QQuickItem*>(
+                  QStringLiteral("installedAvailabilityButton"));
+              auto* readyAvailability =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("readyAvailabilityButton"));
+              auto* tagFilter =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("tagFilterButton"));
+              auto* settingsScroll =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
+              if (sort == nullptr || rescan == nullptr || settings == nullptr ||
+                  allMode == nullptr || hiddenMode == nullptr || allSources == nullptr ||
+                  retroArchSource == nullptr || statusFilter == nullptr || tagFilter == nullptr ||
+                  installedAvailability == nullptr || readyAvailability == nullptr ||
+                  settingsScroll == nullptr) {
+                fail(QStringLiteral("Controller navigation test could not find toolbar controls"));
+                return;
+              }
+              controller.toolbarRequested();
+              if (!sort->hasActiveFocus()) {
+                fail(QStringLiteral("Controller Controls did not enter the library toolbar"));
+                return;
+              }
+              controller.focusDirectionRequested(Qt::Key_Left);
+              if (narrow) {
+                if (!retroArchSource->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller Left did not reach source filters when tiled"));
+                  return;
+                }
+                for (int step = 0; step < 5; ++step) {
+                  controller.focusDirectionRequested(Qt::Key_Left);
+                }
+                controller.focusDirectionRequested(Qt::Key_Up);
+                if (!allMode->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller Up did not reach tiled library mode filters"));
+                  return;
+                }
+                for (int step = 0; step < 3; ++step) {
+                  controller.focusDirectionRequested(Qt::Key_Right);
+                }
+                if (!hiddenMode->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller could not traverse tiled library mode filters"));
+                  return;
+                }
+                controller.focusDirectionRequested(Qt::Key_Down);
+              } else {
+                if (!hiddenMode->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller Left did not reach library mode filters"));
+                  return;
+                }
+                for (int step = 0; step < 3; ++step) {
+                  controller.focusDirectionRequested(Qt::Key_Left);
+                }
+                if (!allMode->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller could not traverse library mode filters"));
+                  return;
+                }
+                controller.focusDirectionRequested(Qt::Key_Down);
+              }
+              if (!retroArchSource->hasActiveFocus()) {
+                fail(QStringLiteral("Controller Down did not reach source filters"));
+                return;
+              }
+              for (int step = 0; step < 5; ++step) {
+                controller.focusDirectionRequested(Qt::Key_Left);
+              }
+              if (!allSources->hasActiveFocus()) {
+                fail(QStringLiteral("Controller could not traverse all source filters"));
                 return;
               }
               controller.focusDirectionRequested(Qt::Key_Down);
-              QTimer::singleShot(50, quickWindow,
-                                 [quickWindow, &application, &controller, up, fail] {
-                QQuickItem* movedDown = quickWindow->activeFocusItem();
-                if (movedDown == nullptr) {
-                  fail(QStringLiteral("Controller Down cleared detail focus"));
-                  return;
-                }
-                const QPointF down = movedDown->mapToScene(
-                    QPointF(movedDown->width() / 2, movedDown->height() / 2));
-                if (down.y() <= up.y() + 3) {
-                  fail(QStringLiteral("Controller Down did not move down on game details"));
+              if (ownedLayoutTest) {
+                if (!installedAvailability->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller Down did not reach availability filters"));
                   return;
                 }
                 controller.focusDirectionRequested(Qt::Key_Right);
-                QTimer::singleShot(50, quickWindow,
-                                   [quickWindow, &application, &controller, down, fail] {
-                  QQuickItem* movedRight = quickWindow->activeFocusItem();
-                  if (movedRight == nullptr) {
-                    fail(QStringLiteral("Controller Right cleared detail focus"));
-                    return;
-                  }
-                  const QPointF right = movedRight->mapToScene(
-                      QPointF(movedRight->width() / 2, movedRight->height() / 2));
-                  if (right.x() <= down.x() + 3) {
-                    fail(QStringLiteral("Controller Right did not move right on game details"));
-                    return;
-                  }
-                  controller.focusDirectionRequested(Qt::Key_Left);
-                  QTimer::singleShot(
-                      50, quickWindow, [quickWindow, &application, &controller, right, fail] {
-                    QQuickItem* movedLeft = quickWindow->activeFocusItem();
-                    if (movedLeft == nullptr) {
-                      fail(QStringLiteral("Controller Left cleared detail focus"));
+                controller.focusDirectionRequested(Qt::Key_Right);
+                if (!readyAvailability->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller could not traverse availability filters"));
+                  return;
+                }
+                controller.focusDirectionRequested(Qt::Key_Down);
+              }
+              if (!statusFilter->hasActiveFocus()) {
+                fail(QStringLiteral("Controller Down did not reach organization filters"));
+                return;
+              }
+              controller.focusDirectionRequested(Qt::Key_Right);
+              controller.focusDirectionRequested(Qt::Key_Right);
+              if (!tagFilter->hasActiveFocus()) {
+                fail(QStringLiteral("Controller could not traverse organization filters"));
+                return;
+              }
+              controller.toolbarRequested();
+              controller.toolbarRequested();
+              controller.focusDirectionRequested(Qt::Key_Right);
+              if (!rescan->hasActiveFocus()) {
+                fail(QStringLiteral("Controller Right did not reach Rescan"));
+                return;
+              }
+              controller.focusDirectionRequested(Qt::Key_Up);
+              if (!settings->hasActiveFocus()) {
+                controller.focusDirectionRequested(Qt::Key_Right);
+              }
+              if (!settings->hasActiveFocus()) {
+                fail(QStringLiteral("Controller could not reach Settings from Rescan"));
+                return;
+              }
+              controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
+              QTimer::singleShot(
+                  100, quickWindow,
+                  [quickWindow, &application, &controller, grid, settingsScroll, fail] {
+                    if (!quickWindow->property("diagnosticsOpen").toBool() ||
+                        quickWindow->activeFocusItem() == nullptr) {
+                      fail(QStringLiteral("Controller Open did not enter Settings"));
                       return;
                     }
-                    const QPointF left = movedLeft->mapToScene(
-                        QPointF(movedLeft->width() / 2, movedLeft->height() / 2));
-                    if (left.x() >= right.x() - 3) {
-                      fail(QStringLiteral("Controller Left did not move left on game details"));
+                    QQuickItem* settingsStart = quickWindow->activeFocusItem();
+                    for (int step = 0; step < 30; ++step) {
+                      controller.focusDirectionRequested(Qt::Key_Down);
+                    }
+                    if (quickWindow->activeFocusItem() == settingsStart ||
+                        settingsScroll->property("navigationContentY").toReal() <= 0) {
+                      fail(QStringLiteral("Controller Down did not traverse and scroll Settings"));
                       return;
                     }
                     controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
-                    QTimer::singleShot(50, quickWindow, [quickWindow, &application, fail] {
-                      if (quickWindow->property("detailOpen").toBool()) {
-                        fail(QStringLiteral("Controller Back did not close game details"));
+                    QTimer::singleShot(50, quickWindow, [quickWindow, &application, &controller, grid, fail] {
+                      if (quickWindow->property("diagnosticsOpen").toBool()) {
+                        fail(QStringLiteral("Controller Back did not close Settings"));
                         return;
                       }
-                      application.quit();
+                      controller.toolbarRequested();
+                      if (!grid->hasActiveFocus()) {
+                        fail(QStringLiteral("Controller Controls did not return to the game grid"));
+                        return;
+                      }
+                      controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
+                      QTimer::singleShot(100, quickWindow, [quickWindow, &application, &controller, fail] {
+                        auto* play =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("playButton"));
+                        if (!quickWindow->property("detailOpen").toBool() || play == nullptr ||
+                            !play->hasActiveFocus()) {
+                          fail(QStringLiteral("Game details did not focus Play"));
+                          return;
+                        }
+                        const QPointF initial =
+                            play->mapToScene(QPointF(play->width() / 2, play->height() / 2));
+                        controller.focusDirectionRequested(Qt::Key_Up);
+                        QTimer::singleShot(
+                            50, quickWindow,
+                            [quickWindow, &application, &controller, initial, fail] {
+                              QQuickItem* movedUp = quickWindow->activeFocusItem();
+                              if (movedUp == nullptr) {
+                                fail(QStringLiteral("Controller Up cleared detail focus"));
+                                return;
+                              }
+                              const QPointF up = movedUp->mapToScene(
+                                  QPointF(movedUp->width() / 2, movedUp->height() / 2));
+                              if (up.y() >= initial.y() - 3) {
+                                fail(QStringLiteral(
+                                    "Controller Up did not move up on game details"));
+                                return;
+                              }
+                              controller.focusDirectionRequested(Qt::Key_Down);
+                              QTimer::singleShot(
+                                  50, quickWindow,
+                                  [quickWindow, &application, &controller, up, fail] {
+                                    QQuickItem* movedDown = quickWindow->activeFocusItem();
+                                    if (movedDown == nullptr) {
+                                      fail(QStringLiteral("Controller Down cleared detail focus"));
+                                      return;
+                                    }
+                                    const QPointF down = movedDown->mapToScene(
+                                        QPointF(movedDown->width() / 2, movedDown->height() / 2));
+                                    if (down.y() <= up.y() + 3) {
+                                      fail(QStringLiteral(
+                                          "Controller Down did not move down on game details"));
+                                      return;
+                                    }
+                                    controller.focusDirectionRequested(Qt::Key_Right);
+                                    QTimer::singleShot(
+                                        50, quickWindow,
+                                        [quickWindow, &application, &controller, down, fail] {
+                                          QQuickItem* movedRight = quickWindow->activeFocusItem();
+                                          if (movedRight == nullptr) {
+                                            fail(QStringLiteral(
+                                                "Controller Right cleared detail focus"));
+                                            return;
+                                          }
+                                          const QPointF right = movedRight->mapToScene(QPointF(
+                                              movedRight->width() / 2, movedRight->height() / 2));
+                                          if (right.x() <= down.x() + 3) {
+                                            fail(QStringLiteral("Controller Right did not move "
+                                                                "right on game details"));
+                                            return;
+                                          }
+                                          controller.focusDirectionRequested(Qt::Key_Left);
+                                          QTimer::singleShot(
+                                              50, quickWindow,
+                                              [quickWindow, &application, &controller, right,
+                                               fail] {
+                                                QQuickItem* movedLeft =
+                                                    quickWindow->activeFocusItem();
+                                                if (movedLeft == nullptr) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Left cleared detail focus"));
+                                                  return;
+                                                }
+                                                const QPointF left = movedLeft->mapToScene(
+                                                    QPointF(movedLeft->width() / 2,
+                                                            movedLeft->height() / 2));
+                                                if (left.x() >= right.x() - 3) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Left did not move left on "
+                                                      "game details"));
+                                                  return;
+                                                }
+                                                controller.keyRequested(Qt::Key_Escape,
+                                                                        Qt::NoModifier);
+                                                QTimer::singleShot(
+                                                    50, quickWindow,
+                                                    [quickWindow, &application, &controller, fail] {
+                                                      if (quickWindow->property("detailOpen")
+                                                              .toBool()) {
+                                                        fail(QStringLiteral(
+                                                            "Controller Back did not close "
+                                                            "game details"));
+                                                        return;
+                                                      }
+                                                      controller.keyRequested(Qt::Key_F,
+                                                                              Qt::ControlModifier);
+                                                      QTimer::singleShot(
+                                                          50, quickWindow,
+                                                          [quickWindow, &application, &controller,
+                                                           fail] {
+                                                            auto* search =
+                                                                quickWindow->findChild<QQuickItem*>(
+                                                                    QStringLiteral("searchField"));
+                                                            if (search == nullptr ||
+                                                                !search->hasActiveFocus()) {
+                                                              fail(QStringLiteral(
+                                                                  "Keyboard Search did not "
+                                                                  "focus the search field"));
+                                                              return;
+                                                            }
+                                                            controller.keyRequested(Qt::Key_Escape,
+                                                                                    Qt::NoModifier);
+                                                            QTimer::singleShot(
+                                                                50, quickWindow,
+                                                                [quickWindow, &application,
+                                                                 &controller, fail] {
+                                                                  auto* grid =
+                                                                      quickWindow
+                                                                          ->findChild<QQuickItem*>(
+                                                                              QStringLiteral(
+                                                                                  "libraryGrid"));
+                                                                  if (grid == nullptr ||
+                                                                      !grid->hasActiveFocus()) {
+                                                                    fail(QStringLiteral(
+                                                                        "Keyboard Escape did "
+                                                                        "not return to the "
+                                                                        "library grid"));
+                                                                    return;
+                                                                  }
+                                                                  controller.keyRequested(
+                                                                      Qt::Key_F6, Qt::NoModifier);
+                                                                  QTimer::singleShot(
+                                                                      50, quickWindow,
+                                                                      [quickWindow, &application,
+                                                                       &controller, grid, fail] {
+                                                                        auto* sort =
+                                                                            quickWindow->findChild<
+                                                                                QQuickItem*>(
+                                                                                QStringLiteral(
+                                                                                    "sortButton"));
+                                                                        if (sort == nullptr ||
+                                                                            !sort->hasActiveFocus()) {
+                                                                          fail(QStringLiteral(
+                                                                              "Keyboard F6 did "
+                                                                              "not enter library "
+                                                                              "controls"));
+                                                                          return;
+                                                                        }
+                                                                        controller.keyRequested(
+                                                                            Qt::Key_F6,
+                                                                            Qt::NoModifier);
+                                                                        QTimer::singleShot(
+                                                                            50, quickWindow,
+                                                                            [grid, &application,
+                                                                             fail] {
+                                                                              if (!grid->hasActiveFocus()) {
+                                                                                fail(QStringLiteral(
+                                                                                    "Keyboard F6 "
+                                                                                    "did "
+                                                                                    "not return to "
+                                                                                    "the "
+                                                                                    "library "
+                                                                                    "grid"));
+                                                                                return;
+                                                                              }
+                                                                              application.quit();
+                                                                            });
+                                                                      });
+                                                                });
+                                                          });
+                                                    });
+                                              });
+                                        });
+                                  });
+                            });
+                      });
                     });
                   });
-                });
-              });
             });
-          });
-        });
       });
     }
   }

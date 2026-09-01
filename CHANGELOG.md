@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0
+
+- Added controller navigation across library modes, source filters,
+  organization controls, Settings, and game details.
+- Added a visible whole-library Rescan action.
+- Added optional owned Steam library sync, installed and ready-to-install
+  filters, and Steam installation handoff.
+- Loads owned-game covers as they enter the visible library instead of fetching
+  an entire account at once.
+- Fixed narrow game-details layouts and prerelease owned-library cache upgrades.
+- Added end-to-end navigation coverage and owned-library regression tests.
+
 ## 1.2.3
 
 - Restored controller navigation on game details.

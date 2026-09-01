@@ -50,6 +50,8 @@ public:
   Q_INVOKABLE void toggleHidden(int row);
   Q_INVOKABLE void refresh();
   Q_INVOKABLE void reloadAchievementSummary(const QString& appId);
+  Q_INVOKABLE void reloadOwnedGames();
+  Q_INVOKABLE void requestCover(const QString& appId);
   void refreshFromRoots(const QStringList& roots);
 
 signals:
@@ -63,6 +65,7 @@ private:
     bool hidden = false;
     int achievementsUnlocked = 0;
     int achievementsTotal = 0;
+    bool installed = true;
     QColor accentStart;
     QColor accentEnd;
   };
@@ -77,6 +80,7 @@ private:
   void rebuildWatchPaths(const SteamScanResult& result);
   void setStatus(const QString& status, const QString& error = {});
   void requestMissingCovers();
+  void requestCoverForGame(const Game& game);
   void startNextCoverDownloads();
   void downloadCover(const QString& appId, int attempt);
   void applyCover(const QString& appId, const QString& path);

@@ -18,6 +18,7 @@ Item {
     signal gameActivated(int index)
     signal favoriteToggled(int index)
     signal refreshRequested()
+    signal coverRequested(string source, string appId)
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -139,9 +140,21 @@ Item {
             required property color accentEnd
             required property string coverMark
             required property string coverPath
+            required property string source
+            required property string appId
 
             width: grid.cellWidth
             height: grid.cellHeight
+
+            function requestVisibleCover() {
+                if (visible && coverPath.length === 0) {
+                    root.coverRequested(source, appId)
+                }
+            }
+
+            Component.onCompleted: requestVisibleCover()
+            onAppIdChanged: requestVisibleCover()
+            onVisibleChanged: requestVisibleCover()
 
             GameCard {
                 anchors.fill: parent

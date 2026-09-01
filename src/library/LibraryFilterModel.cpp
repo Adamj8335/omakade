@@ -37,6 +37,18 @@ void LibraryFilterModel::setSortMode(SortMode value) {
   emit sortModeChanged();
 }
 
+LibraryFilterModel::Availability LibraryFilterModel::availability() const { return m_availability; }
+
+void LibraryFilterModel::setAvailability(Availability value) {
+  if (m_availability == value) {
+    return;
+  }
+  m_availability = value;
+  beginFilterChange();
+  endFilterChange(Direction::Rows);
+  emit availabilityChanged();
+}
+
 bool LibraryFilterModel::showHidden() const { return m_showHidden; }
 
 void LibraryFilterModel::setShowHidden(bool value) {
@@ -263,6 +275,13 @@ bool LibraryFilterModel::setCollectionMembership(int row, const QString& name, b
 
 bool LibraryFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
   const QModelIndex sourceIndex = sourceModel()->index(sourceRow, 0, sourceParent);
+
+  const QVariant installedValue = sourceIndex.data(GameRoles::Installed);
+  const bool installed = !installedValue.isValid() || installedValue.toBool();
+  if ((m_availability == Availability::Installed && !installed) ||
+      (m_availability == Availability::ReadyToInstall && installed)) {
+    return false;
+  }
 
   if (!m_sourceFilter.isEmpty()) {
     const QString primarySource = sourceIndex.data(GameRoles::Source).toString();

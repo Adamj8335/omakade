@@ -28,6 +28,7 @@ public:
                           const QString& launchTarget = {});
   Q_INVOKABLE bool manage(const QString& source, const QString& id, bool flatpak = false,
                           const QString& runner = {});
+  Q_INVOKABLE bool install(const QString& source, const QString& id);
 
 signals:
   void lastErrorChanged();

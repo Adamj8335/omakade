@@ -11,7 +11,8 @@ class MockGameModel final : public QAbstractListModel {
   Q_OBJECT
 
 public:
-  explicit MockGameModel(QObject* parent = nullptr, int gameCount = 100);
+  explicit MockGameModel(QObject* parent = nullptr, int gameCount = 100,
+                         bool firstUninstalled = false);
 
   [[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override;
   [[nodiscard]] QVariant data(const QModelIndex& index, int role) const override;
@@ -42,6 +43,7 @@ private:
     QString logoPath;
     QString installPath;
     QString source = QStringLiteral("Demo");
+    bool installed = true;
   };
 
   [[nodiscard]] QVariant valueForRole(const Game& game, int role) const;

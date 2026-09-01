@@ -72,6 +72,10 @@ QString ControllerInput::favoriteGlyph() const {
   return buttonLabel(SDL_GAMEPAD_BUTTON_WEST, QStringLiteral("WEST"));
 }
 
+QString ControllerInput::toolbarGlyph() const {
+  return buttonLabel(SDL_GAMEPAD_BUTTON_NORTH, QStringLiteral("NORTH"));
+}
+
 bool ControllerInput::focusNavigation() const { return m_focusNavigation; }
 
 void ControllerInput::setFocusNavigation(bool enabled) {
@@ -154,6 +158,9 @@ void ControllerInput::handleButton(int button) {
     break;
   case SDL_GAMEPAD_BUTTON_WEST:
     emit favoriteRequested();
+    break;
+  case SDL_GAMEPAD_BUTTON_NORTH:
+    emit toolbarRequested();
     break;
   case SDL_GAMEPAD_BUTTON_START:
     emit keyRequested(Qt::Key_F11, Qt::NoModifier);

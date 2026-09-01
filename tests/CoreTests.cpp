@@ -13,6 +13,7 @@
 #include "library/MockGameModel.h"
 #include "library/RetroArchGameModel.h"
 #include "library/SteamGameModel.h"
+#include "library/SteamOwnedGamesApi.h"
 #include "library/UnifiedGameModel.h"
 #include "metadata/GameInsightsService.h"
 #include "metadata/IgdbApi.h"
@@ -216,9 +217,12 @@ private slots:
   void steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements();
   void steamModelPersistsFavoritesAndHiddenState();
   void steamModelMigratesVersionOneDatabase();
+  void steamModelMigratesUnscopedOwnedGamesCache();
   void achievementModelLoadsLocalSteamCache();
   void steamAchievementApiParsesPlayerSchemaAndRarity();
   void steamAchievementApiClassifiesFailures();
+  void steamOwnedGamesApiParsesLibraryAndPrivacy();
+  void steamOwnedGamesRemainOptionalAndFilterByInstallation();
   void steamLauncherBuildsSafeUrls();
   void lutrisScannerImportsOnlyLaunchableGames();
   void lutrisModelIsRepeatableAndPreservesLocalState();
@@ -507,7 +511,7 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QSqlQuery query(verify);
     QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
     QVERIFY(query.next());
-    QCOMPARE(query.value(0).toInt(), 7);
+    QCOMPARE(query.value(0).toInt(), 9);
     QVERIFY(query.exec(QStringLiteral(
         "SELECT paths FROM source_state WHERE source = 'steam'")));
     QVERIFY(query.next());
@@ -523,6 +527,11 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QVERIFY(query.next());
     QCOMPARE(query.value(0).toInt(), 1);
     QVERIFY(query.exec(
+        QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = "
+                       "'owned_games'")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 1);
+    QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('artwork_overrides', 'game_link_members', 'launch_activity')")));
     QVERIFY(query.next());
@@ -532,6 +541,57 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
                        "('game_organization', 'collections', 'collection_games')")));
     QVERIFY(query.next());
     QCOMPARE(query.value(0).toInt(), 3);
+    verify.close();
+  }
+  QSqlDatabase::removeDatabase(verifyConnection);
+}
+
+void CoreTests::steamModelMigratesUnscopedOwnedGamesCache() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/library.sqlite3");
+  const QString setupConnection = QStringLiteral("owned-migration-setup");
+  {
+    QSqlDatabase setup = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), setupConnection);
+    setup.setDatabaseName(database);
+    QVERIFY(setup.open());
+    QSqlQuery query(setup);
+    QVERIFY(query.exec(QStringLiteral(
+        "CREATE TABLE games (app_id TEXT PRIMARY KEY, title TEXT NOT NULL, favorite INTEGER NOT "
+        "NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0)")));
+    QVERIFY(query.exec(QStringLiteral("INSERT INTO games VALUES('440', 'Team Fortress 2', 0, 0)")));
+    QVERIFY(query.exec(QStringLiteral(
+        "CREATE TABLE owned_games (app_id TEXT PRIMARY KEY REFERENCES games(app_id), "
+        "playtime_minutes INTEGER NOT NULL DEFAULT 0, synced_at INTEGER NOT NULL)")));
+    QVERIFY(query.exec(QStringLiteral("INSERT INTO owned_games VALUES('440', 600, 1700000000)")));
+    QVERIFY(query.exec(QStringLiteral("PRAGMA user_version = 8")));
+    setup.close();
+  }
+  QSqlDatabase::removeDatabase(setupConnection);
+
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  settings.setSteamId(QStringLiteral("76561198000000000"));
+  SteamGameModel model(database, &settings);
+  QCOMPARE(model.rowCount(), 0);
+
+  const QString verifyConnection = QStringLiteral("owned-migration-verify");
+  {
+    QSqlDatabase verify = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), verifyConnection);
+    verify.setDatabaseName(database);
+    QVERIFY(verify.open());
+    QSqlQuery query(verify);
+    QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 9);
+    QVERIFY(query.exec(QStringLiteral("PRAGMA table_info(owned_games)")));
+    bool hasSteamId = false;
+    while (query.next()) {
+      hasSteamId = hasSteamId || query.value(1).toString() == QStringLiteral("steam_id");
+    }
+    QVERIFY(hasSteamId);
+    QVERIFY(query.exec(QStringLiteral("SELECT COUNT(*) FROM owned_games")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 0);
     verify.close();
   }
   QSqlDatabase::removeDatabase(verifyConnection);
@@ -632,12 +692,109 @@ void CoreTests::steamAchievementApiClassifiesFailures() {
            SteamApiState::RemoteError);
 }
 
+void CoreTests::steamOwnedGamesApiParsesLibraryAndPrivacy() {
+  QVector<SteamOwnedGameRecord> games;
+  QString error;
+  QCOMPARE(
+      SteamOwnedGamesApi::parse(
+          R"({"response":{"game_count":2,"games":[{"appid":10,"name":"Counter-Strike","playtime_forever":125},{"appid":30,"name":"Portal","playtime_forever":60}]}})",
+          &games, &error),
+      SteamApiState::Ready);
+  QVERIFY(error.isEmpty());
+  QCOMPARE(games.size(), 2);
+  QCOMPARE(games.at(0).appId, QStringLiteral("10"));
+  QCOMPARE(games.at(0).title, QStringLiteral("Counter-Strike"));
+  QCOMPARE(games.at(0).playtimeMinutes, 125);
+
+  QCOMPARE(SteamOwnedGamesApi::parse(R"({"response":{}})", &games, &error),
+           SteamApiState::PrivateProfile);
+  QVERIFY(!error.isEmpty());
+  QCOMPARE(SteamOwnedGamesApi::parse(R"({"response":{"game_count":0}})", &games, &error),
+           SteamApiState::Ready);
+  QVERIFY(games.isEmpty());
+  QCOMPARE(SteamOwnedGamesApi::parse(R"({"response":{"game_count":2}})", &games, &error),
+           SteamApiState::RemoteError);
+  QCOMPARE(SteamOwnedGamesApi::parse(
+               R"({"response":{"game_count":2,"games":[{"appid":10,"name":"Counter-Strike"}]}})",
+               &games, &error),
+           SteamApiState::RemoteError);
+  QCOMPARE(
+      SteamOwnedGamesApi::parse(
+          R"({"response":{"game_count":2,"games":[{"appid":10,"name":"Counter-Strike"},{"appid":10,"name":"Duplicate"}]}})",
+          &games, &error),
+      SteamApiState::RemoteError);
+  QCOMPARE(SteamOwnedGamesApi::parse("not json", &games, &error), SteamApiState::RemoteError);
+  QVERIFY(SteamOwnedGamesApi::messageForState(SteamApiState::Offline)
+              .contains(QStringLiteral("owned games")));
+  QVERIFY(SteamOwnedGamesApi::messageForState(SteamApiState::RemoteError)
+              .contains(QStringLiteral("owned games")));
+  QVERIFY(!SteamOwnedGamesApi::messageForState(SteamApiState::Offline)
+               .contains(QStringLiteral("achievement")));
+}
+
+void CoreTests::steamOwnedGamesRemainOptionalAndFilterByInstallation() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/library.sqlite3");
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  settings.setSteamId(QStringLiteral("76561198000000000"));
+  {
+    SteamGameModel schema(database, &settings);
+  }
+
+  const QString connection = QStringLiteral("owned-games-fixture");
+  {
+    QSqlDatabase setup = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+    setup.setDatabaseName(database);
+    QVERIFY(setup.open());
+    QSqlQuery query(setup);
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO games(app_id, title) VALUES('10', 'Counter-Strike'), ('30', 'Portal'), "
+        "('40', 'Other Account Game')")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO owned_games(steam_id, app_id, playtime_minutes, synced_at) VALUES"
+        "('76561198000000000', '10', 125, 1700000000), "
+        "('76561198000000000', '30', 60, 1700000000), "
+        "('76561198000000001', '40', 30, 1700000000)")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO installations(app_id, install_dir, library_path, manifest_path, cover_path, "
+        "hero_path, logo_path, last_played, playtime_minutes, observed_at) VALUES"
+        "('10', 'Counter-Strike', '/games', '/manifests/10', '', '', '', 0, 100, 1700000000)")));
+    setup.close();
+  }
+  QSqlDatabase::removeDatabase(connection);
+
+  SteamGameModel games(database, &settings);
+  QCOMPARE(games.rowCount(), 2);
+  LibraryFilterModel library;
+  library.setSourceModel(&games);
+  QCOMPARE(library.rowCount(), 1);
+  QVERIFY(library.get(0).value(QStringLiteral("installed")).toBool());
+
+  library.setAvailability(LibraryFilterModel::Availability::AllGames);
+  QCOMPARE(library.rowCount(), 2);
+  library.setAvailability(LibraryFilterModel::Availability::ReadyToInstall);
+  QCOMPARE(library.rowCount(), 1);
+  QCOMPARE(library.get(0).value(QStringLiteral("appId")).toString(), QStringLiteral("30"));
+  QVERIFY(!library.get(0).value(QStringLiteral("installed")).toBool());
+
+  settings.setSteamId(QStringLiteral("76561198000000001"));
+  library.setAvailability(LibraryFilterModel::Availability::AllGames);
+  QCOMPARE(library.rowCount(), 2);
+  library.setAvailability(LibraryFilterModel::Availability::ReadyToInstall);
+  QCOMPARE(library.rowCount(), 1);
+  QCOMPARE(library.get(0).value(QStringLiteral("appId")).toString(), QStringLiteral("40"));
+}
+
 void CoreTests::steamLauncherBuildsSafeUrls() {
   QCOMPARE(SteamLauncher::launchUrl(QStringLiteral("440")),
            QUrl(QStringLiteral("steam://rungameid/440")));
   QCOMPARE(SteamLauncher::manageUrl(QStringLiteral("440")),
            QUrl(QStringLiteral("steam://nav/games/details/440")));
+  QCOMPARE(SteamLauncher::installUrl(QStringLiteral("440")),
+           QUrl(QStringLiteral("steam://install/440")));
   QVERIFY(SteamLauncher::launchUrl(QStringLiteral("440;touch /tmp/nope")).isEmpty());
+  QVERIFY(SteamLauncher::installUrl(QStringLiteral("440;touch /tmp/nope")).isEmpty());
 }
 
 void CoreTests::lutrisScannerImportsOnlyLaunchableGames() {
@@ -1453,8 +1610,8 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   description.type = SDL_JOYSTICK_TYPE_GAMEPAD;
   description.naxes = SDL_GAMEPAD_AXIS_COUNT;
   description.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
-  description.button_mask = (1U << SDL_GAMEPAD_BUTTON_SOUTH)
-                            | (1U << SDL_GAMEPAD_BUTTON_WEST);
+  description.button_mask = (1U << SDL_GAMEPAD_BUTTON_SOUTH) | (1U << SDL_GAMEPAD_BUTTON_WEST) |
+                            (1U << SDL_GAMEPAD_BUTTON_NORTH);
   description.axis_mask = (1U << SDL_GAMEPAD_AXIS_LEFTX) | (1U << SDL_GAMEPAD_AXIS_LEFTY);
   description.name = "Omakade test controller";
   const SDL_JoystickID id = SDL_AttachVirtualJoystick(&description);
@@ -1467,6 +1624,7 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   QSignalSpy keys(&controller, &ControllerInput::keyRequested);
   QSignalSpy focusDirections(&controller, &ControllerInput::focusDirectionRequested);
   QSignalSpy favorites(&controller, &ControllerInput::favoriteRequested);
+  QSignalSpy toolbar(&controller, &ControllerInput::toolbarRequested);
   SDL_Joystick* joystick = SDL_OpenJoystick(id);
   QVERIFY(joystick != nullptr);
   QVERIFY(SDL_SetJoystickVirtualButton(joystick, SDL_GAMEPAD_BUTTON_SOUTH, true));
@@ -1480,6 +1638,13 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   favorite.gbutton.button = SDL_GAMEPAD_BUTTON_WEST;
   QVERIFY(SDL_PushEvent(&favorite));
   QTRY_COMPARE_WITH_TIMEOUT(favorites.size(), 1, 1000);
+
+  SDL_Event controls{};
+  controls.type = SDL_EVENT_GAMEPAD_BUTTON_DOWN;
+  controls.gbutton.which = id;
+  controls.gbutton.button = SDL_GAMEPAD_BUTTON_NORTH;
+  QVERIFY(SDL_PushEvent(&controls));
+  QTRY_COMPARE_WITH_TIMEOUT(toolbar.size(), 1, 1000);
 
   keys.clear();
   QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTX, 20000));

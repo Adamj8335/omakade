@@ -164,6 +164,24 @@ bool GameLauncher::manage(const QString& source, const QString& id, bool flatpak
   return false;
 }
 
+bool GameLauncher::install(const QString& source, const QString& id) {
+  if (source.compare(QStringLiteral("Steam"), Qt::CaseInsensitive) != 0) {
+    setError(QStringLiteral("%1 games cannot be installed here yet.").arg(source));
+    return false;
+  }
+  const QUrl url = SteamLauncher::installUrl(id);
+  if (!url.isValid() || url.isEmpty()) {
+    setError(QStringLiteral("This game has an invalid Steam App ID."));
+    return false;
+  }
+  if (!QDesktopServices::openUrl(url)) {
+    setError(QStringLiteral("Steam could not start the installation."));
+    return false;
+  }
+  setError({});
+  return true;
+}
+
 bool GameLauncher::launchLutris(const QString& id, bool flatpak, bool manageOnly) {
   const QString executable = flatpak ? QStringLiteral("flatpak") : QStringLiteral("lutris");
   const bool available = !QStandardPaths::findExecutable(executable).isEmpty();

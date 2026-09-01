@@ -17,6 +17,8 @@ Omakade retains:
 - User-created links between duplicate installations in the same database
 - Completion states, tags, collections, and collection memberships in the same
   database
+- Owned Steam App IDs, titles, and account playtime after an explicit library
+  sync in the same database
 - Steam ID, public IGDB client ID, cache limit, and reduced-motion preference in
   `$XDG_CONFIG_HOME/omakade/config.toml`
 - Downloaded covers and achievement icons in `$XDG_CACHE_HOME/omakade/`
@@ -46,6 +48,11 @@ stale achievement data when Steam game details open or when the user selects
 Refresh Steam. It requests player achievements, the game's achievement schema,
 and global rarity from Valve's documented HTTPS endpoints. Failed requests do
 not remove cached data.
+
+Owned-library requests occur only when the user selects Sync Owned Steam
+Library. Omakade requests the public game list and playtime for the configured
+Steam ID, then caches it locally. A failed or private-profile response does not
+replace the previous cache. Steam remains responsible for installation.
 
 IGDB requests occur only after the user supplies their own Twitch developer
 credentials. Omakade maps a Steam App ID to an IGDB game, then requests IGDB's

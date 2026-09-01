@@ -16,6 +16,7 @@ class ControllerInput final : public QObject {
   Q_PROPERTY(QString primaryGlyph READ primaryGlyph NOTIFY controllerChanged)
   Q_PROPERTY(QString backGlyph READ backGlyph NOTIFY controllerChanged)
   Q_PROPERTY(QString favoriteGlyph READ favoriteGlyph NOTIFY controllerChanged)
+  Q_PROPERTY(QString toolbarGlyph READ toolbarGlyph NOTIFY controllerChanged)
   Q_PROPERTY(bool focusNavigation READ focusNavigation WRITE setFocusNavigation NOTIFY
                  focusNavigationChanged)
 
@@ -29,6 +30,7 @@ public:
   [[nodiscard]] QString primaryGlyph() const;
   [[nodiscard]] QString backGlyph() const;
   [[nodiscard]] QString favoriteGlyph() const;
+  [[nodiscard]] QString toolbarGlyph() const;
   [[nodiscard]] bool focusNavigation() const;
   void setFocusNavigation(bool enabled);
   void start();
@@ -37,6 +39,7 @@ signals:
   void controllerChanged();
   void focusNavigationChanged();
   void favoriteRequested();
+  void toolbarRequested();
   void focusDirectionRequested(int key);
   void keyRequested(int key, int modifiers);
 

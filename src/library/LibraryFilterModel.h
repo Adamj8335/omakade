@@ -8,6 +8,8 @@ class LibraryFilterModel final : public QSortFilterProxyModel {
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY searchTextChanged)
   Q_PROPERTY(Mode mode READ mode WRITE setMode NOTIFY modeChanged)
   Q_PROPERTY(SortMode sortMode READ sortMode WRITE setSortMode NOTIFY sortModeChanged)
+  Q_PROPERTY(
+      Availability availability READ availability WRITE setAvailability NOTIFY availabilityChanged)
   Q_PROPERTY(bool showHidden READ showHidden WRITE setShowHidden NOTIFY showHiddenChanged)
   Q_PROPERTY(
       QString sourceFilter READ sourceFilter WRITE setSourceFilter NOTIFY sourceFilterChanged)
@@ -24,6 +26,8 @@ public:
   Q_ENUM(Mode)
   enum class SortMode { Title = 0, RecentlyPlayed, Playtime };
   Q_ENUM(SortMode)
+  enum class Availability { Installed = 0, AllGames, ReadyToInstall };
+  Q_ENUM(Availability)
 
   explicit LibraryFilterModel(QObject* parent = nullptr);
   void setSourceModel(QAbstractItemModel* sourceModel) override;
@@ -35,6 +39,8 @@ public:
   void setMode(Mode value);
   [[nodiscard]] SortMode sortMode() const;
   void setSortMode(SortMode value);
+  [[nodiscard]] Availability availability() const;
+  void setAvailability(Availability value);
   [[nodiscard]] bool showHidden() const;
   void setShowHidden(bool value);
   [[nodiscard]] QString sourceFilter() const;
@@ -70,6 +76,7 @@ signals:
   void searchTextChanged();
   void modeChanged();
   void sortModeChanged();
+  void availabilityChanged();
   void showHiddenChanged();
   void sourceFilterChanged();
   void organizationFilterChanged();
@@ -84,6 +91,7 @@ private:
   QString m_searchText;
   Mode m_mode = Mode::All;
   SortMode m_sortMode = SortMode::Title;
+  Availability m_availability = Availability::Installed;
   bool m_showHidden = false;
   QString m_sourceFilter;
   QString m_completionFilter;

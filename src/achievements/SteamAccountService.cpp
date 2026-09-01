@@ -37,6 +37,7 @@ const SecretSchema* legacySteamSchema() {
 
 constexpr auto kSecretService = "steam-web-api";
 constexpr qsizetype kMaximumApiResponseBytes = 4 * 1024 * 1024;
+constexpr qsizetype kMaximumOwnedGamesResponseBytes = 16 * 1024 * 1024;
 constexpr qint64 kAchievementRefreshSeconds = 15 * 60;
 
 SteamSecretResult lookupSecret(bool includeSecret) {
@@ -116,6 +117,7 @@ SteamAccountService::SteamAccountService(const QString& databasePath, AppSetting
       m_settings->setSteamId(discovered);
     }
   }
+  loadOwnedGameCount();
   connect(&m_secretWatcher, &QFutureWatcher<SteamSecretResult>::finished, this,
           &SteamAccountService::finishSecretOperation);
   beginSecretOperation(SecretAction::Detect);
@@ -142,6 +144,8 @@ QString SteamAccountService::statusText() const { return m_statusText; }
 
 QString SteamAccountService::state() const { return m_state; }
 
+int SteamAccountService::ownedGameCount() const { return m_ownedGameCount; }
+
 void SteamAccountService::setSteamId(const QString& steamId) {
   if (m_settings == nullptr) {
     return;
@@ -149,7 +153,9 @@ void SteamAccountService::setSteamId(const QString& steamId) {
   const QString before = m_settings->steamId();
   m_settings->setSteamId(steamId);
   if (before != m_settings->steamId()) {
+    loadOwnedGameCount();
     emit accountChanged();
+    emit ownedGamesUpdated();
     setStatus(QStringLiteral("local"), QStringLiteral("Steam ID saved"));
   } else if (steamId.trimmed() != before) {
     setStatus(QStringLiteral("error"), QStringLiteral("Enter a numeric Steam ID"));
@@ -219,6 +225,21 @@ void SteamAccountService::refreshAchievementsIfStale(const QString& appId) {
   refreshAchievements(appId);
 }
 
+void SteamAccountService::refreshOwnedGames() {
+  if (m_busy) {
+    return;
+  }
+  if (steamId().isEmpty()) {
+    setStatus(QStringLiteral("setup"), QStringLiteral("Enter your Steam ID before syncing games"));
+    return;
+  }
+  if (!m_hasApiKey) {
+    setStatus(QStringLiteral("setup"), QStringLiteral("Add a Steam Web API key in settings"));
+    return;
+  }
+  beginSecretOperation(SecretAction::LookupForOwnedGames);
+}
+
 QString SteamAccountService::discoverSteamId() {
   for (const QString& root : SteamScanner::discoverSteamRoots()) {
     ValveKeyValues values;
@@ -256,8 +277,9 @@ void SteamAccountService::beginSecretOperation(SecretAction action, const QByteA
   m_secretAction = action;
   setBusy(true);
   m_secretWatcher.setFuture(QtConcurrent::run([action, secretValue = QByteArray(value)]() mutable {
-    if (action == SecretAction::Detect || action == SecretAction::LookupForRefresh) {
-      return lookupSecret(action == SecretAction::LookupForRefresh);
+    if (action == SecretAction::Detect || action == SecretAction::LookupForRefresh ||
+        action == SecretAction::LookupForOwnedGames) {
+      return lookupSecret(action != SecretAction::Detect);
     }
     GError* error = nullptr;
     bool success = false;
@@ -316,10 +338,98 @@ void SteamAccountService::finishSecretOperation() {
     emit accountChanged();
     setBusy(false);
     setStatus(QStringLiteral("setup"), QStringLiteral("Add a Steam Web API key in settings"));
-  } else {
+  } else if (m_secretAction == SecretAction::LookupForRefresh) {
     startApiRequests(std::move(result.secret));
+  } else {
+    startOwnedGamesRequest(std::move(result.secret));
   }
   result.secret.fill('\0');
+}
+
+void SteamAccountService::startOwnedGamesRequest(QByteArray apiKey) {
+  const QString requestSteamId = steamId();
+  QUrl url;
+  url.setScheme(QStringLiteral("https"));
+  url.setHost(SteamAchievementApi::authenticatedHost());
+  url.setPath(QStringLiteral("/IPlayerService/GetOwnedGames/v1/"));
+  QUrlQuery query;
+  query.addQueryItem(QStringLiteral("key"), QString::fromLatin1(apiKey));
+  query.addQueryItem(QStringLiteral("steamid"), requestSteamId);
+  query.addQueryItem(QStringLiteral("include_appinfo"), QStringLiteral("1"));
+  query.addQueryItem(QStringLiteral("include_played_free_games"), QStringLiteral("1"));
+  url.setQuery(query);
+  QNetworkRequest request(url);
+  request.setTransferTimeout(20000);
+  request.setHeader(QNetworkRequest::UserAgentHeader,
+                    QStringLiteral("Omakade/%1").arg(QCoreApplication::applicationVersion()));
+  request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                       QNetworkRequest::ManualRedirectPolicy);
+  QNetworkReply* reply = m_network.get(request);
+  reply->setProperty("steamId", requestSteamId);
+  m_responseBuffers.insert(reply, {});
+  connect(reply, &QNetworkReply::readyRead, this, [this, reply] {
+    QByteArray& buffer = m_responseBuffers[reply];
+    const qsizetype remaining = kMaximumOwnedGamesResponseBytes - buffer.size();
+    if (remaining <= 0) {
+      reply->setProperty("responseTooLarge", true);
+      reply->abort();
+      return;
+    }
+    buffer.append(reply->read(remaining + 1));
+    if (buffer.size() > kMaximumOwnedGamesResponseBytes) {
+      reply->setProperty("responseTooLarge", true);
+      reply->abort();
+    }
+  });
+  connect(reply, &QNetworkReply::finished, this, [this, reply] { handleOwnedGamesReply(reply); });
+  apiKey.fill('\0');
+  setStatus(QStringLiteral("refreshing"), QStringLiteral("Syncing owned Steam games"));
+}
+
+void SteamAccountService::handleOwnedGamesReply(QNetworkReply* reply) {
+  const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+  const QString requestSteamId = reply->property("steamId").toString();
+  QByteArray contents = m_responseBuffers.take(reply);
+  if (contents.size() <= kMaximumOwnedGamesResponseBytes) {
+    contents.append(reply->read(kMaximumOwnedGamesResponseBytes + 1 - contents.size()));
+  }
+  const bool tooLarge = reply->property("responseTooLarge").toBool() ||
+                        contents.size() > kMaximumOwnedGamesResponseBytes;
+  const SteamApiState responseState = tooLarge
+                                          ? SteamApiState::RemoteError
+                                          : SteamAchievementApi::classifyHttpResponse(
+                                                status, reply->error() != QNetworkReply::NoError);
+  reply->deleteLater();
+  if (requestSteamId != steamId()) {
+    setBusy(false);
+    setStatus(QStringLiteral("setup"), QStringLiteral("Steam ID changed; sync canceled"));
+    return;
+  }
+  if (responseState != SteamApiState::Ready) {
+    setBusy(false);
+    setStatus(apiStateName(responseState),
+              tooLarge ? QStringLiteral("Steam returned an unexpectedly large response")
+                       : SteamOwnedGamesApi::messageForState(responseState));
+    return;
+  }
+  QVector<SteamOwnedGameRecord> games;
+  QString error;
+  const SteamApiState state = SteamOwnedGamesApi::parse(contents, &games, &error);
+  if (state != SteamApiState::Ready) {
+    setBusy(false);
+    setStatus(apiStateName(state), SteamOwnedGamesApi::messageForState(state, error));
+    return;
+  }
+  if (!persistOwnedGames(requestSteamId, games)) {
+    setBusy(false);
+    setStatus(QStringLiteral("error"), QStringLiteral("Could not cache owned Steam games"));
+    return;
+  }
+  m_ownedGameCount = games.size();
+  setBusy(false);
+  setStatus(QStringLiteral("connected"),
+            QStringLiteral("Synced %1 owned Steam games").arg(m_ownedGameCount));
+  emit ownedGamesUpdated();
 }
 
 void SteamAccountService::startApiRequests(QByteArray apiKey) {
@@ -492,6 +602,53 @@ bool SteamAccountService::persistAchievements(const SteamAchievementApiResult& r
     return false;
   }
   return true;
+}
+
+bool SteamAccountService::persistOwnedGames(const QString& requestSteamId,
+                                            const QVector<SteamOwnedGameRecord>& games) {
+  if (!m_database.isOpen() || !m_database.transaction()) {
+    return false;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral("DELETE FROM owned_games WHERE steam_id = ?"));
+  query.addBindValue(requestSteamId);
+  bool okay = query.exec();
+  const qint64 syncedAt = QDateTime::currentSecsSinceEpoch();
+  for (const SteamOwnedGameRecord& game : games) {
+    query.prepare(QStringLiteral(
+        "INSERT INTO games(app_id, title) VALUES(?, ?) ON CONFLICT(app_id) DO UPDATE SET "
+        "title = excluded.title"));
+    query.addBindValue(game.appId);
+    query.addBindValue(game.title);
+    okay = okay && query.exec();
+    query.prepare(
+        QStringLiteral("INSERT INTO owned_games(steam_id, app_id, playtime_minutes, synced_at) "
+                       "VALUES(?, ?, ?, ?)"));
+    query.addBindValue(requestSteamId);
+    query.addBindValue(game.appId);
+    query.addBindValue(game.playtimeMinutes);
+    query.addBindValue(syncedAt);
+    okay = okay && query.exec();
+  }
+  if (!okay || !m_database.commit()) {
+    m_database.rollback();
+    return false;
+  }
+  return true;
+}
+
+void SteamAccountService::loadOwnedGameCount() {
+  if (!m_database.isOpen()) {
+    return;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral("SELECT COUNT(*) FROM owned_games WHERE steam_id = ?"));
+  query.addBindValue(steamId());
+  if (query.exec() && query.next()) {
+    m_ownedGameCount = query.value(0).toInt();
+  } else {
+    m_ownedGameCount = 0;
+  }
 }
 
 void SteamAccountService::setBusy(bool busy) {

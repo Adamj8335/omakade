@@ -40,7 +40,8 @@ QString descriptionFor(int index, const QString& title) {
 }
 } // namespace
 
-MockGameModel::MockGameModel(QObject* parent, int gameCount) : QAbstractListModel(parent) {
+MockGameModel::MockGameModel(QObject* parent, int gameCount, bool firstUninstalled)
+    : QAbstractListModel(parent) {
   m_games.reserve(gameCount);
 
   for (int index = 0; index < gameCount; ++index) {
@@ -73,6 +74,8 @@ MockGameModel::MockGameModel(QObject* parent, int gameCount) : QAbstractListMode
         .heroPath = {},
         .logoPath = {},
         .installPath = {},
+        .source = firstUninstalled && index == 0 ? QStringLiteral("Steam") : QStringLiteral("Demo"),
+        .installed = !firstUninstalled || index != 0,
     });
   }
 }
@@ -114,6 +117,7 @@ QHash<int, QByteArray> MockGameModel::roleNames() const {
       {GameRoles::Runner, "runner"},
       {GameRoles::Flatpak, "flatpak"},
       {GameRoles::Hidden, "hidden"},
+      {GameRoles::Installed, "installed"},
   };
 }
 
@@ -189,6 +193,8 @@ QVariant MockGameModel::valueForRole(const Game& game, int role) const {
     return false;
   case GameRoles::Hidden:
     return false;
+  case GameRoles::Installed:
+    return game.installed;
   default:
     return {};
   }

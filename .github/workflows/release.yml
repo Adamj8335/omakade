@@ -28,6 +28,8 @@ jobs:
           project_version="$(sed -n 's/^project(Omakade VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)"
           test "$version" = "$project_version"
           grep -q "<release version=\"$version\"" packaging/io.github.tsouth89.Omakade.metainfo.xml
+          grep -q "^## $version$" CHANGELOG.md
+          grep -q "omakade-$version-1-x86_64.pkg.tar.zst" README.md
           echo "VERSION=$version" >> "$GITHUB_ENV"
       - name: Build and test
         run: |
@@ -37,6 +39,8 @@ jobs:
           desktop-file-validate packaging/io.github.tsouth89.Omakade.desktop
           appstreamcli validate packaging/io.github.tsouth89.Omakade.metainfo.xml
       - name: Create source and package
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git archive --format=tar --prefix="omakade-$VERSION/" \
@@ -50,6 +54,14 @@ jobs:
           chown -R builder:builder "$GITHUB_WORKSPACE"
           runuser -u builder -- bash -lc "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --cleanbuild --noconfirm"
           package_file="$(find packaging/arch -maxdepth 1 -name 'omakade-[0-9]*-x86_64.pkg.tar.zst' -print -quit)"
+          previous_tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          mkdir previous-release
+          gh release download "$previous_tag" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'omakade-*-x86_64.pkg.tar.zst' --dir previous-release
+          previous_package="$(find previous-release -maxdepth 1 -name 'omakade-*-x86_64.pkg.tar.zst' -print -quit)"
+          test -n "$previous_package"
+          pacman -U --noconfirm "$previous_package"
+          QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software omakade --smoke-test
           pacman -U --noconfirm "$package_file"
           QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software omakade --smoke-test
           pacman -U --noconfirm "$package_file"
@@ -61,6 +73,7 @@ jobs:
           sha256sum "omakade-$VERSION.tar.gz" omakade-*.pkg.tar.zst "PKGBUILD-$VERSION" > SHA256SUMS
           awk -v heading="## $VERSION" '$0 == heading {copy=1; next} /^## /{copy=0} copy' \
             CHANGELOG.md > RELEASE_NOTES.md
+          test -s RELEASE_NOTES.md
       - name: Attest release artifacts
         uses: actions/attest@v4
         with:

@@ -1,6 +1,13 @@
 # Releasing Omakade
 
-1. Update the version in `CMakeLists.txt`, AppStream metadata, and the changelog.
+Never push the release commit or tag until the maintainer has tested the exact
+candidate locally and explicitly approved publication. Before requesting that
+approval, record the candidate commit, checks run, known limitations, and a
+short manual test checklist. A critical hotfix may bypass local maintainer
+testing only when the maintainer explicitly authorizes that specific release.
+
+1. Update the version in `CMakeLists.txt`, AppStream metadata, the changelog,
+   README package commands, and public feature descriptions.
 2. Run the release configure, build, and tests:
 
    ```bash
@@ -18,15 +25,17 @@
      ./build/release/omakade --render-screenshot=/tmp/omakade.png \
      --render-size=1380x880
    ```
-5. Tag the reviewed local commit as `vX.Y.Z` and push the tag. Do not push the
+5. Give the maintainer the exact candidate and checklist. Wait for local test
+   results and explicit publication approval.
+6. Tag the approved commit as `vX.Y.Z` and push the tag. Do not push the
    version update to `main` yet.
-6. Confirm the Release workflow builds the source archive and Arch package,
+7. Confirm the Release workflow builds the source archive and Arch package,
    installs, launches, reinstalls, removes, and reinstalls the package, publishes
    SHA-256 checksums and signed provenance, then creates the GitHub release.
-7. Download the public assets, verify their checksums and provenance, then push
+8. Download the public assets, verify their checksums and provenance, then push
    the reviewed commit to `main`. This prevents README install links from going
    live before their release assets.
-8. Install, upgrade, remove, and reinstall the published package in a disposable
+9. Install, upgrade, remove, and reinstall the published package in a disposable
    Omarchy environment.
 
 Do not publish a package while the source URL or checksum is a placeholder.

@@ -193,6 +193,16 @@ QVariant UnifiedGameModel::data(const QModelIndex& index, int role) const {
     }
     return hours;
   }
+  if (role == GameRoles::Installed) {
+    for (const SourceRow& member : members) {
+      const QModelIndex game = member.model->index(member.row, 0);
+      const QVariant installed = game.data(role);
+      if (!installed.isValid() || installed.toBool()) {
+        return true;
+      }
+    }
+    return false;
+  }
   const QString override = m_coverOverrides.value(gameKey(source));
   if (role == GameRoles::CoverPath && QFileInfo::exists(override)) {
     return localUrl(override);
@@ -213,6 +223,7 @@ QHash<int, QByteArray> UnifiedGameModel::roleNames() const {
   roles.insert(GameRoles::Tags, "tags");
   roles.insert(GameRoles::Collections, "collections");
   roles.insert(GameRoles::LaunchTarget, "launchTarget");
+  roles.insert(GameRoles::Installed, "installed");
   return roles;
 }
 
