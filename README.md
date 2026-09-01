@@ -5,7 +5,9 @@
 
 **Your games, beautifully together.**
 
-![Omakade library preview](docs/assets/library-preview.webp)
+[![Omakade library showing installed games from multiple launchers](docs/assets/library-preview.webp)](https://tsouth89.github.io/omakade/assets/omakade-demo.mp4)
+
+[Watch the 18-second demo](https://tsouth89.github.io/omakade/assets/omakade-demo.mp4)
 
 Omakade is a fast, local-first game library built for Omarchy. It brings
 installed Steam, Lutris, Heroic, Faugus, Epic, GOG, and Amazon games into one quiet,
@@ -34,6 +36,8 @@ Omakade includes:
 - Explicit linking for games installed through multiple sources
 - ProtonDB and PCGamingWiki shortcuts with actionable launch errors
 - Keyboard, mouse, and controller navigation
+
+![Omakade game details showing playtime, IGDB insights, and Steam achievements](docs/assets/game-details.webp)
 
 Omakade reads launcher data without modifying it. Core discovery, browsing,
 artwork, and launching work offline. Run `omakade --demo` to explore the UI

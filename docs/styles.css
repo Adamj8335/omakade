@@ -46,7 +46,7 @@ h1 em { color: var(--cream); font-style: normal; }
 .secondary:hover { color: var(--text); border-color: rgba(193, 196, 151, .36); }
 
 .app-window { margin: 90px 0 0; border: 1px solid rgba(140, 211, 203, .26); border-radius: 14px; overflow: hidden; background: #07100c; box-shadow: 0 38px 100px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .03); transform: perspective(1500px) rotateX(2deg); }
-.app-window img { display: block; width: 100%; height: auto; }
+.app-window img, .app-window video { display: block; width: 100%; height: auto; }
 .app-window figcaption { padding: 12px 16px; color: var(--muted); text-align: left; font-size: 10px; }
 
 .principles { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -56,6 +56,11 @@ h1 em { color: var(--cream); font-style: normal; }
 .number { color: var(--green); font-size: 11px; }
 .principles h2 { margin: 26px 0 14px; color: var(--cream); font-size: 20px; }
 .principles p { margin: 0; color: var(--muted); font-family: Inter, system-ui, sans-serif; line-height: 1.7; font-size: 15px; }
+
+.details-showcase { padding-top: 120px; text-align: center; }
+.details-showcase h2 { margin: 22px 0 18px; color: var(--cream); font-size: clamp(34px, 4vw, 56px); line-height: 1.08; letter-spacing: -.05em; }
+.details-showcase > p { max-width: 720px; margin: 0 auto; color: var(--muted); font-family: Inter, system-ui, sans-serif; font-size: 16px; line-height: 1.7; }
+.detail-window { margin-top: 55px; }
 
 .sources { display: grid; grid-template-columns: 1fr 1.2fr; align-items: end; gap: 80px; padding-block: 130px; }
 .sources .eyebrow { justify-content: flex-start; }
