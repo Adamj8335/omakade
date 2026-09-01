@@ -27,6 +27,10 @@ SteamApiState playerErrorState(const QString& message) {
 }
 } // namespace
 
+QString SteamAchievementApi::authenticatedHost() {
+  return QStringLiteral("api.steampowered.com");
+}
+
 SteamApiState SteamAchievementApi::classifyHttpResponse(int statusCode, bool networkError) {
   if (statusCode == 401 || statusCode == 403) {
     return SteamApiState::InvalidKey;

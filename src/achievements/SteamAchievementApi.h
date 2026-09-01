@@ -22,6 +22,7 @@ struct SteamAchievementApiResult {
 
 class SteamAchievementApi final {
 public:
+  [[nodiscard]] static QString authenticatedHost();
   [[nodiscard]] static SteamApiState classifyHttpResponse(int statusCode, bool networkError);
   [[nodiscard]] static SteamApiState parse(const QByteArray& playerResponse,
                                            const QByteArray& schemaResponse,

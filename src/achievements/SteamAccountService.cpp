@@ -304,10 +304,10 @@ void SteamAccountService::startApiRequests(QByteArray apiKey) {
     bool usesKey = false;
   };
   const Endpoint endpoints[] = {
-      {QStringLiteral("partner.steam-api.com"),
+      {SteamAchievementApi::authenticatedHost(),
        QStringLiteral("/ISteamUserStats/GetPlayerAchievements/v1/"), QStringLiteral("player"),
        true},
-      {QStringLiteral("partner.steam-api.com"),
+      {SteamAchievementApi::authenticatedHost(),
        QStringLiteral("/ISteamUserStats/GetSchemaForGame/v2/"), QStringLiteral("schema"), true},
       {QStringLiteral("api.steampowered.com"),
        QStringLiteral("/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/"),

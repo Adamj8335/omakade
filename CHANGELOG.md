@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2
+
+- Fixed Steam Web API keys being rejected by the wrong API host.
+- Added a visible Settings button to the library header.
+- Made mouse-wheel library scrolling smooth and row-based.
+
 ## 1.0.1
 
 - Added a distinct Omakade launcher icon and matching in-app brand mark.

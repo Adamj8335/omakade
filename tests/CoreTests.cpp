@@ -499,6 +499,7 @@ void CoreTests::steamAchievementApiParsesPlayerSchemaAndRarity() {
 }
 
 void CoreTests::steamAchievementApiClassifiesFailures() {
+  QCOMPARE(SteamAchievementApi::authenticatedHost(), QStringLiteral("api.steampowered.com"));
   QCOMPARE(SteamAchievementApi::classifyHttpResponse(0, true), SteamApiState::Offline);
   QCOMPARE(SteamAchievementApi::classifyHttpResponse(403, false), SteamApiState::InvalidKey);
   QCOMPARE(SteamAchievementApi::classifyHttpResponse(429, false), SteamApiState::RateLimited);

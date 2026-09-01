@@ -42,6 +42,41 @@ Item {
         reuseItems: true
         focus: true
         currentIndex: count > 0 ? Math.min(currentIndex, count - 1) : -1
+        property real wheelTargetY: contentY
+
+        NumberAnimation {
+            id: wheelScrollAnimation
+            target: grid
+            property: "contentY"
+            duration: 180
+            easing.type: Easing.OutCubic
+        }
+
+        WheelHandler {
+            target: null
+            acceptedDevices: PointerDevice.Mouse
+
+            onWheel: function(event) {
+                if (event.angleDelta.y === 0) {
+                    return
+                }
+                const maximumY = Math.max(0, grid.contentHeight - grid.height)
+                const startingY = wheelScrollAnimation.running
+                                  ? grid.wheelTargetY : grid.contentY
+                const rows = event.angleDelta.y / 120
+                grid.wheelTargetY = Math.max(0, Math.min(maximumY,
+                                                        startingY - rows * grid.cellHeight))
+                wheelScrollAnimation.stop()
+                if (Preferences.reducedMotion) {
+                    grid.contentY = grid.wheelTargetY
+                } else {
+                    wheelScrollAnimation.from = grid.contentY
+                    wheelScrollAnimation.to = grid.wheelTargetY
+                    wheelScrollAnimation.start()
+                }
+                event.accepted = true
+            }
+        }
 
         Keys.onReturnPressed: function(event) {
             if (currentIndex >= 0) {
@@ -171,6 +206,7 @@ Item {
             property real dragOffset: scrollThumb.height / 2
 
             onPressed: function(mouse) {
+                wheelScrollAnimation.stop()
                 dragOffset = mouse.y >= scrollThumb.y
                              && mouse.y <= scrollThumb.y + scrollThumb.height
                              ? mouse.y - scrollThumb.y : scrollThumb.height / 2

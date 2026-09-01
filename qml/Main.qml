@@ -449,6 +449,12 @@ ApplicationWindow {
                         font.pixelSize: 15
                     }
                 }
+
+                GlassButton {
+                    text: "SETTINGS"
+                    compact: true
+                    onClicked: root.diagnosticsOpen = true
+                }
             }
 
             RowLayout {
