@@ -44,6 +44,13 @@ jobs:
           useradd --create-home builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
           runuser -u builder -- bash -lc "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --cleanbuild --noconfirm"
+          package_file="$(find packaging/arch -maxdepth 1 -name 'omakade-[0-9]*-x86_64.pkg.tar.zst' -print -quit)"
+          pacman -U --noconfirm "$package_file"
+          QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software omakade --smoke-test
+          pacman -U --noconfirm "$package_file"
+          pacman -R --noconfirm omakade
+          test ! -e /usr/bin/omakade
+          pacman -U --noconfirm "$package_file"
           cp packaging/arch/omakade-*.pkg.tar.zst .
           cp packaging/arch/PKGBUILD "PKGBUILD-$VERSION"
           sha256sum "omakade-$VERSION.tar.gz" omakade-*.pkg.tar.zst "PKGBUILD-$VERSION" > SHA256SUMS

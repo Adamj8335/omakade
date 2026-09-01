@@ -20,7 +20,8 @@
    ```
 5. Tag the reviewed commit as `vX.Y.Z`.
 6. Confirm the Release workflow builds the source archive and Arch package,
-   publishes their SHA-256 checksums, and creates the GitHub release.
+   installs, launches, reinstalls, removes, and reinstalls the package, publishes
+   SHA-256 checksums, and creates the GitHub release.
 7. Install, upgrade, remove, and reinstall the published package in a disposable
    Omarchy environment.
 
