@@ -126,7 +126,7 @@ install(FILES packaging/io.github.omakade.Omakade.metainfo.xml
 install(FILES LICENSE
   DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/omakade
 )
-install(FILES README.md PRIVACY.md SUPPORT.md CHANGELOG.md
+install(FILES README.md PRIVACY.md SUPPORT.md CHANGELOG.md docs/COMPATIBILITY.md
   DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/omakade
 )
 

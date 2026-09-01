@@ -71,4 +71,5 @@ requests.
 
 See [SUPPORT.md](SUPPORT.md) for bug-report guidance,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and [PLAN.md](PLAN.md) for
-product scope and release gates.
+product scope and release gates. Current platform results are recorded in the
+[compatibility report](docs/COMPATIBILITY.md).
