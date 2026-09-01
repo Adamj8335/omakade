@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0
+
+- Added native and Flatpak Faugus library discovery, artwork, playtime, filters, and settings.
+- Added safe launch delegation and management handoff to Faugus.
+- Preferred high-resolution Steam hero artwork over small store headers.
+- Fixed missing achievement icons from Steam's legacy image CDN.
+- Added achievement sorting by status or unlock date.
+- Increased smooth mouse-wheel travel and added proportional touchpad scrolling.
+- Added project and issue links to Settings.
+
 ## 1.0.2
 
 - Fixed Steam Web API keys being rejected by the wrong API host.

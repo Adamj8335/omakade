@@ -8,7 +8,7 @@
 ![Omakade library preview](docs/assets/library-preview.webp)
 
 Omakade is a fast, local-first game library built for Omarchy. It brings
-installed Steam, Lutris, Epic, GOG, and Amazon games into one quiet,
+installed Steam, Lutris, Heroic, Faugus, Epic, GOG, and Amazon games into one quiet,
 cover-focused home that follows the active Omarchy theme.
 
 [Project homepage](https://tsouth89.github.io/omakade/) ·
@@ -19,9 +19,9 @@ cover-focused home that follows the active Omarchy theme.
 
 ## Current release
 
-Omakade 1.0 includes:
+Omakade includes:
 
-- Native and Flatpak Steam, Lutris, and Heroic discovery
+- Native and Flatpak Steam, Lutris, Heroic, and Faugus discovery
 - One-click details and delegated launching through the owning platform
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
@@ -45,8 +45,10 @@ Download the package and `SHA256SUMS` from the
 [latest release](https://github.com/tsouth89/omakade/releases/latest), then run:
 
 ```bash
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.0/omakade-1.1.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.0/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.0.2-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.1.0-1-x86_64.pkg.tar.zst
 ```
 
 Omakade keeps its local library and settings when the package is upgraded or

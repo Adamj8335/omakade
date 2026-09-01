@@ -9,6 +9,7 @@
 #include <QVector>
 
 class AppSettings;
+class QUrl;
 
 class AchievementModel final : public QAbstractListModel {
   Q_OBJECT
@@ -18,6 +19,7 @@ class AchievementModel final : public QAbstractListModel {
   Q_PROPERTY(int knownCount READ knownCount NOTIFY summaryChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY summaryChanged)
   Q_PROPERTY(qint64 cacheBytes READ cacheBytes NOTIFY cacheChanged)
+  Q_PROPERTY(int sortMode READ sortMode WRITE setSortMode NOTIFY sortModeChanged)
 
 public:
   enum Role {
@@ -48,6 +50,10 @@ public:
   [[nodiscard]] int knownCount() const;
   [[nodiscard]] QString statusText() const;
   [[nodiscard]] qint64 cacheBytes() const;
+  [[nodiscard]] int sortMode() const;
+  void setSortMode(int sortMode);
+
+  [[nodiscard]] static bool acceptsIconUrl(const QUrl& url);
 
   Q_INVOKABLE void load(const QString& appId);
   Q_INVOKABLE void clearCache();
@@ -55,6 +61,7 @@ public:
 signals:
   void summaryChanged();
   void cacheChanged();
+  void sortModeChanged();
 
 private:
   struct Achievement {
@@ -81,6 +88,7 @@ private:
   void requestMissingIcons();
   void startNextIconDownloads();
   void requestIcon(int row);
+  void sortAchievements();
   void pruneCache();
   void updateCacheBytes();
 
@@ -90,6 +98,7 @@ private:
   int m_unlocked = 0;
   int m_total = 0;
   qint64 m_cacheBytes = 0;
+  int m_sortMode = 0;
   AppSettings* m_settings = nullptr;
   QSqlDatabase m_database;
   QString m_connectionName;

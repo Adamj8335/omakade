@@ -54,18 +54,21 @@ Item {
 
         WheelHandler {
             target: null
-            acceptedDevices: PointerDevice.Mouse
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            blocking: true
 
             onWheel: function(event) {
-                if (event.angleDelta.y === 0) {
+                const travel = event.pixelDelta.y !== 0
+                               ? event.pixelDelta.y * 1.35
+                               : event.angleDelta.y / 120 * grid.cellHeight * 1.5
+                if (travel === 0) {
                     return
                 }
                 const maximumY = Math.max(0, grid.contentHeight - grid.height)
                 const startingY = wheelScrollAnimation.running
                                   ? grid.wheelTargetY : grid.contentY
-                const rows = event.angleDelta.y / 120
                 grid.wheelTargetY = Math.max(0, Math.min(maximumY,
-                                                        startingY - rows * grid.cellHeight))
+                                                        startingY - travel))
                 wheelScrollAnimation.stop()
                 if (Preferences.reducedMotion) {
                     grid.contentY = grid.wheelTargetY

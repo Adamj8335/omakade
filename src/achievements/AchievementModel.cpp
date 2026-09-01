@@ -22,13 +22,6 @@ namespace {
 constexpr qint64 kMaximumIconBytes = 2 * 1024 * 1024;
 constexpr int kMaximumConcurrentIconDownloads = 4;
 
-bool trustedIconUrl(const QUrl& url) {
-  const QString host = url.host().toLower();
-  return url.scheme() == QStringLiteral("https") &&
-         (host == QStringLiteral("steamstatic.com") ||
-          host.endsWith(QStringLiteral(".steamstatic.com")));
-}
-
 QString localUrl(const QString& path) {
   return path.isEmpty() ? QString{} : QUrl::fromLocalFile(path).toString();
 }
@@ -113,6 +106,28 @@ QString AchievementModel::statusText() const { return m_statusText; }
 
 qint64 AchievementModel::cacheBytes() const { return m_cacheBytes; }
 
+int AchievementModel::sortMode() const { return m_sortMode; }
+
+void AchievementModel::setSortMode(int sortMode) {
+  const int normalized = sortMode == 1 ? 1 : 0;
+  if (m_sortMode == normalized) {
+    return;
+  }
+  beginResetModel();
+  m_sortMode = normalized;
+  sortAchievements();
+  endResetModel();
+  emit sortModeChanged();
+}
+
+bool AchievementModel::acceptsIconUrl(const QUrl& url) {
+  const QString host = url.host().toLower();
+  return url.scheme() == QStringLiteral("https") &&
+         (host == QStringLiteral("steamcdn-a.akamaihd.net") ||
+          host == QStringLiteral("steamstatic.com") ||
+          host.endsWith(QStringLiteral(".steamstatic.com")));
+}
+
 void AchievementModel::load(const QString& appId) {
   while (!m_iconQueue.isEmpty()) {
     const IconRequest request = m_iconQueue.dequeue();
@@ -158,6 +173,7 @@ void AchievementModel::load(const QString& appId) {
       }
     }
   }
+  sortAchievements();
 
   if (m_total == 0) {
     m_statusText = QStringLiteral(
@@ -219,7 +235,7 @@ void AchievementModel::requestMissingIcons() {
       emit dataChanged(index(row), index(row), {IconPathRole});
       continue;
     }
-    if (!trustedIconUrl(QUrl(achievement.iconUrl))) {
+    if (!acceptsIconUrl(QUrl(achievement.iconUrl))) {
       continue;
     }
     const QString key = m_appId + QLatin1Char('/') + achievement.apiName;
@@ -258,7 +274,7 @@ void AchievementModel::requestIcon(int row) {
     return;
   }
   const QUrl url(m_achievements.at(row).iconUrl);
-  if (!trustedIconUrl(url)) {
+  if (!acceptsIconUrl(url)) {
     return;
   }
   QNetworkRequest request(url);
@@ -306,6 +322,22 @@ void AchievementModel::requestIcon(int row) {
     m_pendingIcons.remove(appId + QLatin1Char('/') + apiName);
     pruneCache();
     startNextIconDownloads();
+  });
+}
+
+void AchievementModel::sortAchievements() {
+  std::sort(m_achievements.begin(), m_achievements.end(), [this](const Achievement& left,
+                                                                 const Achievement& right) {
+    if (left.unlocked != right.unlocked) {
+      return left.unlocked;
+    }
+    if (m_sortMode == 1 && left.unlocked && left.unlockTime != right.unlockTime) {
+      return left.unlockTime > right.unlockTime;
+    }
+    if (m_sortMode == 0 && left.rarity != right.rarity) {
+      return left.rarity < right.rarity;
+    }
+    return QString::compare(left.title, right.title, Qt::CaseInsensitive) < 0;
   });
 }
 

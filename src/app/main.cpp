@@ -4,6 +4,7 @@
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
+#include "library/FaugusGameModel.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
 #include "library/LutrisGameModel.h"
@@ -83,9 +84,11 @@ int main(int argc, char* argv[]) {
   std::unique_ptr<QAbstractItemModel> games;
   std::unique_ptr<LutrisGameModel> lutrisGames;
   std::unique_ptr<HeroicGameModel> heroicGames;
+  std::unique_ptr<FaugusGameModel> faugusGames;
   SteamGameModel* steamLibrary = nullptr;
   LutrisGameModel* lutrisLibrary = nullptr;
   HeroicGameModel* heroicLibrary = nullptr;
+  FaugusGameModel* faugusLibrary = nullptr;
   QString libraryDatabasePath;
   if (demoMode || stressMode) {
     games = std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100);
@@ -98,6 +101,8 @@ int main(int argc, char* argv[]) {
     lutrisLibrary = lutrisGames.get();
     heroicGames = std::make_unique<HeroicGameModel>(steamLibrary->databasePath());
     heroicLibrary = heroicGames.get();
+    faugusGames = std::make_unique<FaugusGameModel>(steamLibrary->databasePath());
+    faugusLibrary = faugusGames.get();
   }
   UnifiedGameModel unifiedGames(libraryDatabasePath);
   unifiedGames.addSourceModel(games.get());
@@ -107,10 +112,14 @@ int main(int argc, char* argv[]) {
   if (heroicGames != nullptr) {
     unifiedGames.addSourceModel(heroicGames.get());
   }
+  if (faugusGames != nullptr) {
+    unifiedGames.addSourceModel(faugusGames.get());
+  }
   const auto applySourcePreferences = [&] {
     unifiedGames.setSourceEnabled(QStringLiteral("Steam"), preferences.steamEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Lutris"), preferences.lutrisEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Heroic"), preferences.heroicEnabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("Faugus"), preferences.faugusEnabled());
   };
   applySourcePreferences();
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
@@ -158,6 +167,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("SteamLibrary"), steamLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("LutrisLibrary"), lutrisLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("HeroicLibrary"), heroicLibrary);
+  engine.rootContext()->setContextProperty(QStringLiteral("FaugusLibrary"), faugusLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("Launcher"), &launcher);
   engine.rootContext()->setContextProperty(QStringLiteral("Preferences"), &preferences);
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
@@ -226,6 +236,9 @@ int main(int argc, char* argv[]) {
   }
   if (heroicLibrary != nullptr && preferences.heroicEnabled()) {
     QTimer::singleShot(300, heroicLibrary, &HeroicGameModel::refresh);
+  }
+  if (faugusLibrary != nullptr && preferences.faugusEnabled()) {
+    QTimer::singleShot(450, faugusLibrary, &FaugusGameModel::refresh);
   }
 
   if (smokeTest && !renderMode) {

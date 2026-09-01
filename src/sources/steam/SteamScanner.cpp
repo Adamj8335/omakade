@@ -41,8 +41,13 @@ bool isTool(const QString& name) {
 
 QString firstMatchingFile(const QString& directory, const QStringList& filters) {
   const QDir dir(directory);
-  const QStringList matches = dir.entryList(filters, QDir::Files, QDir::Name);
-  return matches.isEmpty() ? QString{} : dir.absoluteFilePath(matches.first());
+  for (const QString& filter : filters) {
+    const QStringList matches = dir.entryList({filter}, QDir::Files, QDir::Name);
+    if (!matches.isEmpty()) {
+      return dir.absoluteFilePath(matches.first());
+    }
+  }
+  return {};
 }
 
 QString firstMatchingFileRecursively(const QString& directory, const QString& filename) {

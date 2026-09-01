@@ -316,7 +316,10 @@ Item {
                     }
 
                     GlassButton {
-                        visible: root.selectedInstallation.source === "Steam" || root.selectedInstallation.source === "Lutris" || root.selectedInstallation.source === "Heroic"
+                        visible: root.selectedInstallation.source === "Steam"
+                                 || root.selectedInstallation.source === "Lutris"
+                                 || root.selectedInstallation.source === "Heroic"
+                                 || root.selectedInstallation.source === "Faugus"
                         text: "MANAGE IN " + (root.selectedInstallation.source || "LAUNCHER").toUpperCase()
                         onClicked: root.manageRequested()
                     }
@@ -574,6 +577,13 @@ Item {
                             font.letterSpacing: 0.6
                         }
                         Item { Layout.fillWidth: true }
+                        GlassButton {
+                            visible: Achievements.total > 1
+                            compact: true
+                            text: Achievements.sortMode === 0
+                                  ? "SORT: STATUS" : "SORT: UNLOCK DATE"
+                            onClicked: Achievements.sortMode = (Achievements.sortMode + 1) % 2
+                        }
                         GlassButton {
                             compact: true
                             text: Insights && Insights.configured

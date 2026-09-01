@@ -535,6 +535,16 @@ ApplicationWindow {
                             libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
                         }
                     }
+                    GlassButton {
+                        text: "FAUGUS"
+                        compact: true
+                        visible: Preferences.faugusEnabled
+                        selected: Library.sourceFilter === "Faugus"
+                        onClicked: {
+                            Library.sourceFilter = "Faugus"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
                 }
 
                 Text {
@@ -641,6 +651,8 @@ ApplicationWindow {
                 scanning: SteamLibrary ? SteamLibrary.scanning : false
                 emptyTitle: Library.sourceFilter === "Heroic" && HeroicLibrary && !HeroicLibrary.heroicDetected
                             ? "Heroic was not found"
+                            : Library.sourceFilter === "Faugus" && FaugusLibrary && !FaugusLibrary.faugusDetected
+                            ? "Faugus was not found"
                             : Library.sourceFilter === "Lutris" && LutrisLibrary && !LutrisLibrary.lutrisDetected
                             ? "Lutris was not found"
                             : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
@@ -648,13 +660,15 @@ ApplicationWindow {
                               : Library.mode === 3 ? "No hidden games" : "No installed games"
                 emptyMessage: Library.completionFilter !== "" || Library.collectionFilter !== "" || Library.tagFilter !== ""
                               ? "Clear or change the organization filters to see more games."
+                              : Library.sourceFilter === "Faugus" && FaugusLibrary && FaugusLibrary.errorText.length > 0
+                              ? FaugusLibrary.errorText
                               : Library.sourceFilter === "Heroic" && HeroicLibrary && HeroicLibrary.errorText.length > 0
                               ? HeroicLibrary.errorText
                               : Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
                               ? LutrisLibrary.errorText
                               : SteamLibrary && SteamLibrary.errorText.length > 0
                                 ? SteamLibrary.errorText
-                                : "Install a game in Steam, Lutris, or Heroic, then rescan your library."
+                                : "Install a game in Steam, Lutris, Heroic, or Faugus, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
                 onRefreshRequested: {
@@ -666,6 +680,9 @@ ApplicationWindow {
                     }
                     if (HeroicLibrary && Preferences.heroicEnabled) {
                         HeroicLibrary.refresh()
+                    }
+                    if (FaugusLibrary && Preferences.faugusEnabled) {
+                        FaugusLibrary.refresh()
                     }
                 }
             }
@@ -981,7 +998,12 @@ ApplicationWindow {
                           status: HeroicLibrary ? HeroicLibrary.statusText : "Unavailable",
                           error: HeroicLibrary ? HeroicLibrary.errorText : "",
                           paths: HeroicLibrary ? HeroicLibrary.detectedPaths : [],
-                          lastScan: HeroicLibrary ? HeroicLibrary.lastScan : 0 }
+                          lastScan: HeroicLibrary ? HeroicLibrary.lastScan : 0 },
+                        { name: "FAUGUS", enabled: Preferences.faugusEnabled,
+                          status: FaugusLibrary ? FaugusLibrary.statusText : "Unavailable",
+                          error: FaugusLibrary ? FaugusLibrary.errorText : "",
+                          paths: FaugusLibrary ? FaugusLibrary.detectedPaths : [],
+                          lastScan: FaugusLibrary ? FaugusLibrary.lastScan : 0 }
                     ]
                     ColumnLayout {
                         required property var modelData
@@ -1012,9 +1034,15 @@ ApplicationWindow {
                                         nowEnabled = Preferences.lutrisEnabled
                                         if (Preferences.lutrisEnabled) LutrisLibrary.refresh()
                                     } else {
-                                        Preferences.heroicEnabled = !Preferences.heroicEnabled
-                                        nowEnabled = Preferences.heroicEnabled
-                                        if (Preferences.heroicEnabled) HeroicLibrary.refresh()
+                                        if (modelData.name === "HEROIC") {
+                                            Preferences.heroicEnabled = !Preferences.heroicEnabled
+                                            nowEnabled = Preferences.heroicEnabled
+                                            if (Preferences.heroicEnabled) HeroicLibrary.refresh()
+                                        } else {
+                                            Preferences.faugusEnabled = !Preferences.faugusEnabled
+                                            nowEnabled = Preferences.faugusEnabled
+                                            if (Preferences.faugusEnabled) FaugusLibrary.refresh()
+                                        }
                                     }
                                     if (!nowEnabled && Library.sourceFilter === modelData.name[0]
                                             + modelData.name.slice(1).toLowerCase()) {
@@ -1029,7 +1057,8 @@ ApplicationWindow {
                                 onClicked: {
                                     if (modelData.name === "STEAM") SteamLibrary.refresh()
                                     else if (modelData.name === "LUTRIS") LutrisLibrary.refresh()
-                                    else HeroicLibrary.refresh()
+                                    else if (modelData.name === "HEROIC") HeroicLibrary.refresh()
+                                    else FaugusLibrary.refresh()
                                 }
                             }
                         }
@@ -1317,6 +1346,20 @@ ApplicationWindow {
                 }
                 RowLayout {
                     Layout.topMargin: 8
+                    spacing: 8
+                    GlassButton {
+                        compact: true
+                        text: "PROJECT"
+                        onClicked: Qt.openUrlExternally("https://github.com/tsouth89/omakade")
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "REPORT ISSUE"
+                        onClicked: Qt.openUrlExternally("https://github.com/tsouth89/omakade/issues/new/choose")
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+                RowLayout {
                     spacing: 8
                     GlassButton {
                         compact: true

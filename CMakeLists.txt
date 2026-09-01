@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Omakade VERSION 1.0.2 LANGUAGES CXX)
+project(Omakade VERSION 1.1.0 LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
@@ -31,6 +31,8 @@ add_library(omakade_core STATIC
   src/library/LibraryFilterModel.cpp
   src/library/LibraryFilterModel.h
   src/library/GameRoles.h
+  src/library/FaugusGameModel.cpp
+  src/library/FaugusGameModel.h
   src/library/HeroicGameModel.cpp
   src/library/HeroicGameModel.h
   src/library/LutrisGameModel.cpp
@@ -57,6 +59,8 @@ add_library(omakade_core STATIC
   src/sources/lutris/LutrisScanner.h
   src/sources/heroic/HeroicScanner.cpp
   src/sources/heroic/HeroicScanner.h
+  src/sources/faugus/FaugusScanner.cpp
+  src/sources/faugus/FaugusScanner.h
   src/theme/OmarchyTheme.cpp
   src/theme/OmarchyTheme.h
 )

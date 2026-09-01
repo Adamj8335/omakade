@@ -1,13 +1,13 @@
 # Omakade product and delivery plan
 
 Implementation status: M0 through M5 are complete for v1.0. Steam, Lutris, and
-Heroic import, launch delegation, source filters, organization, settings,
+Heroic and Faugus import, launch delegation, source filters, organization, settings,
 release checks, and explicit linking are implemented.
 
 ## Product statement
 
 Omakade is a beautiful, local-first game library built for Omarchy. It brings
-installed games from Steam, Lutris, and Heroic into one coherent place.
+installed games from Steam, Lutris, Heroic, and Faugus into one coherent place.
 It owns discovery, presentation, search, achievements, organization, and the
 launch action. Existing platforms continue to own authentication, installation,
 updates, compatibility tools, cloud saves, DRM, and overlays.

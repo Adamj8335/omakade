@@ -21,6 +21,13 @@ bool validHeroicTarget(const QString& id, const QString& runner) {
          (runner == QStringLiteral("legendary") || runner == QStringLiteral("gog") ||
           runner == QStringLiteral("nile"));
 }
+
+bool validFaugusId(const QString& id) {
+  static const QRegularExpression gameId(
+      QStringLiteral("^[\\p{L}\\p{N}_-][\\p{L}\\p{N}_.-]{0,254}$"),
+      QRegularExpression::UseUnicodePropertiesOption);
+  return gameId.match(id).hasMatch();
+}
 } // namespace
 
 GameLauncher::GameLauncher(QObject* parent) : QObject(parent) {}
@@ -56,9 +63,24 @@ LaunchCommand GameLauncher::heroicCommand(const QString& id, const QString& runn
              : LaunchCommand{QStringLiteral("heroic"), {QStringLiteral("--no-gui"), target}};
 }
 
+LaunchCommand GameLauncher::faugusCommand(const QString& id, bool flatpak) {
+  if (!validFaugusId(id)) {
+    return {};
+  }
+  return flatpak
+             ? LaunchCommand{QStringLiteral("flatpak"),
+                             {QStringLiteral("run"),
+                              QStringLiteral("--command=/app/bin/faugus-launcher"),
+                              QStringLiteral("io.github.Faugus.faugus-launcher"),
+                              QStringLiteral("--game"), id}}
+             : LaunchCommand{QStringLiteral("faugus-launcher"),
+                             {QStringLiteral("--game"), id}};
+}
+
 bool GameLauncher::launch(const QString& source, const QString& id, bool flatpak,
                           const QString& runner, const QString& installPath) {
-  if (!installPath.isEmpty() && !QFileInfo::exists(installPath)) {
+  if (source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) != 0 &&
+      !installPath.isEmpty() && !QFileInfo::exists(installPath)) {
     setError(QStringLiteral(
                  "The installed files are missing. Rescan or repair this game in %1.")
                  .arg(source));
@@ -83,6 +105,9 @@ bool GameLauncher::launch(const QString& source, const QString& id, bool flatpak
   if (source.compare(QStringLiteral("Heroic"), Qt::CaseInsensitive) == 0) {
     return launchHeroic(id, runner, flatpak, false);
   }
+  if (source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) == 0) {
+    return launchFaugus(id, flatpak, false);
+  }
   setError(QStringLiteral("%1 games cannot be launched yet.").arg(source));
   return false;
 }
@@ -103,6 +128,9 @@ bool GameLauncher::manage(const QString& source, const QString& id, bool flatpak
   }
   if (source.compare(QStringLiteral("Heroic"), Qt::CaseInsensitive) == 0) {
     return launchHeroic(id, runner, flatpak, true);
+  }
+  if (source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) == 0) {
+    return launchFaugus(id, flatpak, true);
   }
   setError(QStringLiteral("%1 does not provide game management yet.").arg(source));
   return false;
@@ -177,6 +205,42 @@ bool GameLauncher::launchHeroic(const QString& id, const QString& runner, bool f
   }
   if (!QProcess::startDetached(command.program, command.arguments)) {
     setError(QStringLiteral("Heroic could not be started. Open Heroic and try again."));
+    return false;
+  }
+  setError({});
+  return true;
+}
+
+bool GameLauncher::launchFaugus(const QString& id, bool flatpak, bool manageOnly) {
+  const QString executable = flatpak ? QStringLiteral("flatpak")
+                                     : QStringLiteral("faugus-launcher");
+  if (QStandardPaths::findExecutable(executable).isEmpty()) {
+    setError(flatpak ? QStringLiteral("Flatpak is not installed.")
+                     : QStringLiteral("Faugus is not installed."));
+    return false;
+  }
+  if (flatpak) {
+    const QString error = flatpakError(QStringLiteral("io.github.Faugus.faugus-launcher"),
+                                       QStringLiteral("Faugus"));
+    if (!error.isEmpty()) {
+      setError(error);
+      return false;
+    }
+  }
+  const LaunchCommand command =
+      manageOnly
+          ? (flatpak
+                 ? LaunchCommand{QStringLiteral("flatpak"),
+                                 {QStringLiteral("run"),
+                                  QStringLiteral("io.github.Faugus.faugus-launcher")}}
+                 : LaunchCommand{QStringLiteral("faugus-launcher"), {}})
+          : faugusCommand(id, flatpak);
+  if (!command.isValid()) {
+    setError(QStringLiteral("This game has an invalid Faugus ID."));
+    return false;
+  }
+  if (!QProcess::startDetached(command.program, command.arguments)) {
+    setError(QStringLiteral("Faugus could not be started. Open Faugus and try again."));
     return false;
   }
   setError({});

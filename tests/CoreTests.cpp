@@ -6,6 +6,7 @@
 #include "launch/GameLauncher.h"
 #include "launch/SteamLauncher.h"
 #include "library/GameRoles.h"
+#include "library/FaugusGameModel.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
 #include "library/LutrisGameModel.h"
@@ -15,6 +16,7 @@
 #include "metadata/IgdbApi.h"
 #include "metadata/GameInsightsService.h"
 #include "sources/heroic/HeroicScanner.h"
+#include "sources/faugus/FaugusScanner.h"
 #include "sources/lutris/LutrisScanner.h"
 #include "sources/steam/SteamScanner.h"
 #include "sources/steam/ValveKeyValues.h"
@@ -86,6 +88,7 @@ void createSteamFixture(const QString& root, const QString& secondLibrary) {
             manifest("10", "Counter-Strike", "Counter-Strike"));
   writeFile(root + QStringLiteral("/appcache/librarycache/10/library_600x900.jpg"), "cover");
   writeFile(root + QStringLiteral("/appcache/librarycache/20/header.jpg"), "landscape");
+  writeFile(root + QStringLiteral("/appcache/librarycache/20/library_hero.jpg"), "hero");
   writeFile(root + QStringLiteral("/appcache/librarycache/20/hash/library_capsule.jpg"),
             "portrait");
   writeFile(root + QStringLiteral("/userdata/42/config/grid/10p.png"), "custom cover");
@@ -149,6 +152,15 @@ void createHeroicFixture(const QString& root) {
       root + QStringLiteral("/nile_config/nile/library.json"),
       R"([{"product":{"id":"amazon-game","title":"Amazon Trail","productDetail":{"iconUrl":"","details":{"backgroundUrl1":""}}}}])");
 }
+
+void createFaugusFixture(const QString& root) {
+  writeFile(
+      root + QStringLiteral("/games.json"),
+      R"([{"gameid":"signal-hill","title":"Signal Hill","path":"~/Games/Signal/signal.exe","runner":"GE-Proton","playtime":7200},{"gameid":"linux-tool","title":"Linux Tool","path":"/games/linux-tool","runner":"Linux","playtime":0},{"gameid":"pokémon-外伝","title":"Pokémon 外伝","path":"/games/pokemon"},{"gameid":"signal-hill","title":"Duplicate","path":"/games/duplicate"},{"gameid":"bad;id","title":"Unsafe","path":"/games/unsafe"},{"gameid":"missing-path","title":"Missing Path","path":""}])");
+  writeFile(root + QStringLiteral("/covers/signal-hill.png"), "cover");
+  writeFile(root + QStringLiteral("/banners/signal-hill.png"), "hero");
+  writeFile(root + QStringLiteral("/icons/linux-tool.png"), "icon");
+}
 } // namespace
 
 class CoreTests final : public QObject {
@@ -185,6 +197,10 @@ private slots:
   void heroicModelIsRepeatableAndPreservesLocalState();
   void malformedHeroicDataDoesNotReplaceCachedGames();
   void heroicLauncherBuildsSafeCommands();
+  void faugusScannerImportsLaunchableGamesAndArtwork();
+  void faugusModelIsRepeatableAndPreservesLocalState();
+  void malformedFaugusDataDoesNotReplaceCachedGames();
+  void faugusLauncherBuildsSafeCommands();
   void launcherReportsInvalidAndStaleTargets();
   void igdbApiBuildsSafeQueriesAndParsesInsights();
   void igdbInsightsLoadFromOfflineCache();
@@ -341,7 +357,7 @@ void CoreTests::steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements(
   QCOMPARE(result.games.at(0).achievements.size(), 2);
   QCOMPARE(result.games.at(0).achievements.at(0).title, QStringLiteral("First Win"));
   QVERIFY(result.games.at(1).coverPath.endsWith(QStringLiteral("library_capsule.jpg")));
-  QVERIFY(result.games.at(1).heroPath.endsWith(QStringLiteral("header.jpg")));
+  QVERIFY(result.games.at(1).heroPath.endsWith(QStringLiteral("library_hero.jpg")));
 }
 
 void CoreTests::steamModelPersistsFavoritesAndHiddenState() {
@@ -476,6 +492,35 @@ void CoreTests::achievementModelLoadsLocalSteamCache() {
   QCOMPARE(achievements.rowCount(), 2);
   QCOMPARE(achievements.data(achievements.index(0), AchievementModel::TitleRole).toString(),
            QStringLiteral("First Win"));
+
+  const QString updateConnection = QStringLiteral("achievement-sort-update");
+  {
+    QSqlDatabase update = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), updateConnection);
+    update.setDatabaseName(database);
+    QVERIFY(update.open());
+    QSqlQuery query(update);
+    QVERIFY(query.exec(QStringLiteral(
+        "UPDATE achievements SET unlocked = 1, unlock_time = 1600000000 "
+        "WHERE app_id = '10' AND api_name = 'WIN_TWO'")));
+    update.close();
+  }
+  QSqlDatabase::removeDatabase(updateConnection);
+
+  achievements.load(QStringLiteral("10"));
+  QCOMPARE(achievements.data(achievements.index(0), AchievementModel::TitleRole).toString(),
+           QStringLiteral("Second Win"));
+  achievements.setSortMode(1);
+  QCOMPARE(achievements.data(achievements.index(0), AchievementModel::TitleRole).toString(),
+           QStringLiteral("First Win"));
+
+  QVERIFY(AchievementModel::acceptsIconUrl(QUrl(QStringLiteral(
+      "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/10/icon.jpg"))));
+  QVERIFY(AchievementModel::acceptsIconUrl(
+      QUrl(QStringLiteral("https://shared.steamstatic.com/icon.jpg"))));
+  QVERIFY(!AchievementModel::acceptsIconUrl(
+      QUrl(QStringLiteral("https://steamcdn-a.akamaihd.net.example.com/icon.jpg"))));
+  QVERIFY(!AchievementModel::acceptsIconUrl(
+      QUrl(QStringLiteral("http://steamcdn-a.akamaihd.net/icon.jpg"))));
 }
 
 void CoreTests::steamAchievementApiParsesPlayerSchemaAndRarity() {
@@ -927,6 +972,89 @@ void CoreTests::heroicLauncherBuildsSafeCommands() {
                .isValid());
 }
 
+void CoreTests::faugusScannerImportsLaunchableGamesAndArtwork() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString nativeRoot = directory.path() + QStringLiteral("/faugus-launcher");
+  const QString flatpakRoot =
+      directory.path() +
+      QStringLiteral("/.var/app/io.github.Faugus.faugus-launcher/data/faugus-launcher");
+  createFaugusFixture(nativeRoot);
+  createFaugusFixture(flatpakRoot);
+
+  const FaugusScanResult result = FaugusScanner::scan({nativeRoot, flatpakRoot});
+  QVERIFY(!result.incomplete);
+  QCOMPARE(result.roots, QStringList({nativeRoot, flatpakRoot}));
+  QCOMPARE(result.games.size(), 3);
+  QCOMPARE(result.games.at(0).gameId, QStringLiteral("signal-hill"));
+  QCOMPARE(result.games.at(0).title, QStringLiteral("Signal Hill"));
+  QCOMPARE(result.games.at(0).runner, QStringLiteral("GE-Proton"));
+  QCOMPARE(result.games.at(0).playtimeSeconds, 7200);
+  QVERIFY(result.games.at(0).executablePath.startsWith(QDir::homePath()));
+  QVERIFY(result.games.at(0).coverPath.endsWith(QStringLiteral("signal-hill.png")));
+  QVERIFY(result.games.at(0).heroPath.endsWith(QStringLiteral("signal-hill.png")));
+  QVERIFY(!result.games.at(0).flatpak);
+  QVERIFY(result.games.at(1).coverPath.endsWith(QStringLiteral("linux-tool.png")));
+  QCOMPARE(result.games.at(2).gameId, QStringLiteral("pokémon-外伝"));
+}
+
+void CoreTests::faugusModelIsRepeatableAndPreservesLocalState() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/faugus-launcher");
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  createFaugusFixture(root);
+
+  FaugusGameModel model(database);
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  QCOMPARE(model.detectedPaths(), QStringList({root}));
+  QVERIFY(model.lastScan() > 0);
+  QCOMPARE(model.data(model.index(0), GameRoles::Source).toString(), QStringLiteral("Faugus"));
+  QCOMPARE(model.data(model.index(2), GameRoles::Hours).toInt(), 2);
+  model.toggleFavorite(0);
+  model.toggleHidden(0);
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
+  QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
+
+  FaugusGameModel reloaded(database);
+  QCOMPARE(reloaded.detectedPaths(), QStringList({root}));
+  QCOMPARE(reloaded.lastScan(), model.lastScan());
+}
+
+void CoreTests::malformedFaugusDataDoesNotReplaceCachedGames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/faugus-launcher");
+  createFaugusFixture(root);
+  FaugusGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  writeFile(root + QStringLiteral("/games.json"), "not json");
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  QVERIFY(model.statusText().startsWith(QStringLiteral("Faugus scan interrupted")));
+}
+
+void CoreTests::faugusLauncherBuildsSafeCommands() {
+  const LaunchCommand native = GameLauncher::faugusCommand(QStringLiteral("signal-hill"), false);
+  QCOMPARE(native.program, QStringLiteral("faugus-launcher"));
+  QCOMPARE(native.arguments,
+           QStringList({QStringLiteral("--game"), QStringLiteral("signal-hill")}));
+  const LaunchCommand flatpak = GameLauncher::faugusCommand(QStringLiteral("signal-hill"), true);
+  QCOMPARE(flatpak.program, QStringLiteral("flatpak"));
+  QCOMPARE(flatpak.arguments,
+           QStringList({QStringLiteral("run"),
+                        QStringLiteral("--command=/app/bin/faugus-launcher"),
+                        QStringLiteral("io.github.Faugus.faugus-launcher"),
+                        QStringLiteral("--game"), QStringLiteral("signal-hill")}));
+  QVERIFY(!GameLauncher::faugusCommand(QStringLiteral("bad;id"), false).isValid());
+  QVERIFY(GameLauncher::faugusCommand(QStringLiteral("pokémon-外伝"), false).isValid());
+  QVERIFY(!GameLauncher::faugusCommand(QStringLiteral("../escape"), false).isValid());
+}
+
 void CoreTests::launcherReportsInvalidAndStaleTargets() {
   GameLauncher launcher;
   QVERIFY(!launcher.launch(QStringLiteral("Lutris"), QStringLiteral("bad")));
@@ -1028,6 +1156,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     settings.setIgdbClientId(QStringLiteral("publicclient123"));
     settings.setSteamEnabled(false);
     settings.setLutrisEnabled(false);
+    settings.setFaugusEnabled(false);
     settings.setCloseAfterLaunch(true);
   }
   AppSettings reloaded(path);
@@ -1038,6 +1167,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   QVERIFY(!reloaded.steamEnabled());
   QVERIFY(!reloaded.lutrisEnabled());
   QVERIFY(reloaded.heroicEnabled());
+  QVERIFY(!reloaded.faugusEnabled());
   QVERIFY(reloaded.closeAfterLaunch());
 }
 
