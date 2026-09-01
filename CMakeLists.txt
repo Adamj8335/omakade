@@ -91,6 +91,12 @@ qt_add_qml_module(omakade
     qml/screens/GameDetails.qml
 )
 
+qt_add_resources(omakade "omakade_icons"
+  PREFIX "/icons"
+  FILES
+    resources/icons/io.github.tsouth89.Omakade.svg
+)
+
 set_target_properties(omakade PROPERTIES
   OUTPUT_NAME omakade
   MACOSX_BUNDLE_GUI_IDENTIFIER io.github.tsouth89.Omakade

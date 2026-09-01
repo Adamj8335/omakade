@@ -322,21 +322,13 @@ ApplicationWindow {
                     spacing: 11
                     Layout.alignment: Qt.AlignVCenter
 
-                    Rectangle {
+                    Image {
                         width: 34
                         height: 34
-                        radius: Math.max(7, Theme.cornerRadius)
-                        color: root.alpha(Theme.accent, 0.16)
-                        border.color: root.alpha(Theme.accent, 0.48)
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "◇"
-                            color: Theme.accent
-                            font.family: Theme.fontFamily
-                            font.pixelSize: 19
-                            font.weight: Font.DemiBold
-                        }
+                        source: "qrc:/icons/resources/icons/io.github.tsouth89.Omakade.svg"
+                        sourceSize: Qt.size(68, 68)
+                        fillMode: Image.PreserveAspectFit
+                        Accessible.ignored: true
                     }
 
                     Column {
@@ -1205,6 +1197,14 @@ ApplicationWindow {
                     font.pixelSize: 10
                     wrapMode: Text.Wrap
                 }
+                Text {
+                    Layout.fillWidth: true
+                    text: "TWITCH SETUP · Create Application, not Extension · Redirect: http://localhost · Client type: Confidential · Manage → New Secret"
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    wrapMode: Text.Wrap
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     enabled: Insights !== null && !Insights.busy
@@ -1263,7 +1263,7 @@ ApplicationWindow {
                 }
                 GlassButton {
                     compact: true
-                    text: "CREATE IGDB CREDENTIALS"
+                    text: "OPEN TWITCH APPLICATIONS"
                     onClicked: Qt.openUrlExternally("https://dev.twitch.tv/console/apps")
                 }
                 Rectangle {

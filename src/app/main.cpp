@@ -54,7 +54,12 @@ int main(int argc, char* argv[]) {
   QQuickStyle::setStyle(QStringLiteral("Basic"));
 
   QGuiApplication application(argc, argv);
-  application.setWindowIcon(QIcon::fromTheme(QStringLiteral("io.github.tsouth89.Omakade")));
+  QIcon applicationIcon = QIcon::fromTheme(QStringLiteral("io.github.tsouth89.Omakade"));
+  if (applicationIcon.isNull()) {
+    applicationIcon =
+        QIcon(QStringLiteral(":/icons/resources/icons/io.github.tsouth89.Omakade.svg"));
+  }
+  application.setWindowIcon(applicationIcon);
 
   OmarchyTheme theme;
   const QString screenshotPath =

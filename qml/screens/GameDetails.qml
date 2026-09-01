@@ -440,10 +440,17 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Item { Layout.preferredWidth: 76 }
+                        Text {
+                            text: "NEW"
+                            color: Theme.mutedText
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            Layout.preferredWidth: 76
+                        }
                         TextField {
                             id: collectionField
                             Layout.fillWidth: true
+                            Layout.maximumWidth: 360
                             placeholderText: "New collection"
                             color: Theme.foreground
                             placeholderTextColor: root.alpha(Theme.foreground, 0.42)

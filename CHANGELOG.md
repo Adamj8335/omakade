@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added a distinct Omakade launcher icon and matching in-app brand mark.
+- Made the library scrollbar larger and easier to drag with a mouse.
+- Added a persistent accent outline to the selected game card.
+- Improved the new-collection layout and clarified Twitch setup for IGDB.
+
 ## 1.0.0
 
 - Added persistent launch activity across Steam, Lutris, and Heroic.

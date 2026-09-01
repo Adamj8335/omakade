@@ -48,10 +48,19 @@ FocusScope {
         }
     }
 
-    scale: activeFocus ? 1.018 : cardMouse.containsMouse ? 1.01 : 1.0
+    scale: current ? 1.018 : cardMouse.containsMouse ? 1.01 : 1.0
     Behavior on scale {
         enabled: !Preferences.reducedMotion
         NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+    }
+
+    Rectangle {
+        anchors.fill: cover
+        anchors.margins: root.current ? -5 : 0
+        radius: cover.radius + 4
+        color: root.current ? root.alpha(Theme.accent, 0.16) : "transparent"
+        border.width: root.current ? 2 : 0
+        border.color: Theme.accent
     }
 
     Rectangle {
@@ -72,8 +81,8 @@ FocusScope {
         height: Math.round(width * 1.5)
         radius: Math.max(5, Theme.cornerRadius)
         clip: true
-        border.width: root.activeFocus ? 2 : 1
-        border.color: root.activeFocus ? Theme.accent : root.alpha(Theme.foreground, 0.15)
+        border.width: root.current ? 3 : 1
+        border.color: root.current ? Theme.accent : root.alpha(Theme.foreground, 0.15)
 
         gradient: Gradient {
             orientation: Gradient.Horizontal

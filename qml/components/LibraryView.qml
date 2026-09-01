@@ -18,6 +18,10 @@ Item {
     signal favoriteToggled(int index)
     signal refreshRequested()
 
+    function alpha(color, value) {
+        return Qt.rgba(color.r, color.g, color.b, value)
+    }
+
     function focusGrid() {
         if (grid.count > 0) {
             grid.forceActiveFocus()
@@ -27,6 +31,7 @@ Item {
     GridView {
         id: grid
         anchors.fill: parent
+        anchors.rightMargin: libraryScrollTrack.visible ? 20 : 0
         clip: true
         model: root.libraryModel
         boundsBehavior: Flickable.StopAtBounds
@@ -66,15 +71,6 @@ Item {
         readonly property int columns: Math.max(2, Math.min(8, Math.floor(width / 210)))
         cellWidth: width / columns
         cellHeight: Math.round(cellWidth * 1.5) + 64
-
-        ScrollBar.vertical: ScrollBar {
-            policy: ScrollBar.AsNeeded
-            width: 5
-            contentItem: Rectangle {
-                radius: 3
-                color: Qt.rgba(Theme.foreground.r, Theme.foreground.g, Theme.foreground.b, 0.22)
-            }
-        }
 
         delegate: Item {
             id: delegateRoot
@@ -125,6 +121,65 @@ Item {
         onCountChanged: {
             if (count > 0 && currentIndex < 0) {
                 currentIndex = 0
+            }
+        }
+    }
+
+    Rectangle {
+        id: libraryScrollTrack
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        width: 16
+        radius: width / 2
+        visible: grid.contentHeight > grid.height + 1
+        color: root.alpha(Theme.foreground, scrollMouse.containsMouse ? 0.11 : 0.06)
+
+        function scrollTo(pointerY) {
+            const trackRange = height - scrollThumb.height
+            const contentRange = grid.contentHeight - grid.height
+            if (trackRange <= 0 || contentRange <= 0) {
+                return
+            }
+            const thumbY = Math.max(0, Math.min(trackRange,
+                                                pointerY - scrollMouse.dragOffset))
+            grid.contentY = thumbY / trackRange * contentRange
+        }
+
+        Rectangle {
+            id: scrollThumb
+            width: 10
+            height: Math.max(52, Math.min(parent.height,
+                                         parent.height * grid.height / grid.contentHeight))
+            x: (parent.width - width) / 2
+            y: {
+                const trackRange = parent.height - height
+                const contentRange = grid.contentHeight - grid.height
+                return contentRange > 0 ? trackRange * grid.contentY / contentRange : 0
+            }
+            radius: width / 2
+            color: root.alpha(Theme.foreground,
+                              scrollMouse.pressed ? 0.78
+                              : scrollMouse.containsMouse ? 0.58 : 0.38)
+        }
+
+        MouseArea {
+            id: scrollMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            property real dragOffset: scrollThumb.height / 2
+
+            onPressed: function(mouse) {
+                dragOffset = mouse.y >= scrollThumb.y
+                             && mouse.y <= scrollThumb.y + scrollThumb.height
+                             ? mouse.y - scrollThumb.y : scrollThumb.height / 2
+                libraryScrollTrack.scrollTo(mouse.y)
+            }
+            onPositionChanged: function(mouse) {
+                if (pressed) {
+                    libraryScrollTrack.scrollTo(mouse.y)
+                }
             }
         }
     }
