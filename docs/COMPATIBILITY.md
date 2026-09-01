@@ -17,6 +17,22 @@ The reference library contains 45 installed Steam games. Theme colors, font,
 launcher transparency, one-click details, keyboard navigation, and the
 controller input path have been exercised on this system.
 
+## Automated visual matrix
+
+Verified offscreen on August 31, 2026:
+
+| Fixture | Size | Result |
+| --- | --- | --- |
+| Catppuccin Latte light theme | 820 × 590 | Pass |
+| Osaka Jade dark theme | 1380 × 880 | Pass |
+| Everforest at 1.25 scale | 1380 × 880 physical | Pass |
+| Tokyo Night ultrawide | 2560 × 1080 | Pass |
+| No compositor blur | 820 × 590 | Pass |
+
+These deterministic renders verify layout, clipping, card aspect ratios, and
+theme contrast without changing the active desktop. A render smoke test runs in
+CI. Real display and compositor checks remain separate acceptance work.
+
 ## Contract-tested sources
 
 Lutris native and Flatpak discovery, Heroic native and Flatpak discovery, and
@@ -27,10 +43,9 @@ stable release gate can close.
 ## Still needed
 
 - A clean Omarchy installation
-- A second display scale
 - Native and Flatpak Lutris libraries from real users
 - Native and Flatpak Heroic libraries from real users
 - Steam Flatpak from a real user
-- Blur disabled and a light Omarchy theme
+- Light, scaled, ultrawide, and blur-disabled checks on real displays
 
 Reports should follow [SUPPORT.md](../SUPPORT.md) and must not include secrets.

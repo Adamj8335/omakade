@@ -11,6 +11,13 @@
 
 3. Validate the desktop and AppStream files.
 4. Install into an empty staging directory and inspect every installed file.
+   Render visual fixtures without opening a desktop window when needed:
+
+   ```bash
+   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+     ./build/release/omakade --render-screenshot=/tmp/omakade.png \
+     --render-size=1380x880
+   ```
 5. Tag the reviewed commit as `vX.Y.Z`.
 6. Confirm the Release workflow builds the source archive and Arch package,
    publishes their SHA-256 checksums, and creates the GitHub release.

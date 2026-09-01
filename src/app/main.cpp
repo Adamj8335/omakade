@@ -18,6 +18,7 @@
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QIcon>
+#include <QImage>
 #include <QKeyEvent>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -28,6 +29,18 @@
 #include <QWindow>
 
 #include <memory>
+
+namespace {
+QString optionValue(const QStringList& arguments, const QString& name) {
+  const QString prefix = name + QLatin1Char('=');
+  for (const QString& argument : arguments) {
+    if (argument.startsWith(prefix)) {
+      return argument.mid(prefix.size());
+    }
+  }
+  return {};
+}
+} // namespace
 
 int main(int argc, char* argv[]) {
   QElapsedTimer startupTimer;
@@ -44,15 +57,20 @@ int main(int argc, char* argv[]) {
   application.setWindowIcon(QIcon::fromTheme(QStringLiteral("io.github.tsouth89.Omakade")));
 
   OmarchyTheme theme;
+  const QString screenshotPath =
+      optionValue(application.arguments(), QStringLiteral("--render-screenshot"));
+  const QString renderSize = optionValue(application.arguments(), QStringLiteral("--render-size"));
+  const bool renderMode = !screenshotPath.isEmpty();
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
-  const bool demoMode = smokeTest || application.arguments().contains(QStringLiteral("--demo"));
+  const bool demoMode = smokeTest || renderMode ||
+                        application.arguments().contains(QStringLiteral("--demo"));
   const bool benchmarkMode = application.arguments().contains(QStringLiteral("--benchmark"));
   const bool stressMode = application.arguments().contains(QStringLiteral("--stress-test"));
   if (benchmarkMode) {
     qInfo() << "Theme ready in" << startupTimer.elapsed() << "ms";
   }
   SingleInstance singleInstance;
-  if (!smokeTest && !singleInstance.claimOrNotify()) {
+  if (!smokeTest && !renderMode && !singleInstance.claimOrNotify()) {
     return EXIT_SUCCESS;
   }
   AppSettings preferences;
@@ -159,6 +177,21 @@ int main(int argc, char* argv[]) {
 
   auto* rootWindow = qobject_cast<QWindow*>(engine.rootObjects().constFirst());
   if (auto* quickWindow = qobject_cast<QQuickWindow*>(rootWindow)) {
+    if (renderMode) {
+      const QStringList dimensions = renderSize.split(QLatin1Char('x'));
+      if (dimensions.size() == 2) {
+        quickWindow->resize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
+      }
+      QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
+        const QImage screenshot = quickWindow->grabWindow();
+        if (screenshot.isNull() || !screenshot.save(screenshotPath)) {
+          qCritical() << "Could not save screenshot to" << screenshotPath;
+          application.exit(EXIT_FAILURE);
+          return;
+        }
+        application.quit();
+      });
+    }
     QObject::connect(
         quickWindow, &QQuickWindow::frameSwapped, &application,
         [&application, &controller, &startupTimer, benchmarkMode] {
@@ -188,7 +221,7 @@ int main(int argc, char* argv[]) {
     QTimer::singleShot(300, heroicLibrary, &HeroicGameModel::refresh);
   }
 
-  if (smokeTest) {
+  if (smokeTest && !renderMode) {
     QTimer::singleShot(600, &application, &QCoreApplication::quit);
   }
 

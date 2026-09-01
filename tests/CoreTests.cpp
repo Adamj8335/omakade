@@ -286,6 +286,8 @@ void CoreTests::themeFollowsShellLauncherTransparency() {
   QCOMPARE(theme.surfaceAlpha(), 0.63);
   writeFile(shell, "[launcher]\nbackground-alpha = 0.91\n");
   QTRY_COMPARE_WITH_TIMEOUT(theme.surfaceAlpha(), 0.91, 1500);
+  writeFile(shell, "[launcher]\nbackground-alpha = 1.0\n");
+  QTRY_COMPARE_WITH_TIMEOUT(theme.surfaceAlpha(), 1.0, 1500);
 }
 
 void CoreTests::valveKeyValuesParsesNestedAndEscapedValues() {

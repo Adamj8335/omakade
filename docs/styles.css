@@ -45,23 +45,9 @@ h1 em { color: var(--cream); font-style: normal; }
 .secondary { border: 1px solid var(--line); color: var(--muted); }
 .secondary:hover { color: var(--text); border-color: rgba(193, 196, 151, .36); }
 
-.app-window { margin-top: 90px; padding: 18px 20px 24px; border: 1px solid rgba(140, 211, 203, .26); border-radius: 14px; background: linear-gradient(135deg, rgba(20, 46, 34, .82), rgba(3, 11, 8, .9)); box-shadow: 0 38px 100px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .03); transform: perspective(1500px) rotateX(2deg); text-align: left; }
-.window-bar { display: flex; justify-content: space-between; color: #668478; font-size: 9px; text-transform: uppercase; letter-spacing: .12em; padding-bottom: 28px; }
-.wordmark { color: var(--cream); font-weight: 800; }
-.library-label { color: var(--cream); font-size: 10px; font-weight: 800; letter-spacing: .1em; margin-bottom: 14px; }
-.library-label b { color: var(--green); margin-left: 8px; }
-.cover-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; }
-.cover { aspect-ratio: 2 / 3; border-radius: 4px; display: flex; align-items: end; padding: 12px 9px; overflow: hidden; position: relative; box-shadow: 0 7px 18px rgba(0,0,0,.28); background-size: cover; }
-.cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(0,0,0,.86)); }
-.cover span { position: relative; color: #eee3b9; font-size: 9px; line-height: 1.25; text-transform: uppercase; font-weight: 800; }
-.c1 { background: radial-gradient(circle at 45% 35%, #ad8d55, transparent 20%), linear-gradient(145deg, #506879, #1d2223 65%, #b95d31); }
-.c2 { background: radial-gradient(circle at 60% 35%, #cc7258, transparent 18%), linear-gradient(155deg, #8dc2c1, #546e67 55%, #8f3f28); }
-.c3 { background: linear-gradient(25deg, #222, #b54d24 45%, #213d3f 48%, #222); }
-.c4 { background: radial-gradient(circle at 60% 42%, #e4b082, transparent 17%), linear-gradient(135deg, #153d51, #a46546); }
-.c5 { background: linear-gradient(145deg, #e0c215 0 35%, #1f3443 36% 62%, #a72c4d 63%); }
-.c6 { background: radial-gradient(circle at 45% 38%, #b4a14e, transparent 15%), linear-gradient(160deg, #302c20, #6d6b36 60%, #0d0c0a); }
-.c7 { background: linear-gradient(145deg, #d4895c, #7db7bc 36%, #913e2e 58%, #e3c078); }
-.c8 { background: radial-gradient(ellipse at 50% 48%, transparent 9%, #c79035 10% 12%, transparent 13%), linear-gradient(#101b18, #4b301b); }
+.app-window { margin: 90px 0 0; border: 1px solid rgba(140, 211, 203, .26); border-radius: 14px; overflow: hidden; background: #07100c; box-shadow: 0 38px 100px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .03); transform: perspective(1500px) rotateX(2deg); }
+.app-window img { display: block; width: 100%; height: auto; }
+.app-window figcaption { padding: 12px 16px; color: var(--muted); text-align: left; font-size: 10px; }
 
 .principles { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .principles article { padding: 55px 40px; border-right: 1px solid var(--line); }
@@ -86,8 +72,6 @@ footer { display: flex; justify-content: space-between; padding-block: 48px; col
 @media (max-width: 850px) {
   .nav nav a:not(.nav-cta) { display: none; }
   .hero { padding-top: 65px; }
-  .cover-grid { grid-template-columns: repeat(4, 1fr); }
-  .cover:nth-child(n+5) { display: none; }
   .principles { grid-template-columns: 1fr; }
   .principles article, .principles article:first-child { padding: 38px 0; border-right: 0; border-bottom: 1px solid var(--line); }
   .sources { grid-template-columns: 1fr; gap: 45px; padding-block: 90px; }
@@ -101,10 +85,7 @@ footer { display: flex; justify-content: space-between; padding-block: 48px; col
   h1 { font-size: 48px; }
   .lede { font-size: 16px; }
   .actions { flex-direction: column; }
-  .window-bar span:not(.wordmark) { display: none; }
-  .app-window { margin-top: 60px; padding: 14px; }
-  .cover-grid { gap: 7px; }
-  .cover span { font-size: 7px; }
+  .app-window { margin-top: 60px; }
   .source-list { grid-template-columns: repeat(2, 1fr); }
   .source-list span:nth-child(3n) { border-right: 1px solid var(--line); }
   .source-list span:nth-child(2n) { border-right: 0; }

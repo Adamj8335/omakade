@@ -5,6 +5,8 @@
 
 **Your games, beautifully together.**
 
+![Omakade library preview](docs/assets/library-preview.webp)
+
 Omakade is a fast, local-first game library built for Omarchy. It brings
 installed Steam, Lutris, Epic, GOG, and Amazon games into one quiet,
 cover-focused home that follows the active Omarchy theme.
