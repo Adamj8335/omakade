@@ -45,10 +45,11 @@ with a deterministic fictional library.
 
 ## Install on Omarchy or Arch
 
-### Install from the terminal
+### Install or upgrade from the terminal
 
 These commands download Omakade and its checksum into the current directory,
-verify the package, and install it:
+verify the package, and install it. If Omakade is already installed, `pacman -U`
+upgrades it in place without removing your settings or library data:
 
 ```bash
 curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.2.1/omakade-1.2.1-1-x86_64.pkg.tar.zst
@@ -57,7 +58,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 sudo pacman -U ./omakade-1.2.1-1-x86_64.pkg.tar.zst
 ```
 
-### Download in a browser
+### Install or upgrade from a browser download
 
 1. Open the [latest release](https://github.com/tsouth89/omakade/releases/latest).
 2. Under **Assets**, download `omakade-1.2.1-1-x86_64.pkg.tar.zst` and
