@@ -74,7 +74,7 @@ SteamGameModel::SteamGameModel(const QString& databasePath, AppSettings* setting
     emit scanningChanged();
     if (m_rescanPending) {
       m_rescanPending = false;
-      refresh();
+      QTimer::singleShot(0, this, &SteamGameModel::refresh);
     }
   });
 
@@ -642,6 +642,7 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
   loadDatabase();
   m_detectedPaths = detectedPaths;
   m_lastScan = QDateTime::currentSecsSinceEpoch();
+  m_failedCovers.clear();
   requestMissingCovers();
   rebuildWatchPaths(result);
   if (!result.warnings.isEmpty()) {

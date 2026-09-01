@@ -36,6 +36,9 @@
 - Pinned third-party workflow actions and enabled monthly dependency updates.
 - Added end-to-end navigation coverage and owned-library regression tests.
 
+Thanks to @destx0 for the stale Steam library fix, and to @8uff3r, @bscott, and
+@Zedster07 for the reports that shaped this release.
+
 ## 1.2.3
 
 - Restored controller navigation on game details.
