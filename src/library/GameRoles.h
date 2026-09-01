@@ -27,5 +27,7 @@ enum Role {
   Flatpak,
   Hidden,
   CustomCover,
+  Linked,
+  LinkedSources,
 };
 }

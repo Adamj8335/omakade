@@ -3,6 +3,8 @@
 #include "library/GameRoles.h"
 #include "library/UnifiedGameModel.h"
 
+#include <algorithm>
+
 LibraryFilterModel::LibraryFilterModel(QObject* parent) : QSortFilterProxyModel(parent) {
   setDynamicSortFilter(true);
   sort(0);
@@ -119,13 +121,52 @@ bool LibraryFilterModel::resetCustomCover(int row) {
   return games->resetCustomCover(mapToSource(index(row, 0)).row());
 }
 
+QVariantList LibraryFilterModel::installations(int row) const {
+  const auto* games = qobject_cast<const UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || row < 0 || row >= rowCount()) {
+    return {};
+  }
+  return games->installations(mapToSource(index(row, 0)).row());
+}
+
+QVariantList LibraryFilterModel::linkCandidates(int row, const QString& search) const {
+  const auto* games = qobject_cast<const UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || row < 0 || row >= rowCount()) {
+    return {};
+  }
+  return games->linkCandidates(mapToSource(index(row, 0)).row(), search);
+}
+
+bool LibraryFilterModel::linkGames(int row, const QString& source, const QString& runner,
+                                   const QString& appId) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || row < 0 || row >= rowCount()) {
+    return false;
+  }
+  return games->linkGames(mapToSource(index(row, 0)).row(), source, runner, appId);
+}
+
+bool LibraryFilterModel::unlinkGames(int row) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || row < 0 || row >= rowCount()) {
+    return false;
+  }
+  return games->unlinkGames(mapToSource(index(row, 0)).row());
+}
+
 bool LibraryFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
   const QModelIndex sourceIndex = sourceModel()->index(sourceRow, 0, sourceParent);
 
-  if (!m_sourceFilter.isEmpty() &&
-      sourceIndex.data(GameRoles::Source).toString().compare(m_sourceFilter, Qt::CaseInsensitive) !=
-          0) {
-    return false;
+  if (!m_sourceFilter.isEmpty()) {
+    const QString primarySource = sourceIndex.data(GameRoles::Source).toString();
+    const QStringList linkedSources =
+        sourceIndex.data(GameRoles::LinkedSources).toString().split(QStringLiteral(" + "));
+    if (primarySource.compare(m_sourceFilter, Qt::CaseInsensitive) != 0 &&
+        std::none_of(linkedSources.cbegin(), linkedSources.cend(), [this](const QString& source) {
+          return source.compare(m_sourceFilter, Qt::CaseInsensitive) == 0;
+        })) {
+      return false;
+    }
   }
 
   const bool hidden = sourceIndex.data(GameRoles::Hidden).toBool();

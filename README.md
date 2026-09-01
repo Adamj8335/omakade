@@ -2,7 +2,7 @@
 
 Omakade is a beautiful, local-first game library built for Omarchy.
 
-The current build is the 0.4 unified-library preview. It discovers native and
+The current build is the 0.5 unified-library preview. It discovers native and
 Flatpak Steam, Lutris, and Heroic libraries, indexes installed games locally,
 and delegates launching back to the owning platform. Run with `--demo` to
 explore the interface with a deterministic fictional library.
@@ -27,6 +27,10 @@ mode, reuses local cover art, and supports both native and Flatpak launches.
 Heroic support imports installed Epic, GOG, and Amazon games from its local
 manifests and reuses Heroic's cached artwork. Omakade never edits either
 launcher's game records or runner configuration.
+
+When the same game is installed through more than one source, it can be linked
+explicitly from the game details screen. Linked games use one library card but
+keep every installation available as a separate Play and Manage target.
 
 ## Build
 

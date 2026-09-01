@@ -1,8 +1,8 @@
 # Omakade product and delivery plan
 
-Implementation status: M0 through M3 are complete. M4 is in progress in the
-0.4 preview, with Lutris and Heroic import, launch delegation, and source
-filters complete.
+Implementation status: M0 through M4 are complete in the 0.5 preview. Steam,
+Lutris, and Heroic import, launch delegation, source filters, and explicit
+duplicate linking are complete. M5 release hardening is next.
 
 ## Product statement
 
@@ -684,9 +684,9 @@ Gate:
 
 ### M4: Unified library
 
-Status: in progress. Lutris and Heroic installed-game import and launch, the
-shared model, source filters, and persistent user-selected cover overrides are
-complete in the 0.4 preview. Explicit duplicate linking is next.
+Status: complete in the 0.5 preview. Lutris and Heroic installed-game import
+and launch, the shared model, source filters, persistent user-selected cover
+overrides, and explicit duplicate linking are complete.
 
 Deliver in this order:
 
@@ -694,7 +694,7 @@ Deliver in this order:
 2. Heroic installed-game import and launch
 3. Source filters and source-specific management links
 4. Explicit linking of duplicate games across sources
-5. Desktop-entry or manual native games if still needed
+5. Desktop-entry or manual native games if still needed after the stable release
 
 Gate for each source:
 

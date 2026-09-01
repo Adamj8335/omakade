@@ -11,6 +11,8 @@ Item {
     Accessible.role: Accessible.Pane
 
     required property var game
+    required property var installations
+    required property var selectedInstallation
     signal backRequested()
     signal favoriteRequested()
     signal playRequested()
@@ -19,6 +21,9 @@ Item {
     signal connectRequested()
     signal coverRequested()
     signal coverResetRequested()
+    signal installationSelected(var installation)
+    signal linkRequested()
+    signal unlinkRequested()
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -173,6 +178,18 @@ Item {
                         onClicked: root.coverResetRequested()
                     }
                 }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: !DemoMode
+                    spacing: 8
+                    GlassButton {
+                        Layout.fillWidth: true
+                        compact: true
+                        text: root.game.linked ? "UNLINK INSTALLATIONS" : "LINK INSTALLATION"
+                        onClicked: root.game.linked ? root.unlinkRequested() : root.linkRequested()
+                    }
+                }
             }
 
             ColumnLayout {
@@ -193,7 +210,9 @@ Item {
                 RowLayout {
                     spacing: 10
                     Text {
-                        text: (root.game.subtitle || "GAME") .toUpperCase()
+                        text: (root.game.linked
+                               ? root.game.linkedSources
+                               : (root.game.subtitle || "GAME")).toUpperCase()
                         color: Theme.accent
                         font.family: Theme.fontFamily
                         font.pixelSize: 11
@@ -223,6 +242,35 @@ Item {
                     wrapMode: Text.Wrap
                 }
 
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: root.installations.length > 1
+                    spacing: 7
+                    Text {
+                        text: "LAUNCH WITH"
+                        color: Theme.mutedText
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                        font.weight: Font.DemiBold
+                    }
+                    RowLayout {
+                        spacing: 8
+                        Repeater {
+                            model: root.installations
+                            GlassButton {
+                                required property var modelData
+                                compact: true
+                                text: (modelData.source || "LOCAL").toUpperCase()
+                                      + (modelData.runner ? " · " + modelData.runner.toUpperCase() : "")
+                                selected: root.selectedInstallation.source === modelData.source
+                                          && (root.selectedInstallation.runner || "") === (modelData.runner || "")
+                                          && root.selectedInstallation.appId === modelData.appId
+                                onClicked: root.installationSelected(modelData)
+                            }
+                        }
+                    }
+                }
+
                 RowLayout {
                     spacing: 10
 
@@ -242,8 +290,8 @@ Item {
                     }
 
                     GlassButton {
-                        visible: root.game.source === "Steam" || root.game.source === "Lutris" || root.game.source === "Heroic"
-                        text: "MANAGE IN " + (root.game.source || "LAUNCHER").toUpperCase()
+                        visible: root.selectedInstallation.source === "Steam" || root.selectedInstallation.source === "Lutris" || root.selectedInstallation.source === "Heroic"
+                        text: "MANAGE IN " + (root.selectedInstallation.source || "LAUNCHER").toUpperCase()
                         onClicked: root.manageRequested()
                     }
 
@@ -261,7 +309,7 @@ Item {
                     rowSpacing: 10
 
                     Repeater {
-                        model: root.game.source === "Steam"
+                        model: root.selectedInstallation.source === "Steam"
                                ? [
                                    { label: "PLAYTIME", value: (root.game.hours || 0) + " HOURS" },
                                    { label: "ACHIEVEMENTS", value: (Achievements.unlocked || root.game.achievementsUnlocked || 0) + " / " + (Achievements.total || root.game.achievementsTotal || 0) },
@@ -269,8 +317,8 @@ Item {
                                ]
                                : [
                                    { label: "PLAYTIME", value: (root.game.hours || 0) + " HOURS" },
-                                   { label: "SOURCE", value: (root.game.source || "LOCAL").toUpperCase() },
-                                   { label: "LAUNCHER", value: (root.game.subtitle || root.game.source || "LOCAL").toUpperCase() }
+                                   { label: "SOURCE", value: (root.selectedInstallation.source || "LOCAL").toUpperCase() },
+                                   { label: "LAUNCHER", value: (root.selectedInstallation.subtitle || root.selectedInstallation.source || "LOCAL").toUpperCase() }
                                ]
 
                         Rectangle {
@@ -310,7 +358,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.topMargin: 12
                     spacing: 9
-                    visible: root.game.source === "Steam"
+                    visible: root.selectedInstallation.source === "Steam"
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -352,7 +400,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.topMargin: 18
                     spacing: 10
-                    visible: root.game.source === "Steam"
+                    visible: root.selectedInstallation.source === "Steam"
 
                     RowLayout {
                         Layout.fillWidth: true

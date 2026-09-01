@@ -174,6 +174,7 @@ private slots:
   void malformedLutrisDataDoesNotReplaceCachedGames();
   void unifiedLibraryFiltersSourcesAndRoutesFavorites();
   void customCoverPersistsAndResets();
+  void explicitLinksPersistAndPreserveInstallations();
   void lutrisLauncherBuildsSafeCommands();
   void heroicScannerImportsEpicGogAndAmazon();
   void heroicModelIsRepeatableAndPreservesLocalState();
@@ -590,6 +591,57 @@ void CoreTests::customCoverPersistsAndResets() {
   writeFile(directory.path() + QStringLiteral("/invalid.png"), "not an image");
   QVERIFY(!library.setCustomCover(
       0, QUrl::fromLocalFile(directory.path() + QStringLiteral("/invalid.png"))));
+}
+
+void CoreTests::explicitLinksPersistAndPreserveInstallations() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString dataRoot = directory.path() + QStringLiteral("/lutris");
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  createLutrisFixture(dataRoot);
+
+  {
+    MockGameModel demo(nullptr, 2);
+    LutrisGameModel lutris(database);
+    lutris.refreshFromDatabases({dataRoot + QStringLiteral("/pga.db")});
+    UnifiedGameModel games(database);
+    games.addSourceModel(&demo);
+    games.addSourceModel(&lutris);
+    QCOMPARE(games.rowCount(), 3);
+    QCOMPARE(games.linkCandidates(0, QStringLiteral("Signal")).size(), 1);
+    QVERIFY(games.linkGames(0, QStringLiteral("Lutris"), QString{}, QStringLiteral("7")));
+    QCOMPARE(games.rowCount(), 2);
+    QVERIFY(games.data(games.index(0), GameRoles::Linked).toBool());
+    QCOMPARE(games.data(games.index(0), GameRoles::LinkedSources).toString(),
+             QStringLiteral("Demo + Lutris"));
+    const QVariantList installations = games.installations(0);
+    QCOMPARE(installations.size(), 2);
+    QCOMPARE(installations.at(0).toMap().value(QStringLiteral("source")).toString(),
+             QStringLiteral("Demo"));
+    QCOMPARE(installations.at(1).toMap().value(QStringLiteral("source")).toString(),
+             QStringLiteral("Lutris"));
+    QCOMPARE(installations.at(1).toMap().value(QStringLiteral("appId")).toString(),
+             QStringLiteral("7"));
+    games.toggleFavorite(0);
+    QVERIFY(!demo.data(demo.index(0), GameRoles::Favorite).toBool());
+
+    LibraryFilterModel library;
+    library.setSourceModel(&games);
+    library.setSourceFilter(QStringLiteral("Lutris"));
+    QCOMPARE(library.rowCount(), 1);
+    QVERIFY(library.get(0).value(QStringLiteral("linked")).toBool());
+  }
+
+  MockGameModel demo(nullptr, 2);
+  LutrisGameModel lutris(database);
+  lutris.refreshFromDatabases({dataRoot + QStringLiteral("/pga.db")});
+  UnifiedGameModel games(database);
+  games.addSourceModel(&demo);
+  games.addSourceModel(&lutris);
+  QCOMPARE(games.rowCount(), 2);
+  QCOMPARE(games.installations(0).size(), 2);
+  QVERIFY(games.unlinkGames(0));
+  QCOMPARE(games.rowCount(), 3);
 }
 
 void CoreTests::lutrisLauncherBuildsSafeCommands() {

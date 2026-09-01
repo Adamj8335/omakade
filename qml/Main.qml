@@ -10,9 +10,13 @@ ApplicationWindow {
 
     property bool detailOpen: false
     property var selectedGame: ({})
+    property var selectedInstallation: ({})
+    property var selectedInstallations: []
+    property var linkResults: []
     property int selectedIndex: -1
     property bool smokeReady: false
     property bool diagnosticsOpen: false
+    property bool linkDialogOpen: false
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -21,6 +25,9 @@ ApplicationWindow {
     function openGame(index) {
         selectedIndex = index
         selectedGame = Library.get(index)
+        selectedInstallations = Library.installations(index)
+        selectedInstallation = selectedInstallations.length > 0
+                               ? selectedInstallations[0] : selectedGame
         if (!DemoMode && selectedGame.source === "Steam") {
             Achievements.load(selectedGame.appId)
         } else {
@@ -42,22 +49,59 @@ ApplicationWindow {
     function playSelected() {
         if (DemoMode) {
             showToast("Demo games cannot be launched")
-        } else if (Launcher.launch(selectedGame.source, selectedGame.appId,
-                                   selectedGame.flatpak || false,
-                                   selectedGame.runner || "")) {
-            showToast("Opening " + selectedGame.title + " in " + selectedGame.source)
+        } else if (Launcher.launch(selectedInstallation.source, selectedInstallation.appId,
+                                   selectedInstallation.flatpak || false,
+                                   selectedInstallation.runner || "")) {
+            showToast("Opening " + selectedGame.title + " in " + selectedInstallation.source)
         } else {
             showToast(Launcher.lastError)
         }
     }
 
     function manageSelected() {
-        if (Launcher.manage(selectedGame.source, selectedGame.appId,
-                            selectedGame.flatpak || false,
-                            selectedGame.runner || "")) {
-            showToast("Opening " + selectedGame.source)
+        if (Launcher.manage(selectedInstallation.source, selectedInstallation.appId,
+                            selectedInstallation.flatpak || false,
+                            selectedInstallation.runner || "")) {
+            showToast("Opening " + selectedInstallation.source)
         } else {
             showToast(Launcher.lastError)
+        }
+    }
+
+    function selectInstallation(installation) {
+        selectedInstallation = installation
+        if (!DemoMode && installation.source === "Steam") {
+            Achievements.load(installation.appId)
+        } else {
+            Achievements.load("")
+        }
+    }
+
+    function refreshSelected(source, runner, appId) {
+        for (let index = 0; index < Library.rowCount(); ++index) {
+            const game = Library.get(index)
+            if (game.source === source && (game.runner || "") === (runner || "")
+                    && game.appId === appId) {
+                selectedIndex = index
+                selectedGame = game
+                selectedInstallations = Library.installations(index)
+                selectedInstallation = selectedInstallations.length > 0
+                                       ? selectedInstallations[0] : selectedGame
+                return true
+            }
+        }
+        return false
+    }
+
+    function linkCandidate(candidate) {
+        const source = selectedGame.source
+        const runner = selectedGame.runner || ""
+        const appId = selectedGame.appId
+        if (Library.linkGames(selectedIndex, candidate.source,
+                              candidate.runner || "", candidate.appId)) {
+            refreshSelected(source, runner, appId)
+            showToast("Installations linked")
+            linkDialogOpen = false
         }
     }
 
@@ -110,7 +154,9 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            if (root.diagnosticsOpen) {
+            if (root.linkDialogOpen) {
+                root.linkDialogOpen = false
+            } else if (root.diagnosticsOpen) {
                 root.diagnosticsOpen = false
             } else if (root.detailOpen) {
                 root.closeDetails()
@@ -510,6 +556,8 @@ ApplicationWindow {
 
         sourceComponent: GameDetails {
             game: root.selectedGame
+            installations: root.selectedInstallations
+            selectedInstallation: root.selectedInstallation
             onBackRequested: root.closeDetails()
             onFavoriteRequested: {
                 Library.toggleFavorite(root.selectedIndex)
@@ -517,6 +565,23 @@ ApplicationWindow {
             }
             onPlayRequested: root.playSelected()
             onManageRequested: root.manageSelected()
+            onInstallationSelected: installation => root.selectInstallation(installation)
+            onLinkRequested: {
+                linkSearch.text = root.selectedGame.title
+                root.linkResults = Library.linkCandidates(root.selectedIndex, linkSearch.text)
+                root.linkDialogOpen = true
+            }
+            onUnlinkRequested: {
+                const source = root.selectedGame.source
+                const runner = root.selectedGame.runner || ""
+                const appId = root.selectedGame.appId
+                if (Library.unlinkGames(root.selectedIndex)) {
+                    if (!root.refreshSelected(source, runner, appId)) {
+                        root.closeDetails()
+                    }
+                    root.showToast("Installations unlinked")
+                }
+            }
             onCoverRequested: coverDialog.open()
             onCoverResetRequested: {
                 if (Library.resetCustomCover(root.selectedIndex)) {
@@ -528,6 +593,138 @@ ApplicationWindow {
             onHiddenRequested: {
                 Library.toggleHidden(root.selectedIndex)
                 root.closeDetails()
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        visible: root.linkDialogOpen
+        z: 25
+        color: root.alpha(Theme.darkerBackground, 0.72)
+        onVisibleChanged: {
+            if (visible) {
+                Qt.callLater(linkSearch.forceActiveFocus)
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.linkDialogOpen = false
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(620, root.width - 56)
+            height: Math.min(560, root.height - 56)
+            radius: Math.max(8, Theme.cornerRadius)
+            color: root.alpha(Theme.background, 0.98)
+            border.color: root.alpha(Theme.foreground, 0.22)
+
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 12
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: "LINK ANOTHER INSTALLATION"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 15
+                    font.weight: Font.Bold
+                }
+                Item { Layout.fillWidth: true }
+                GlassButton {
+                    compact: true
+                    text: "CLOSE"
+                    onClicked: root.linkDialogOpen = false
+                }
+            }
+            Text {
+                Layout.fillWidth: true
+                text: "Choose only another installation of the same game. Omakade will keep every launch target."
+                color: Theme.mutedText
+                font.family: Theme.fontFamily
+                font.pixelSize: 10
+                wrapMode: Text.Wrap
+            }
+            TextField {
+                id: linkSearch
+                Layout.fillWidth: true
+                placeholderText: "Search installed games"
+                color: Theme.foreground
+                font.family: Theme.fontFamily
+                onTextChanged: root.linkResults = Library.linkCandidates(root.selectedIndex, text)
+                background: Rectangle {
+                    radius: Math.max(5, Theme.cornerRadius)
+                    color: root.alpha(Theme.foreground, 0.05)
+                    border.color: root.alpha(Theme.foreground, 0.18)
+                }
+            }
+            ListView {
+                id: candidateList
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                spacing: 7
+                model: root.linkResults
+
+                delegate: Button {
+                    required property var modelData
+                    width: candidateList.width
+                    height: 58
+                    focusPolicy: Qt.StrongFocus
+                    Accessible.name: "Link " + modelData.title + " from " + modelData.source
+                    onClicked: root.linkCandidate(modelData)
+
+                    contentItem: Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: 13
+                        spacing: 4
+                        Text {
+                            width: parent.width
+                            text: modelData.title
+                            color: Theme.brightForeground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: (modelData.source || "LOCAL").toUpperCase()
+                                  + (modelData.runner ? "  ·  " + modelData.runner.toUpperCase() : "")
+                            color: Theme.accent
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                        }
+                    }
+
+                    background: Rectangle {
+                        radius: Math.max(5, Theme.cornerRadius)
+                        color: parent.down || parent.hovered || parent.activeFocus
+                               ? root.alpha(Theme.foreground, 0.09)
+                               : root.alpha(Theme.foreground, 0.04)
+                        border.width: parent.activeFocus ? 2 : 1
+                        border.color: parent.activeFocus
+                                      ? Theme.accent
+                                      : root.alpha(Theme.foreground, 0.14)
+                    }
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: candidateList.count === 0
+                    text: "No matching installations"
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                }
+            }
             }
         }
     }

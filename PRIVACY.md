@@ -14,6 +14,7 @@ Omakade retains:
 
 - Library, source records, favorites, hidden state, and achievements in
   `$XDG_DATA_HOME/omakade/library.sqlite3`
+- User-created links between duplicate installations in the same database
 - Steam ID, cache limit, and reduced-motion preference in
   `$XDG_CONFIG_HOME/omakade/config.toml`
 - Downloaded covers and achievement icons in `$XDG_CACHE_HOME/omakade/`
