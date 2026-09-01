@@ -10,8 +10,8 @@
 [Watch the 18-second demo](https://tsouth89.github.io/omakade/assets/omakade-demo.mp4)
 
 Omakade is a fast, local-first game library built for Omarchy. It brings
-installed Steam, Lutris, Heroic, Faugus, Epic, GOG, and Amazon games into one quiet,
-cover-focused home that follows the active Omarchy theme.
+installed Steam, Lutris, Heroic, Faugus, RetroArch, Epic, GOG, and Amazon games
+into one quiet, cover-focused home that follows the active Omarchy theme.
 
 [Project homepage](https://tsouth89.github.io/omakade/) ·
 [Roadmap](PLAN.md) · [Support](SUPPORT.md)
@@ -23,7 +23,7 @@ cover-focused home that follows the active Omarchy theme.
 
 Omakade includes:
 
-- Native and Flatpak Steam, Lutris, Heroic, and Faugus discovery
+- Native and Flatpak Steam, Lutris, Heroic, Faugus, and RetroArch discovery
 - One-click details and delegated launching through the owning platform
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
@@ -51,22 +51,22 @@ These commands download Omakade and its checksum into the current directory,
 verify the package, and install it:
 
 ```bash
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.1/omakade-1.1.1-1-x86_64.pkg.tar.zst
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.1/SHA256SUMS
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.2.0/omakade-1.2.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.2.0/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.2.0-1-x86_64.pkg.tar.zst
 ```
 
 ### Download in a browser
 
 1. Open the [latest release](https://github.com/tsouth89/omakade/releases/latest).
-2. Under **Assets**, download `omakade-1.1.1-1-x86_64.pkg.tar.zst` and
+2. Under **Assets**, download `omakade-1.2.0-1-x86_64.pkg.tar.zst` and
    `SHA256SUMS` into the same folder.
 3. Open a terminal in that folder and run:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.2.0-1-x86_64.pkg.tar.zst
 ```
 
 Launch Omakade from the application launcher or run `omakade` in a terminal.
@@ -74,6 +74,11 @@ Launch Omakade from the application launcher or run `omakade` in a terminal.
 Omakade keeps its local library and settings when the package is upgraded or
 removed. The owning launchers remain responsible for games, accounts, updates,
 cloud saves, DRM, and compatibility tools.
+
+RetroArch games come from its configured playlists. Omakade uses local
+RetroArch thumbnails and runtime logs, then launches each game with its assigned
+core. Entries without a core association remain visible and explain how to fix
+launching after you press Play.
 
 ## Build
 

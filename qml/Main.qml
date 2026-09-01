@@ -110,7 +110,8 @@ ApplicationWindow {
         } else if (Launcher.launch(selectedInstallation.source, selectedInstallation.appId,
                                    selectedInstallation.flatpak || false,
                                    selectedInstallation.runner || "",
-                                   selectedInstallation.installPath || "")) {
+                                   selectedInstallation.installPath || "",
+                                   selectedInstallation.launchTarget || "")) {
             Library.recordLaunch(selectedIndex, selectedInstallation.source,
                                  selectedInstallation.runner || "", selectedInstallation.appId)
             showToast("Opening " + selectedGame.title + " in " + selectedInstallation.source)
@@ -551,9 +552,20 @@ ApplicationWindow {
                             libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
                         }
                     }
+                    GlassButton {
+                        text: "RETROARCH"
+                        compact: true
+                        visible: Preferences.retroArchEnabled
+                        selected: Library.sourceFilter === "RetroArch"
+                        onClicked: {
+                            Library.sourceFilter = "RetroArch"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
                 }
 
                 Text {
+                    visible: root.width >= 1100
                     text: Library.mode === 1 ? "FAVORITES" : Library.mode === 2 ? "RECENTLY PLAYED" : Library.mode === 3 ? "HIDDEN" : "YOUR LIBRARY"
                     color: Theme.foreground
                     font.family: Theme.fontFamily
@@ -562,13 +574,14 @@ ApplicationWindow {
                     font.letterSpacing: 0.7
                 }
                 Text {
+                    visible: root.width >= 1100
                     text: libraryView.count + " GAMES"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
                     font.pixelSize: 9
                 }
                 Text {
-                    visible: SteamLibrary ? SteamLibrary.scanning : false
+                    visible: root.width >= 1100 && (SteamLibrary ? SteamLibrary.scanning : false)
                     text: "SYNCING"
                     color: Theme.accent
                     font.family: Theme.fontFamily
@@ -659,6 +672,8 @@ ApplicationWindow {
                             ? "Heroic was not found"
                             : Library.sourceFilter === "Faugus" && FaugusLibrary && !FaugusLibrary.faugusDetected
                             ? "Faugus was not found"
+                            : Library.sourceFilter === "RetroArch" && RetroArchLibrary && !RetroArchLibrary.retroArchDetected
+                            ? "RetroArch was not found"
                             : Library.sourceFilter === "Lutris" && LutrisLibrary && !LutrisLibrary.lutrisDetected
                             ? "Lutris was not found"
                             : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
@@ -668,13 +683,15 @@ ApplicationWindow {
                               ? "Clear or change the organization filters to see more games."
                               : Library.sourceFilter === "Faugus" && FaugusLibrary && FaugusLibrary.errorText.length > 0
                               ? FaugusLibrary.errorText
+                              : Library.sourceFilter === "RetroArch" && RetroArchLibrary && RetroArchLibrary.errorText.length > 0
+                              ? RetroArchLibrary.errorText
                               : Library.sourceFilter === "Heroic" && HeroicLibrary && HeroicLibrary.errorText.length > 0
                               ? HeroicLibrary.errorText
                               : Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
                               ? LutrisLibrary.errorText
                               : SteamLibrary && SteamLibrary.errorText.length > 0
                                 ? SteamLibrary.errorText
-                                : "Install a game in Steam, Lutris, Heroic, or Faugus, then rescan your library."
+                                : "Install a game in Steam, Lutris, Heroic, Faugus, or RetroArch, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
                 onRefreshRequested: {
@@ -689,6 +706,9 @@ ApplicationWindow {
                     }
                     if (FaugusLibrary && Preferences.faugusEnabled) {
                         FaugusLibrary.refresh()
+                    }
+                    if (RetroArchLibrary && Preferences.retroArchEnabled) {
+                        RetroArchLibrary.refresh()
                     }
                 }
             }
@@ -1010,7 +1030,12 @@ ApplicationWindow {
                           status: FaugusLibrary ? FaugusLibrary.statusText : "Unavailable",
                           error: FaugusLibrary ? FaugusLibrary.errorText : "",
                           paths: FaugusLibrary ? FaugusLibrary.detectedPaths : [],
-                          lastScan: FaugusLibrary ? FaugusLibrary.lastScan : 0 }
+                          lastScan: FaugusLibrary ? FaugusLibrary.lastScan : 0 },
+                        { name: "RETROARCH", enabled: Preferences.retroArchEnabled,
+                          status: RetroArchLibrary ? RetroArchLibrary.statusText : "Unavailable",
+                          error: RetroArchLibrary ? RetroArchLibrary.errorText : "",
+                          paths: RetroArchLibrary ? RetroArchLibrary.detectedPaths : [],
+                          lastScan: RetroArchLibrary ? RetroArchLibrary.lastScan : 0 }
                     ]
                     ColumnLayout {
                         required property var modelData
@@ -1040,19 +1065,20 @@ ApplicationWindow {
                                         Preferences.lutrisEnabled = !Preferences.lutrisEnabled
                                         nowEnabled = Preferences.lutrisEnabled
                                         if (Preferences.lutrisEnabled) LutrisLibrary.refresh()
+                                    } else if (modelData.name === "HEROIC") {
+                                        Preferences.heroicEnabled = !Preferences.heroicEnabled
+                                        nowEnabled = Preferences.heroicEnabled
+                                        if (Preferences.heroicEnabled) HeroicLibrary.refresh()
+                                    } else if (modelData.name === "FAUGUS") {
+                                        Preferences.faugusEnabled = !Preferences.faugusEnabled
+                                        nowEnabled = Preferences.faugusEnabled
+                                        if (Preferences.faugusEnabled) FaugusLibrary.refresh()
                                     } else {
-                                        if (modelData.name === "HEROIC") {
-                                            Preferences.heroicEnabled = !Preferences.heroicEnabled
-                                            nowEnabled = Preferences.heroicEnabled
-                                            if (Preferences.heroicEnabled) HeroicLibrary.refresh()
-                                        } else {
-                                            Preferences.faugusEnabled = !Preferences.faugusEnabled
-                                            nowEnabled = Preferences.faugusEnabled
-                                            if (Preferences.faugusEnabled) FaugusLibrary.refresh()
-                                        }
+                                        Preferences.retroArchEnabled = !Preferences.retroArchEnabled
+                                        nowEnabled = Preferences.retroArchEnabled
+                                        if (Preferences.retroArchEnabled) RetroArchLibrary.refresh()
                                     }
-                                    if (!nowEnabled && Library.sourceFilter === modelData.name[0]
-                                            + modelData.name.slice(1).toLowerCase()) {
+                                    if (!nowEnabled && Library.sourceFilter.toUpperCase() === modelData.name) {
                                         Library.sourceFilter = ""
                                     }
                                 }
@@ -1065,7 +1091,8 @@ ApplicationWindow {
                                     if (modelData.name === "STEAM") SteamLibrary.refresh()
                                     else if (modelData.name === "LUTRIS") LutrisLibrary.refresh()
                                     else if (modelData.name === "HEROIC") HeroicLibrary.refresh()
-                                    else FaugusLibrary.refresh()
+                                    else if (modelData.name === "FAUGUS") FaugusLibrary.refresh()
+                                    else RetroArchLibrary.refresh()
                                 }
                             }
                         }

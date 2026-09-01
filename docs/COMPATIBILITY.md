@@ -2,7 +2,7 @@
 
 ## Reference Omarchy system
 
-Verified on August 31, 2026:
+Verified through September 1, 2026:
 
 | Component | Version | Result |
 | --- | --- | --- |
@@ -13,6 +13,7 @@ Verified on August 31, 2026:
 | SDL | 3.4.14 | Pass |
 | Native Steam | 1.0.0.87-3 | Library, artwork, launch delegation, and local achievements pass |
 | Native Faugus | 2.2.1-1 | Binary and delegated launch command contract pass |
+| Native RetroArch | 1.22.2-5 | Signed Arch binary and `-L` CLI contract pass |
 
 The reference library contains 45 installed Steam games. Theme colors, font,
 launcher transparency, one-click details, keyboard navigation, and the
@@ -37,8 +38,8 @@ CI. Additional real-user reports expand compatibility coverage after v1.
 ## Contract-tested sources
 
 Lutris native and Flatpak discovery, Heroic native and Flatpak discovery,
-Faugus native and Flatpak discovery, and Epic, GOG, and Amazon manifests are
-covered by repeatable local fixtures. These
+Faugus and RetroArch native and Flatpak discovery, and Epic, GOG, and Amazon
+manifests are covered by repeatable local fixtures. These
 paths still need reports from users with those launchers installed before the
 stable release gate can close.
 
@@ -48,6 +49,7 @@ stable release gate can close.
 - Native and Flatpak Lutris libraries from real users
 - Native and Flatpak Heroic libraries from real users
 - A configured native or Flatpak Faugus library from a real user
+- A configured native or Flatpak RetroArch library from a real user
 - Steam Flatpak from a real user
 - Light, scaled, ultrawide, and blur-disabled checks on real displays
 

@@ -1,10 +1,10 @@
 # Support
 
-Omakade is a preview. Please include these details with a bug report:
+Please include these details with a bug report:
 
 - Omakade version
 - Omarchy version and active theme
-- Native or Flatpak installation for Steam, Lutris, or Heroic
+- Native or Flatpak installation for Steam, Lutris, Heroic, Faugus, or RetroArch
 - The source shown for the affected game
 - Steps that reproduce the problem
 

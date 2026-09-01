@@ -7,8 +7,8 @@ system, or required online service.
 
 Omakade reads Steam library manifests, artwork caches, playtime, recent-play
 state, and achievement caches. It also reads installed-game manifests and
-cached artwork from Lutris and Heroic. It never writes into Steam, Lutris, or
-Heroic directories.
+cached artwork from Lutris and Heroic, plus configured playlists, thumbnails,
+and runtime logs from RetroArch. It never writes into source launcher directories.
 
 Omakade retains:
 
@@ -41,10 +41,11 @@ Omakade may request missing covers and achievement icons from Steam's public
 HTTPS artwork hosts. Responses are size-limited and the artwork cache is
 bounded by the configured limit.
 
-Steam Web API requests occur only after the user stores a key and explicitly
-selects Refresh Steam for a game. Omakade requests player achievements, the
-game's achievement schema, and global rarity from Valve's documented HTTPS
-endpoints. Failed requests do not remove cached data.
+Steam Web API requests occur only after the user stores a key. Omakade refreshes
+stale achievement data when Steam game details open or when the user selects
+Refresh Steam. It requests player achievements, the game's achievement schema,
+and global rarity from Valve's documented HTTPS endpoints. Failed requests do
+not remove cached data.
 
 IGDB requests occur only after the user supplies their own Twitch developer
 credentials. Omakade maps a Steam App ID to an IGDB game, then requests IGDB's

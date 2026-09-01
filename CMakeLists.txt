@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Omakade VERSION 1.1.1 LANGUAGES CXX)
+project(Omakade VERSION 1.2.0 LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
@@ -37,6 +37,8 @@ add_library(omakade_core STATIC
   src/library/HeroicGameModel.h
   src/library/LutrisGameModel.cpp
   src/library/LutrisGameModel.h
+  src/library/RetroArchGameModel.cpp
+  src/library/RetroArchGameModel.h
   src/library/MockGameModel.cpp
   src/library/MockGameModel.h
   src/library/SteamGameModel.cpp
@@ -57,6 +59,8 @@ add_library(omakade_core STATIC
   src/sources/steam/ValveKeyValues.h
   src/sources/lutris/LutrisScanner.cpp
   src/sources/lutris/LutrisScanner.h
+  src/sources/retroarch/RetroArchScanner.cpp
+  src/sources/retroarch/RetroArchScanner.h
   src/sources/heroic/HeroicScanner.cpp
   src/sources/heroic/HeroicScanner.h
   src/sources/faugus/FaugusScanner.cpp

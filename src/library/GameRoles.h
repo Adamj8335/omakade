@@ -33,5 +33,6 @@ enum Role {
   CompletionStatus,
   Tags,
   Collections,
+  LaunchTarget,
 };
 }

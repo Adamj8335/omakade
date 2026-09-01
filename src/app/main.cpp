@@ -9,6 +9,7 @@
 #include "library/LibraryFilterModel.h"
 #include "library/LutrisGameModel.h"
 #include "library/MockGameModel.h"
+#include "library/RetroArchGameModel.h"
 #include "library/SteamGameModel.h"
 #include "library/UnifiedGameModel.h"
 #include "metadata/GameInsightsService.h"
@@ -85,10 +86,12 @@ int main(int argc, char* argv[]) {
   std::unique_ptr<LutrisGameModel> lutrisGames;
   std::unique_ptr<HeroicGameModel> heroicGames;
   std::unique_ptr<FaugusGameModel> faugusGames;
+  std::unique_ptr<RetroArchGameModel> retroArchGames;
   SteamGameModel* steamLibrary = nullptr;
   LutrisGameModel* lutrisLibrary = nullptr;
   HeroicGameModel* heroicLibrary = nullptr;
   FaugusGameModel* faugusLibrary = nullptr;
+  RetroArchGameModel* retroArchLibrary = nullptr;
   QString libraryDatabasePath;
   if (demoMode || stressMode) {
     games = std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100);
@@ -103,6 +106,8 @@ int main(int argc, char* argv[]) {
     heroicLibrary = heroicGames.get();
     faugusGames = std::make_unique<FaugusGameModel>(steamLibrary->databasePath());
     faugusLibrary = faugusGames.get();
+    retroArchGames = std::make_unique<RetroArchGameModel>(steamLibrary->databasePath());
+    retroArchLibrary = retroArchGames.get();
   }
   UnifiedGameModel unifiedGames(libraryDatabasePath);
   unifiedGames.addSourceModel(games.get());
@@ -115,11 +120,15 @@ int main(int argc, char* argv[]) {
   if (faugusGames != nullptr) {
     unifiedGames.addSourceModel(faugusGames.get());
   }
+  if (retroArchGames != nullptr) {
+    unifiedGames.addSourceModel(retroArchGames.get());
+  }
   const auto applySourcePreferences = [&] {
     unifiedGames.setSourceEnabled(QStringLiteral("Steam"), preferences.steamEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Lutris"), preferences.lutrisEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Heroic"), preferences.heroicEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Faugus"), preferences.faugusEnabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("RetroArch"), preferences.retroArchEnabled());
   };
   applySourcePreferences();
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
@@ -168,6 +177,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("LutrisLibrary"), lutrisLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("HeroicLibrary"), heroicLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("FaugusLibrary"), faugusLibrary);
+  engine.rootContext()->setContextProperty(QStringLiteral("RetroArchLibrary"), retroArchLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("Launcher"), &launcher);
   engine.rootContext()->setContextProperty(QStringLiteral("Preferences"), &preferences);
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
@@ -239,6 +249,9 @@ int main(int argc, char* argv[]) {
   }
   if (faugusLibrary != nullptr && preferences.faugusEnabled()) {
     QTimer::singleShot(450, faugusLibrary, &FaugusGameModel::refresh);
+  }
+  if (retroArchLibrary != nullptr && preferences.retroArchEnabled()) {
+    QTimer::singleShot(600, retroArchLibrary, &RetroArchGameModel::refresh);
   }
 
   if (smokeTest && !renderMode) {

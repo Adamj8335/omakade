@@ -16,6 +16,8 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool lutrisEnabled READ lutrisEnabled WRITE setLutrisEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool heroicEnabled READ heroicEnabled WRITE setHeroicEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool faugusEnabled READ faugusEnabled WRITE setFaugusEnabled NOTIFY sourcesChanged)
+  Q_PROPERTY(
+      bool retroArchEnabled READ retroArchEnabled WRITE setRetroArchEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool closeAfterLaunch READ closeAfterLaunch WRITE setCloseAfterLaunch NOTIFY
                  closeAfterLaunchChanged)
 
@@ -38,6 +40,8 @@ public:
   void setHeroicEnabled(bool value);
   [[nodiscard]] bool faugusEnabled() const;
   void setFaugusEnabled(bool value);
+  [[nodiscard]] bool retroArchEnabled() const;
+  void setRetroArchEnabled(bool value);
   [[nodiscard]] bool closeAfterLaunch() const;
   void setCloseAfterLaunch(bool value);
 
@@ -63,5 +67,6 @@ private:
   bool m_lutrisEnabled = true;
   bool m_heroicEnabled = true;
   bool m_faugusEnabled = true;
+  bool m_retroArchEnabled = true;
   bool m_closeAfterLaunch = false;
 };

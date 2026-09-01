@@ -326,6 +326,7 @@ Item {
                                  || root.selectedInstallation.source === "Lutris"
                                  || root.selectedInstallation.source === "Heroic"
                                  || root.selectedInstallation.source === "Faugus"
+                                 || root.selectedInstallation.source === "RetroArch"
                         text: "MANAGE IN " + (root.selectedInstallation.source || "LAUNCHER").toUpperCase()
                         onClicked: root.manageRequested()
                     }

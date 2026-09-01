@@ -5,19 +5,21 @@
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
 #include "launch/SteamLauncher.h"
-#include "library/GameRoles.h"
 #include "library/FaugusGameModel.h"
+#include "library/GameRoles.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
 #include "library/LutrisGameModel.h"
 #include "library/MockGameModel.h"
+#include "library/RetroArchGameModel.h"
 #include "library/SteamGameModel.h"
 #include "library/UnifiedGameModel.h"
-#include "metadata/IgdbApi.h"
 #include "metadata/GameInsightsService.h"
-#include "sources/heroic/HeroicScanner.h"
+#include "metadata/IgdbApi.h"
 #include "sources/faugus/FaugusScanner.h"
+#include "sources/heroic/HeroicScanner.h"
 #include "sources/lutris/LutrisScanner.h"
+#include "sources/retroarch/RetroArchScanner.h"
 #include "sources/steam/SteamScanner.h"
 #include "sources/steam/ValveKeyValues.h"
 #include "theme/OmarchyTheme.h"
@@ -161,6 +163,39 @@ void createFaugusFixture(const QString& root) {
   writeFile(root + QStringLiteral("/banners/signal-hill.png"), "hero");
   writeFile(root + QStringLiteral("/icons/linux-tool.png"), "icon");
 }
+
+void createRetroArchFixture(const QString& root) {
+  const QString content = root + QStringLiteral("/roms/Sonic & Tails.bin");
+  const QString unassigned = root + QStringLiteral("/roms/Unassigned.nes");
+  writeFile(content, "rom");
+  writeFile(unassigned, "rom");
+  writeFile(root + QStringLiteral("/retroarch.cfg"),
+            QStringLiteral("playlist_directory = \"%1/playlists\"\n"
+                           "thumbnails_directory = \"%1/thumbnails\"\n")
+                .arg(root)
+                .toUtf8());
+  writeFile(
+      root + QStringLiteral("/playlists/Sega - Mega Drive.lpl"),
+      QStringLiteral(
+          R"({"version":"1.5","default_core_path":"%1/cores/genesis_plus_gx_libretro.so","default_core_name":"Genesis Plus GX","items":[{"path":"%2","label":"Sonic & Tails","core_path":"DETECT","core_name":"DETECT","crc32":"00000000|crc","db_name":"Sega - Mega Drive.lpl"},{"path":"%2","label":"Duplicate","core_path":"DETECT","core_name":"DETECT"}]})")
+          .arg(root, content)
+          .toUtf8());
+  writeFile(
+      root + QStringLiteral("/playlists/Nintendo.lpl"),
+      QStringLiteral(
+          R"({"version":"1.5","default_core_path":"DETECT","default_core_name":"DETECT","items":[{"path":"%1","label":"Unassigned","core_path":"DETECT","core_name":"DETECT"}]})")
+          .arg(unassigned)
+          .toUtf8());
+  writeFile(root + QStringLiteral("/thumbnails/Sega - Mega Drive/Named_Boxarts/Sonic _ Tails.png"),
+            "cover");
+  writeFile(root + QStringLiteral("/thumbnails/Sega - Mega Drive/Named_Snaps/Sonic _ Tails.png"),
+            "hero");
+  writeFile(
+      root + QStringLiteral("/playlists/logs/Genesis Plus GX/Sonic & Tails.lrtl"),
+      R"({"version":"1.0","runtime":"12:34:56","last_played":"2026-08-30 19:45:10","play_count":"4","state_slot":"0"})");
+  writeFile(root + QStringLiteral("/playlists/content_history.lpl"),
+            R"({"version":"1.5","items":[{"path":"/ignored","label":"Ignored"}]})");
+}
 } // namespace
 
 class CoreTests final : public QObject {
@@ -201,6 +236,10 @@ private slots:
   void faugusModelIsRepeatableAndPreservesLocalState();
   void malformedFaugusDataDoesNotReplaceCachedGames();
   void faugusLauncherBuildsSafeCommands();
+  void retroArchScannerImportsPlaylistsArtworkAndRuntime();
+  void retroArchModelIsRepeatableAndPreservesLocalState();
+  void malformedRetroArchDataDoesNotReplaceCachedGames();
+  void retroArchLauncherBuildsSafeCommands();
   void launcherReportsInvalidAndStaleTargets();
   void igdbApiBuildsSafeQueriesAndParsesInsights();
   void igdbInsightsLoadFromOfflineCache();
@@ -1055,6 +1094,106 @@ void CoreTests::faugusLauncherBuildsSafeCommands() {
   QVERIFY(!GameLauncher::faugusCommand(QStringLiteral("../escape"), false).isValid());
 }
 
+void CoreTests::retroArchScannerImportsPlaylistsArtworkAndRuntime() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/retroarch");
+  const QString flatpakRoot =
+      directory.path() + QStringLiteral("/.var/app/org.libretro.RetroArch/config/retroarch");
+  createRetroArchFixture(root);
+  createRetroArchFixture(flatpakRoot);
+
+  const RetroArchScanResult result = RetroArchScanner::scan({root, flatpakRoot});
+  QVERIFY(!result.incomplete);
+  QCOMPARE(result.roots, QStringList({root, flatpakRoot}));
+  QCOMPARE(result.games.size(), 4);
+  const auto sonic = std::find_if(result.games.cbegin(), result.games.cend(), [](const auto& game) {
+    return game.title == QStringLiteral("Sonic & Tails") && !game.flatpak;
+  });
+  QVERIFY(sonic != result.games.cend());
+  QCOMPARE(sonic->coreName, QStringLiteral("Genesis Plus GX"));
+  QVERIFY(sonic->corePath.endsWith(QStringLiteral("genesis_plus_gx_libretro.so")));
+  QVERIFY(sonic->coverPath.endsWith(QStringLiteral("Sonic _ Tails.png")));
+  QVERIFY(sonic->heroPath.endsWith(QStringLiteral("Sonic _ Tails.png")));
+  QCOMPARE(sonic->playtimeSeconds, 45296);
+  QVERIFY(sonic->lastPlayed > 0);
+  const auto unassigned =
+      std::find_if(result.games.cbegin(), result.games.cend(),
+                   [](const auto& game) { return game.title == QStringLiteral("Unassigned"); });
+  QVERIFY(unassigned != result.games.cend());
+  QVERIFY(unassigned->corePath.isEmpty());
+  QCOMPARE(std::count_if(result.games.cbegin(), result.games.cend(),
+                         [](const auto& game) { return game.flatpak; }),
+           2);
+
+  writeFile(root + QStringLiteral("/playlists/logs/Genesis Plus GX/Sonic & Tails.lrtl"),
+            R"({"runtime":"9223372036854775807:00:00"})");
+  const RetroArchScanResult hostileRuntime = RetroArchScanner::scan({root});
+  const auto safeSonic =
+      std::find_if(hostileRuntime.games.cbegin(), hostileRuntime.games.cend(),
+                   [](const auto& game) { return game.title == QStringLiteral("Sonic & Tails"); });
+  QVERIFY(safeSonic != hostileRuntime.games.cend());
+  QCOMPARE(safeSonic->playtimeSeconds, 0);
+}
+
+void CoreTests::retroArchModelIsRepeatableAndPreservesLocalState() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/retroarch");
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  createRetroArchFixture(root);
+  RetroArchGameModel model(database);
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 2);
+  QCOMPARE(model.detectedPaths(), QStringList({root}));
+  model.toggleFavorite(0);
+  model.toggleHidden(0);
+  model.refreshFromRoots({root});
+  QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
+  QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
+  RetroArchGameModel reloaded(database);
+  QCOMPARE(reloaded.rowCount(), 2);
+  QVERIFY(reloaded.data(reloaded.index(0), GameRoles::Favorite).toBool());
+}
+
+void CoreTests::malformedRetroArchDataDoesNotReplaceCachedGames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/retroarch");
+  createRetroArchFixture(root);
+  RetroArchGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 2);
+  writeFile(root + QStringLiteral("/playlists/Nintendo.lpl"), "not json");
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 2);
+  QVERIFY(model.statusText().startsWith(QStringLiteral("RetroArch scan interrupted")));
+}
+
+void CoreTests::retroArchLauncherBuildsSafeCommands() {
+  const QString content = QStringLiteral("/games/Sonic & Tails.bin");
+  const QString core = QStringLiteral("/cores/genesis_plus_gx_libretro.so");
+  const LaunchCommand native = GameLauncher::retroArchCommand(content, core, false);
+  QCOMPARE(native.program, QStringLiteral("retroarch"));
+  QCOMPARE(native.arguments, QStringList({QStringLiteral("-L"), core, content}));
+  const LaunchCommand flatpak = GameLauncher::retroArchCommand(content, core, true);
+  QCOMPARE(flatpak.program, QStringLiteral("flatpak"));
+  QCOMPARE(flatpak.arguments,
+           QStringList({QStringLiteral("run"), QStringLiteral("org.libretro.RetroArch"),
+                        QStringLiteral("-L"), core, content}));
+  QVERIFY(!GameLauncher::retroArchCommand(content, QStringLiteral("DETECT"), false).isValid());
+  QVERIFY(!GameLauncher::retroArchCommand({}, core, false).isValid());
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString archive = directory.path() + QStringLiteral("/games.zip");
+  writeFile(archive, "archive");
+  GameLauncher launcher;
+  QVERIFY(!launcher.launch(QStringLiteral("RetroArch"), QStringLiteral("id"), false, {},
+                           archive + QStringLiteral("#Sonic.bin"), {}));
+  QVERIFY(!launcher.lastError().startsWith(QStringLiteral("The installed files are missing.")));
+}
+
 void CoreTests::launcherReportsInvalidAndStaleTargets() {
   GameLauncher launcher;
   QVERIFY(!launcher.launch(QStringLiteral("Lutris"), QStringLiteral("bad")));
@@ -1157,6 +1296,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     settings.setSteamEnabled(false);
     settings.setLutrisEnabled(false);
     settings.setFaugusEnabled(false);
+    settings.setRetroArchEnabled(false);
     settings.setCloseAfterLaunch(true);
   }
   AppSettings reloaded(path);
@@ -1168,6 +1308,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   QVERIFY(!reloaded.lutrisEnabled());
   QVERIFY(reloaded.heroicEnabled());
   QVERIFY(!reloaded.faugusEnabled());
+  QVERIFY(!reloaded.retroArchEnabled());
   QVERIFY(reloaded.closeAfterLaunch());
 }
 

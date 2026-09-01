@@ -1,13 +1,13 @@
 # Omakade product and delivery plan
 
-Implementation status: M0 through M5 are complete for v1.0. Steam, Lutris, and
-Heroic and Faugus import, launch delegation, source filters, organization, settings,
-release checks, and explicit linking are implemented.
+Implementation status: M0 through M5 are complete. Steam, Lutris, Heroic,
+Faugus, and RetroArch import, launch delegation, source filters, organization,
+settings, release checks, and explicit linking are implemented.
 
 ## Product statement
 
 Omakade is a beautiful, local-first game library built for Omarchy. It brings
-installed games from Steam, Lutris, Heroic, and Faugus into one coherent place.
+installed games from Steam, Lutris, Heroic, Faugus, and RetroArch into one coherent place.
 It owns discovery, presentation, search, achievements, organization, and the
 launch action. Existing platforms continue to own authentication, installation,
 updates, compatibility tools, cloud saves, DRM, and overlays.
@@ -412,7 +412,8 @@ must not replace local installed-game discovery.
 
 ### Retro games
 
-- Prefer importing configured RetroArch or EmulationStation entries.
+- Import configured RetroArch playlists, local thumbnails, core associations,
+  and runtime logs without crawling arbitrary ROM folders.
 - Do not become an emulator manager in the first major release.
 - RetroAchievements is a separate optional connection.
 

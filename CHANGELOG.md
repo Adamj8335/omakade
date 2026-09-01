@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- Added native and Flatpak RetroArch playlist discovery and launch delegation.
+- Added RetroArch box art, screenshots, core names, playtime, and recent activity.
+- Added safe handling for archived ROM paths and missing core associations.
+- Added RetroArch source filters, diagnostics, and settings.
+
 ## 1.1.1
 
 - Refreshes stale Steam achievements automatically when game details open.

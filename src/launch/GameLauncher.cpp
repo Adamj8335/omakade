@@ -28,6 +28,14 @@ bool validFaugusId(const QString& id) {
       QRegularExpression::UseUnicodePropertiesOption);
   return gameId.match(id).hasMatch();
 }
+
+bool installedTargetExists(const QString& path) {
+  if (QFileInfo::exists(path)) {
+    return true;
+  }
+  const qsizetype archiveSeparator = path.indexOf(QLatin1Char('#'));
+  return archiveSeparator > 0 && QFileInfo::exists(path.left(archiveSeparator));
+}
 } // namespace
 
 GameLauncher::GameLauncher(QObject* parent) : QObject(parent) {}
@@ -77,10 +85,24 @@ LaunchCommand GameLauncher::faugusCommand(const QString& id, bool flatpak) {
                              {QStringLiteral("--game"), id}};
 }
 
+LaunchCommand GameLauncher::retroArchCommand(const QString& contentPath, const QString& corePath,
+                                             bool flatpak) {
+  if (contentPath.trimmed().isEmpty() || corePath.trimmed().isEmpty() ||
+      corePath == QStringLiteral("DETECT")) {
+    return {};
+  }
+  return flatpak ? LaunchCommand{QStringLiteral("flatpak"),
+                                 {QStringLiteral("run"), QStringLiteral("org.libretro.RetroArch"),
+                                  QStringLiteral("-L"), corePath, contentPath}}
+                 : LaunchCommand{QStringLiteral("retroarch"),
+                                 {QStringLiteral("-L"), corePath, contentPath}};
+}
+
 bool GameLauncher::launch(const QString& source, const QString& id, bool flatpak,
-                          const QString& runner, const QString& installPath) {
+                          const QString& runner, const QString& installPath,
+                          const QString& launchTarget) {
   if (source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) != 0 &&
-      !installPath.isEmpty() && !QFileInfo::exists(installPath)) {
+      !installPath.isEmpty() && !installedTargetExists(installPath)) {
     setError(QStringLiteral(
                  "The installed files are missing. Rescan or repair this game in %1.")
                  .arg(source));
@@ -108,6 +130,9 @@ bool GameLauncher::launch(const QString& source, const QString& id, bool flatpak
   if (source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) == 0) {
     return launchFaugus(id, flatpak, false);
   }
+  if (source.compare(QStringLiteral("RetroArch"), Qt::CaseInsensitive) == 0) {
+    return launchRetroArch(installPath, launchTarget, flatpak, false);
+  }
   setError(QStringLiteral("%1 games cannot be launched yet.").arg(source));
   return false;
 }
@@ -131,6 +156,9 @@ bool GameLauncher::manage(const QString& source, const QString& id, bool flatpak
   }
   if (source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) == 0) {
     return launchFaugus(id, flatpak, true);
+  }
+  if (source.compare(QStringLiteral("RetroArch"), Qt::CaseInsensitive) == 0) {
+    return launchRetroArch({}, {}, flatpak, true);
   }
   setError(QStringLiteral("%1 does not provide game management yet.").arg(source));
   return false;
@@ -241,6 +269,41 @@ bool GameLauncher::launchFaugus(const QString& id, bool flatpak, bool manageOnly
   }
   if (!QProcess::startDetached(command.program, command.arguments)) {
     setError(QStringLiteral("Faugus could not be started. Open Faugus and try again."));
+    return false;
+  }
+  setError({});
+  return true;
+}
+
+bool GameLauncher::launchRetroArch(const QString& contentPath, const QString& corePath,
+                                   bool flatpak, bool manageOnly) {
+  const QString executable = flatpak ? QStringLiteral("flatpak") : QStringLiteral("retroarch");
+  if (QStandardPaths::findExecutable(executable).isEmpty()) {
+    setError(flatpak ? QStringLiteral("Flatpak is not installed.")
+                     : QStringLiteral("RetroArch is not installed."));
+    return false;
+  }
+  if (flatpak) {
+    const QString error =
+        flatpakError(QStringLiteral("org.libretro.RetroArch"), QStringLiteral("RetroArch"));
+    if (!error.isEmpty()) {
+      setError(error);
+      return false;
+    }
+  }
+  const LaunchCommand command =
+      manageOnly
+          ? (flatpak
+                 ? LaunchCommand{QStringLiteral("flatpak"),
+                                 {QStringLiteral("run"), QStringLiteral("org.libretro.RetroArch")}}
+                 : LaunchCommand{QStringLiteral("retroarch"), {}})
+          : retroArchCommand(contentPath, corePath, flatpak);
+  if (!command.isValid()) {
+    setError(QStringLiteral("Set a core association for this game in RetroArch, then rescan."));
+    return false;
+  }
+  if (!QProcess::startDetached(command.program, command.arguments)) {
+    setError(QStringLiteral("RetroArch could not be started. Open RetroArch and try again."));
     return false;
   }
   setError({});
