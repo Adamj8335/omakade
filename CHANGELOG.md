@@ -6,6 +6,7 @@
 - Made the library scrollbar larger and easier to drag with a mouse.
 - Added a persistent accent outline to the selected game card.
 - Improved the new-collection layout and clarified Twitch setup for IGDB.
+- Hid unavailable game-insight metrics and reflowed the remaining cards.
 
 ## 1.0.0
 

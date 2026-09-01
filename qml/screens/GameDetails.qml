@@ -33,10 +33,6 @@ Item {
         return Qt.rgba(color.r, color.g, color.b, value)
     }
 
-    function insightValue(value) {
-        return value > 0 ? value + " H" : "NO DATA"
-    }
-
     Keys.onEscapePressed: function(event) {
         root.backRequested()
         event.accepted = true
@@ -537,10 +533,34 @@ Item {
                 }
 
                 ColumnLayout {
+                    id: insightsSection
                     Layout.fillWidth: true
                     Layout.topMargin: 12
                     spacing: 10
                     visible: root.selectedInstallation.source === "Steam" && Insights !== null
+                    readonly property var metrics: {
+                        if (!Insights) {
+                            return []
+                        }
+                        const values = []
+                        if (Insights.criticScore >= 0) {
+                            values.push({ label: "IGDB CRITIC",
+                                          value: Insights.criticScore + " / 100" })
+                        }
+                        if (Insights.rushedHours > 0) {
+                            values.push({ label: "RUSHED",
+                                          value: Insights.rushedHours + " H" })
+                        }
+                        if (Insights.normalHours > 0) {
+                            values.push({ label: "MAIN + EXTRAS",
+                                          value: Insights.normalHours + " H" })
+                        }
+                        if (Insights.completeHours > 0) {
+                            values.push({ label: "COMPLETIONIST",
+                                          value: Insights.completeHours + " H" })
+                        }
+                        return values
+                    }
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -580,23 +600,20 @@ Item {
 
                     GridLayout {
                         Layout.fillWidth: true
-                        visible: Insights ? Insights.available : false
-                        columns: root.width < 1120 ? 2 : 4
+                        visible: insightsSection.metrics.length > 0
+                        columns: insightsSection.metrics.length === 4 && root.width < 1120
+                                 ? 2 : Math.max(1, insightsSection.metrics.length)
                         columnSpacing: 10
                         rowSpacing: 10
 
                         Repeater {
-                            model: Insights ? [
-                                { label: "IGDB CRITIC", value: Insights.criticScore >= 0 ? Insights.criticScore + " / 100" : "NO SCORE" },
-                                { label: "RUSHED", value: root.insightValue(Insights.rushedHours) },
-                                { label: "MAIN + EXTRAS", value: root.insightValue(Insights.normalHours) },
-                                { label: "COMPLETIONIST", value: root.insightValue(Insights.completeHours) }
-                            ] : []
+                            model: insightsSection.metrics
 
                             Rectangle {
                                 required property var modelData
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 130
+                                Layout.maximumWidth: 340
                                 Layout.preferredHeight: 72
                                 radius: Math.max(5, Theme.cornerRadius)
                                 color: root.alpha(Theme.foreground, 0.045)
@@ -627,7 +644,7 @@ Item {
                     }
 
                     Text {
-                        visible: Insights ? Insights.available : false
+                        visible: insightsSection.metrics.length > 0
                         text: "Critic aggregate and time estimates provided by IGDB"
                         color: root.alpha(Theme.foreground, 0.48)
                         font.family: Theme.fontFamily
