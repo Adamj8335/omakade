@@ -54,7 +54,8 @@ jobs:
           cp packaging/arch/omakade-*.pkg.tar.zst .
           cp packaging/arch/PKGBUILD "PKGBUILD-$VERSION"
           sha256sum "omakade-$VERSION.tar.gz" omakade-*.pkg.tar.zst "PKGBUILD-$VERSION" > SHA256SUMS
-          awk '/^## Unreleased/{copy=1; next} /^## /{copy=0} copy' CHANGELOG.md > RELEASE_NOTES.md
+          awk -v heading="## $VERSION" '$0 == heading {copy=1; next} /^## /{copy=0} copy' \
+            CHANGELOG.md > RELEASE_NOTES.md
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

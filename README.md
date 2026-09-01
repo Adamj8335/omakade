@@ -17,9 +17,9 @@ cover-focused home that follows the active Omarchy theme.
 > Omakade is an independent community project. It is not an official Omarchy
 > application.
 
-## Current preview
+## Current release
 
-The 0.5 preview includes:
+Omakade 1.0 includes:
 
 - Native and Flatpak Steam, Lutris, and Heroic discovery
 - One-click details and delegated launching through the owning platform
