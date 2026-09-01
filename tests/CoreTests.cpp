@@ -28,6 +28,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -210,6 +211,7 @@ private slots:
   void themeFollowsShellLauncherTransparency();
   void valveKeyValuesParsesNestedAndEscapedValues();
   void valveKeyValuesRejectsMalformedInput();
+  void valveKeyValuesRejectsExcessiveNesting();
   void steamScannerImportsLibrariesAndCustomArtwork();
   void steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements();
   void steamModelPersistsFavoritesAndHiddenState();
@@ -236,6 +238,7 @@ private slots:
   void faugusModelIsRepeatableAndPreservesLocalState();
   void malformedFaugusDataDoesNotReplaceCachedGames();
   void faugusLauncherBuildsSafeCommands();
+  void launcherRefreshesRunAsynchronously();
   void retroArchScannerImportsPlaylistsArtworkAndRuntime();
   void retroArchModelIsRepeatableAndPreservesLocalState();
   void malformedRetroArchDataDoesNotReplaceCachedGames();
@@ -365,6 +368,30 @@ void CoreTests::valveKeyValuesRejectsMalformedInput() {
   QString error;
   QVERIFY(!ValveKeyValuesParser::parse("\"Root\" { \"name\" \"unfinished\"", &values, &error));
   QVERIFY(!error.isEmpty());
+}
+
+void CoreTests::valveKeyValuesRejectsExcessiveNesting() {
+  QByteArray input;
+  for (int depth = 0; depth < 129; ++depth) {
+    input.append("\"key\" {");
+  }
+  input.append("\"value\" \"leaf\"");
+  for (int depth = 0; depth < 129; ++depth) {
+    input.append('}');
+  }
+  ValveKeyValues values;
+  QString error;
+  QVERIFY(!ValveKeyValuesParser::parse(input, &values, &error));
+  QCOMPARE(error, QStringLiteral("Object nesting is too deep"));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  QFile oversized(directory.path() + QStringLiteral("/oversized.vdf"));
+  QVERIFY(oversized.open(QIODevice::WriteOnly));
+  QVERIFY(oversized.resize(64LL * 1024 * 1024 + 1));
+  oversized.close();
+  QVERIFY(!ValveKeyValuesParser::parseFile(oversized.fileName(), &values, &error));
+  QCOMPARE(error, QStringLiteral("File is too large"));
 }
 
 void CoreTests::steamScannerImportsLibrariesAndCustomArtwork() {
@@ -1057,6 +1084,14 @@ void CoreTests::faugusModelIsRepeatableAndPreservesLocalState() {
   QCOMPARE(model.rowCount(), 3);
   QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
   QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
+  writeFile(root + QStringLiteral("/games.json"), "[]");
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 0);
+  createFaugusFixture(root);
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
+  QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
 
   FaugusGameModel reloaded(database);
   QCOMPARE(reloaded.detectedPaths(), QStringList({root}));
@@ -1092,6 +1127,48 @@ void CoreTests::faugusLauncherBuildsSafeCommands() {
   QVERIFY(!GameLauncher::faugusCommand(QStringLiteral("bad;id"), false).isValid());
   QVERIFY(GameLauncher::faugusCommand(QStringLiteral("pokémon-外伝"), false).isValid());
   QVERIFY(!GameLauncher::faugusCommand(QStringLiteral("../escape"), false).isValid());
+}
+
+void CoreTests::launcherRefreshesRunAsynchronously() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const bool dataHomeWasSet = qEnvironmentVariableIsSet("XDG_DATA_HOME");
+  const bool configHomeWasSet = qEnvironmentVariableIsSet("XDG_CONFIG_HOME");
+  const QByteArray previousDataHome = qgetenv("XDG_DATA_HOME");
+  const QByteArray previousConfigHome = qgetenv("XDG_CONFIG_HOME");
+  const auto restoreEnvironment = qScopeGuard([&] {
+    if (dataHomeWasSet) {
+      qputenv("XDG_DATA_HOME", previousDataHome);
+    } else {
+      qunsetenv("XDG_DATA_HOME");
+    }
+    if (configHomeWasSet) {
+      qputenv("XDG_CONFIG_HOME", previousConfigHome);
+    } else {
+      qunsetenv("XDG_CONFIG_HOME");
+    }
+  });
+  const QString dataHome = directory.path() + QStringLiteral("/data");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  qputenv("XDG_DATA_HOME", dataHome.toUtf8());
+  qputenv("XDG_CONFIG_HOME", configHome.toUtf8());
+  createLutrisFixture(dataHome + QStringLiteral("/lutris"));
+  createHeroicFixture(configHome + QStringLiteral("/heroic"));
+  createFaugusFixture(dataHome + QStringLiteral("/faugus-launcher"));
+
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  LutrisGameModel lutris(database);
+  HeroicGameModel heroic(database);
+  FaugusGameModel faugus(database);
+  lutris.refresh();
+  heroic.refresh();
+  faugus.refresh();
+  QCOMPARE(lutris.statusText(), QStringLiteral("Scanning Lutris library"));
+  QCOMPARE(heroic.statusText(), QStringLiteral("Scanning Heroic library"));
+  QCOMPARE(faugus.statusText(), QStringLiteral("Scanning Faugus library"));
+  QTRY_COMPARE_WITH_TIMEOUT(lutris.rowCount(), 1, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(heroic.rowCount(), 3, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(faugus.rowCount(), 3, 3000);
 }
 
 void CoreTests::retroArchScannerImportsPlaylistsArtworkAndRuntime() {

@@ -5,6 +5,9 @@
 #include <cctype>
 
 namespace {
+constexpr qint64 kMaximumFileBytes = 64LL * 1024 * 1024;
+constexpr int kMaximumNestingDepth = 128;
+
 QString matchingKey(const auto& values, const QString& wanted) {
   for (auto iterator = values.cbegin(); iterator != values.cend(); ++iterator) {
     if (iterator.key().compare(wanted, Qt::CaseInsensitive) == 0) {
@@ -93,7 +96,11 @@ private:
   QString m_error;
 };
 
-bool parseObject(Tokenizer* tokenizer, ValveKeyValues* result, bool nested, QString* error) {
+bool parseObject(Tokenizer* tokenizer, ValveKeyValues* result, int depth, QString* error) {
+  if (depth > kMaximumNestingDepth) {
+    *error = QStringLiteral("Object nesting is too deep");
+    return false;
+  }
   while (true) {
     QString key;
     if (!tokenizer->next(&key)) {
@@ -101,14 +108,14 @@ bool parseObject(Tokenizer* tokenizer, ValveKeyValues* result, bool nested, QStr
         *error = tokenizer->error();
         return false;
       }
-      if (nested) {
+      if (depth > 0) {
         *error = QStringLiteral("Object is missing a closing brace");
         return false;
       }
       return true;
     }
     if (key == QStringLiteral("}")) {
-      if (!nested) {
+      if (depth == 0) {
         *error = QStringLiteral("Unexpected closing brace");
         return false;
       }
@@ -122,7 +129,7 @@ bool parseObject(Tokenizer* tokenizer, ValveKeyValues* result, bool nested, QStr
     }
     if (value == QStringLiteral("{")) {
       ValveKeyValues child;
-      if (!parseObject(tokenizer, &child, true, error)) {
+      if (!parseObject(tokenizer, &child, depth + 1, error)) {
         return false;
       }
       result->objects.insert(key, child);
@@ -148,9 +155,15 @@ bool ValveKeyValuesParser::parse(const QByteArray& contents, ValveKeyValues* res
     return false;
   }
   *result = {};
+  if (contents.size() > kMaximumFileBytes) {
+    if (error != nullptr) {
+      *error = QStringLiteral("File is too large");
+    }
+    return false;
+  }
   QString localError;
   Tokenizer tokenizer(contents);
-  const bool success = parseObject(&tokenizer, result, false, &localError);
+  const bool success = parseObject(&tokenizer, result, 0, &localError);
   if (error != nullptr) {
     *error = localError;
   }
@@ -162,6 +175,12 @@ bool ValveKeyValuesParser::parseFile(const QString& path, ValveKeyValues* result
   if (!file.open(QIODevice::ReadOnly)) {
     if (error != nullptr) {
       *error = file.errorString();
+    }
+    return false;
+  }
+  if (file.size() > kMaximumFileBytes) {
+    if (error != nullptr) {
+      *error = QStringLiteral("File is too large");
     }
     return false;
   }

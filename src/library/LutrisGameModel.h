@@ -4,6 +4,7 @@
 
 #include <QAbstractListModel>
 #include <QColor>
+#include <QFutureWatcher>
 #include <QSqlDatabase>
 
 class LutrisGameModel final : public QAbstractListModel {
@@ -55,6 +56,7 @@ private:
   QVector<Game> m_games;
   QSqlDatabase m_database;
   QString m_connectionName;
+  QFutureWatcher<LutrisScanResult> m_scanWatcher;
   bool m_lutrisDetected = false;
   QString m_statusText;
   QString m_errorText;

@@ -9,6 +9,7 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QUrl>
+#include <QtConcurrent>
 
 namespace {
 QColor colorFor(const QString& key, int offset) {
@@ -25,6 +26,8 @@ QString localUrl(const QString& path) {
 FaugusGameModel::FaugusGameModel(const QString& omakadeDatabasePath, QObject* parent)
     : QAbstractListModel(parent),
       m_connectionName(QStringLiteral("omakade-faugus-%1").arg(reinterpret_cast<quintptr>(this))) {
+  connect(&m_scanWatcher, &QFutureWatcher<FaugusScanResult>::finished, this,
+          [this] { applyScan(m_scanWatcher.result()); });
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
@@ -32,6 +35,9 @@ FaugusGameModel::FaugusGameModel(const QString& omakadeDatabasePath, QObject* pa
 }
 
 FaugusGameModel::~FaugusGameModel() {
+  if (m_scanWatcher.isRunning()) {
+    m_scanWatcher.waitForFinished();
+  }
   m_database.close();
   m_database = {};
   QSqlDatabase::removeDatabase(m_connectionName);
@@ -116,7 +122,14 @@ void FaugusGameModel::toggleHidden(int row) {
   emit dataChanged(index(row), index(row), {GameRoles::Hidden});
 }
 
-void FaugusGameModel::refresh() { refreshFromRoots(FaugusScanner::discoverRoots()); }
+void FaugusGameModel::refresh() {
+  if (m_scanWatcher.isRunning()) {
+    return;
+  }
+  const QStringList roots = FaugusScanner::discoverRoots();
+  setStatus(QStringLiteral("Scanning Faugus library"));
+  m_scanWatcher.setFuture(QtConcurrent::run([roots] { return FaugusScanner::scan(roots); }));
+}
 
 void FaugusGameModel::refreshFromRoots(const QStringList& roots) {
   applyScan(FaugusScanner::scan(roots));
@@ -157,8 +170,8 @@ void FaugusGameModel::loadDatabase() {
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral(
           "SELECT game_id, name, executable_path, runner, cover_path, hero_path, "
-          "playtime_seconds, flatpak, favorite, hidden FROM faugus_games ORDER BY name COLLATE "
-          "NOCASE"))) {
+          "playtime_seconds, flatpak, favorite, hidden FROM faugus_games WHERE observed_at > 0 "
+          "ORDER BY name COLLATE NOCASE"))) {
     setStatus(QStringLiteral("Could not load cached Faugus games"), query.lastError().text());
     return;
   }
@@ -230,7 +243,6 @@ void FaugusGameModel::applyScan(const FaugusScanResult& result) {
     query.addBindValue(game.flatpak);
     okay = okay && query.exec();
   }
-  okay = okay && query.exec(QStringLiteral("DELETE FROM faugus_games WHERE observed_at = 0"));
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('faugus', "
       "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "

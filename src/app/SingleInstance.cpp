@@ -22,6 +22,10 @@ SingleInstance::SingleInstance(const QString& serverName, QObject* parent)
 }
 
 bool SingleInstance::claimOrNotify() {
+  if (m_server.listen(m_serverName)) {
+    return true;
+  }
+
   QLocalSocket socket;
   socket.connectToServer(m_serverName, QIODevice::WriteOnly);
   if (socket.waitForConnected(120)) {
@@ -31,6 +35,9 @@ bool SingleInstance::claimOrNotify() {
     return false;
   }
 
+  if (m_server.serverError() != QAbstractSocket::AddressInUseError) {
+    return false;
+  }
   QLocalServer::removeServer(m_serverName);
   return m_server.listen(m_serverName);
 }

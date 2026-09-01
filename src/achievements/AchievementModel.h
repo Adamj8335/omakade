@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QHash>
 #include <QNetworkAccessManager>
 #include <QQueue>
 #include <QSet>
@@ -9,6 +10,7 @@
 #include <QVector>
 
 class AppSettings;
+class QNetworkReply;
 class QUrl;
 
 class AchievementModel final : public QAbstractListModel {
@@ -103,6 +105,7 @@ private:
   QSqlDatabase m_database;
   QString m_connectionName;
   QNetworkAccessManager m_network;
+  QHash<QNetworkReply*, QByteArray> m_iconBuffers;
   QQueue<IconRequest> m_iconQueue;
   QSet<QString> m_pendingIcons;
   int m_activeIconDownloads = 0;

@@ -4,6 +4,7 @@
 
 #include <QAbstractListModel>
 #include <QColor>
+#include <QFutureWatcher>
 #include <QSqlDatabase>
 
 class FaugusGameModel final : public QAbstractListModel {
@@ -55,6 +56,7 @@ private:
   QVector<Game> m_games;
   QSqlDatabase m_database;
   QString m_connectionName;
+  QFutureWatcher<FaugusScanResult> m_scanWatcher;
   bool m_faugusDetected = false;
   QString m_statusText;
   QString m_errorText;

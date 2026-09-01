@@ -8,6 +8,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSaveFile>
@@ -285,10 +286,25 @@ void AchievementModel::requestIcon(int row) {
   ++m_activeIconDownloads;
   reply->setProperty("achievementAppId", m_appId);
   reply->setProperty("achievementApiName", m_achievements.at(row).apiName);
+  m_iconBuffers.insert(reply, {});
+  connect(reply, &QNetworkReply::readyRead, this, [this, reply] {
+    QByteArray& buffer = m_iconBuffers[reply];
+    const qsizetype remaining = kMaximumIconBytes - buffer.size();
+    buffer.append(reply->read(remaining + 1));
+    if (buffer.size() > kMaximumIconBytes) {
+      reply->setProperty("tooLarge", true);
+      reply->abort();
+    }
+  });
   connect(reply, &QNetworkReply::finished, this, [this, reply] {
     const QString appId = reply->property("achievementAppId").toString();
     const QString apiName = reply->property("achievementApiName").toString();
-    const QByteArray contents = reply->readAll();
+    QByteArray contents = m_iconBuffers.take(reply);
+    if (contents.size() <= kMaximumIconBytes) {
+      contents.append(reply->read(kMaximumIconBytes + 1 - contents.size()));
+    }
+    const bool tooLarge =
+        reply->property("tooLarge").toBool() || contents.size() > kMaximumIconBytes;
     int row = -1;
     if (appId == m_appId) {
       for (int candidate = 0; candidate < m_achievements.size(); ++candidate) {
@@ -300,7 +316,7 @@ void AchievementModel::requestIcon(int row) {
     }
     const bool validRow = row >= 0;
     if (reply->error() == QNetworkReply::NoError && validRow && !contents.isEmpty() &&
-        contents.size() <= kMaximumIconBytes) {
+        !tooLarge && !QImage::fromData(contents).isNull()) {
       const QString path = pathForIcon(appId, m_achievements.at(row).iconUrl);
       QDir().mkpath(QFileInfo(path).absolutePath());
       QSaveFile file(path);

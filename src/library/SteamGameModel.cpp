@@ -654,11 +654,25 @@ void SteamGameModel::downloadCover(const QString& appId, int attempt) {
                        QNetworkRequest::ManualRedirectPolicy);
   QNetworkReply* reply = m_network.get(request);
   ++m_activeCoverDownloads;
+  m_coverBuffers.insert(reply, {});
+  connect(reply, &QNetworkReply::readyRead, this, [this, reply] {
+    QByteArray& buffer = m_coverBuffers[reply];
+    const qsizetype remaining = kMaximumCoverBytes - buffer.size();
+    buffer.append(reply->read(remaining + 1));
+    if (buffer.size() > kMaximumCoverBytes) {
+      reply->setProperty("tooLarge", true);
+      reply->abort();
+    }
+  });
   connect(reply, &QNetworkReply::finished, this, [this, reply, appId, attempt] {
-    const QByteArray contents = reply->readAll();
+    QByteArray contents = m_coverBuffers.take(reply);
+    if (contents.size() <= kMaximumCoverBytes) {
+      contents.append(reply->read(kMaximumCoverBytes + 1 - contents.size()));
+    }
+    const bool tooLarge =
+        reply->property("tooLarge").toBool() || contents.size() > kMaximumCoverBytes;
     const bool valid = reply->error() == QNetworkReply::NoError && !contents.isEmpty() &&
-                       contents.size() <= kMaximumCoverBytes &&
-                       !QImage::fromData(contents).isNull();
+                       !tooLarge && !QImage::fromData(contents).isNull();
     bool saved = false;
     if (valid) {
       const QString path = coverCachePath(appId);

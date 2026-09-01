@@ -461,6 +461,9 @@ bool SteamAccountService::persistAchievements(const SteamAchievementApiResult& r
   query.addBindValue(result.total);
   query.addBindValue(QDateTime::currentSecsSinceEpoch());
   bool okay = query.exec();
+  query.prepare(QStringLiteral("DELETE FROM achievements WHERE app_id = ?"));
+  query.addBindValue(m_refreshAppId);
+  okay = okay && query.exec();
   for (const SteamAchievementRecord& achievement : result.achievements) {
     query.prepare(QStringLiteral(
         "INSERT INTO achievements(app_id, api_name, title, description, icon_url, icon_path, "

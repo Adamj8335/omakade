@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QFileSystemWatcher>
 #include <QFutureWatcher>
+#include <QHash>
 #include <QNetworkAccessManager>
 #include <QQueue>
 #include <QSet>
@@ -13,6 +14,7 @@
 #include <QTimer>
 
 class AppSettings;
+class QNetworkReply;
 
 class SteamGameModel final : public QAbstractListModel {
   Q_OBJECT
@@ -100,6 +102,7 @@ private:
   qint64 m_lastScan = 0;
   AppSettings* m_settings = nullptr;
   QNetworkAccessManager m_network;
+  QHash<QNetworkReply*, QByteArray> m_coverBuffers;
   QQueue<CoverRequest> m_coverQueue;
   QSet<QString> m_pendingCovers;
   int m_activeCoverDownloads = 0;

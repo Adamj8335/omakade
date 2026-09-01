@@ -9,6 +9,7 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QUrl>
+#include <QtConcurrent>
 
 namespace {
 QColor colorFor(const QString& key, int offset) {
@@ -38,6 +39,8 @@ QString storeName(const QString& runner) {
 HeroicGameModel::HeroicGameModel(const QString& omakadeDatabasePath, QObject* parent)
     : QAbstractListModel(parent),
       m_connectionName(QStringLiteral("omakade-heroic-%1").arg(reinterpret_cast<quintptr>(this))) {
+  connect(&m_scanWatcher, &QFutureWatcher<HeroicScanResult>::finished, this,
+          [this] { applyScan(m_scanWatcher.result()); });
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
@@ -45,6 +48,9 @@ HeroicGameModel::HeroicGameModel(const QString& omakadeDatabasePath, QObject* pa
 }
 
 HeroicGameModel::~HeroicGameModel() {
+  if (m_scanWatcher.isRunning()) {
+    m_scanWatcher.waitForFinished();
+  }
   m_database.close();
   m_database = {};
   QSqlDatabase::removeDatabase(m_connectionName);
@@ -129,7 +135,14 @@ void HeroicGameModel::toggleHidden(int row) {
   emit dataChanged(index(row), index(row), {GameRoles::Hidden});
 }
 
-void HeroicGameModel::refresh() { refreshFromRoots(HeroicScanner::discoverRoots()); }
+void HeroicGameModel::refresh() {
+  if (m_scanWatcher.isRunning()) {
+    return;
+  }
+  const QStringList roots = HeroicScanner::discoverRoots();
+  setStatus(QStringLiteral("Scanning Heroic library"));
+  m_scanWatcher.setFuture(QtConcurrent::run([roots] { return HeroicScanner::scan(roots); }));
+}
 void HeroicGameModel::refreshFromRoots(const QStringList& roots) {
   applyScan(HeroicScanner::scan(roots));
 }
@@ -176,7 +189,8 @@ void HeroicGameModel::loadDatabase() {
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral(
           "SELECT game_key, app_id, runner, name, directory, cover_path, hero_path, flatpak, "
-          "favorite, hidden FROM heroic_games ORDER BY name COLLATE NOCASE"))) {
+          "favorite, hidden FROM heroic_games WHERE observed_at > 0 ORDER BY name COLLATE "
+          "NOCASE"))) {
     setStatus(QStringLiteral("Could not load cached Heroic games"), query.lastError().text());
     return;
   }
@@ -248,7 +262,6 @@ void HeroicGameModel::applyScan(const HeroicScanResult& result) {
     query.addBindValue(game.flatpak);
     okay = okay && query.exec();
   }
-  okay = okay && query.exec(QStringLiteral("DELETE FROM heroic_games WHERE observed_at = 0"));
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('heroic', "
       "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "

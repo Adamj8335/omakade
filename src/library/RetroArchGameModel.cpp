@@ -169,8 +169,8 @@ void RetroArchGameModel::loadDatabase() {
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral(
           "SELECT game_id, name, content_path, core_path, core_name, cover_path, hero_path, "
-          "playtime_seconds, last_played, flatpak, favorite, hidden FROM retroarch_games ORDER BY "
-          "name COLLATE NOCASE"))) {
+          "playtime_seconds, last_played, flatpak, favorite, hidden FROM retroarch_games WHERE "
+          "observed_at > 0 ORDER BY name COLLATE NOCASE"))) {
     setStatus(QStringLiteral("Could not load cached RetroArch games"), query.lastError().text());
     return;
   }
@@ -247,7 +247,6 @@ void RetroArchGameModel::applyScan(const RetroArchScanResult& result) {
     query.addBindValue(game.flatpak);
     okay = okay && query.exec();
   }
-  okay = okay && query.exec(QStringLiteral("DELETE FROM retroarch_games WHERE observed_at = 0"));
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('retroarch', "
       "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "

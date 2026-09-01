@@ -9,6 +9,7 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QUrl>
+#include <QtConcurrent>
 
 namespace {
 QColor colorFor(const QString& id, int offset) {
@@ -25,6 +26,8 @@ QString localUrl(const QString& path) {
 LutrisGameModel::LutrisGameModel(const QString& omakadeDatabasePath, QObject* parent)
     : QAbstractListModel(parent),
       m_connectionName(QStringLiteral("omakade-lutris-%1").arg(reinterpret_cast<quintptr>(this))) {
+  connect(&m_scanWatcher, &QFutureWatcher<LutrisScanResult>::finished, this,
+          [this] { applyScan(m_scanWatcher.result()); });
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
@@ -32,6 +35,9 @@ LutrisGameModel::LutrisGameModel(const QString& omakadeDatabasePath, QObject* pa
 }
 
 LutrisGameModel::~LutrisGameModel() {
+  if (m_scanWatcher.isRunning()) {
+    m_scanWatcher.waitForFinished();
+  }
   m_database.close();
   m_database = {};
   QSqlDatabase::removeDatabase(m_connectionName);
@@ -116,7 +122,14 @@ void LutrisGameModel::toggleHidden(int row) {
   emit dataChanged(index(row), index(row), {GameRoles::Hidden});
 }
 
-void LutrisGameModel::refresh() { refreshFromDatabases(LutrisScanner::discoverDatabases()); }
+void LutrisGameModel::refresh() {
+  if (m_scanWatcher.isRunning()) {
+    return;
+  }
+  const QStringList paths = LutrisScanner::discoverDatabases();
+  setStatus(QStringLiteral("Scanning Lutris library"));
+  m_scanWatcher.setFuture(QtConcurrent::run([paths] { return LutrisScanner::scan(paths); }));
+}
 
 void LutrisGameModel::refreshFromDatabases(const QStringList& paths) {
   applyScan(LutrisScanner::scan(paths));
@@ -165,8 +178,8 @@ void LutrisGameModel::loadDatabase() {
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral("SELECT id, slug, name, runner, directory, platform, year, "
                                  "last_played, playtime_minutes, "
-                                 "cover_path, flatpak, favorite, hidden FROM lutris_games ORDER BY "
-                                 "name COLLATE NOCASE"))) {
+                                 "cover_path, flatpak, favorite, hidden FROM lutris_games WHERE "
+                                 "observed_at > 0 ORDER BY name COLLATE NOCASE"))) {
     setStatus(QStringLiteral("Could not load cached Lutris games"), query.lastError().text());
     return;
   }
@@ -244,7 +257,6 @@ void LutrisGameModel::applyScan(const LutrisScanResult& result) {
     query.addBindValue(game.flatpak);
     okay = okay && query.exec();
   }
-  okay = okay && query.exec(QStringLiteral("DELETE FROM lutris_games WHERE observed_at = 0"));
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('lutris', "
       "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "

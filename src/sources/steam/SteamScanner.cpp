@@ -16,6 +16,8 @@
 #include <algorithm>
 
 namespace {
+constexpr qint64 kMaximumAchievementCacheBytes = 16LL * 1024 * 1024;
+
 struct Activity {
   qint64 lastPlayed = 0;
   int playtimeMinutes = 0;
@@ -126,7 +128,7 @@ void mergeAchievementArray(const QJsonArray& source, bool hidden,
 
 AchievementCache parseAchievementFile(const QString& path) {
   QFile file(path);
-  if (!file.open(QIODevice::ReadOnly)) {
+  if (!file.open(QIODevice::ReadOnly) || file.size() > kMaximumAchievementCacheBytes) {
     return {};
   }
   const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
@@ -182,7 +184,8 @@ QHash<QString, AchievementCache> readAchievementCaches(const QStringList& roots)
 
       QFile progressFile(
           cacheDirectory.absoluteFilePath(QStringLiteral("achievement_progress.json")));
-      if (!progressFile.open(QIODevice::ReadOnly)) {
+      if (!progressFile.open(QIODevice::ReadOnly) ||
+          progressFile.size() > kMaximumAchievementCacheBytes) {
         continue;
       }
       const QJsonArray map = QJsonDocument::fromJson(progressFile.readAll())
