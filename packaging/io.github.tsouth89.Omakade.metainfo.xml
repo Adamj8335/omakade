@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.omakade.Omakade</id>
+  <id>io.github.tsouth89.Omakade</id>
   <name>Omakade</name>
   <summary>Your games, beautifully together</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
-  <developer id="io.github.omakade">
+  <developer id="io.github.tsouth89">
     <name>Omakade contributors</name>
   </developer>
   <description>
@@ -15,9 +15,10 @@
       Omarchy theme, and delegates launching back to the owning platform.
     </p>
   </description>
-  <launchable type="desktop-id">io.github.omakade.Omakade.desktop</launchable>
+  <launchable type="desktop-id">io.github.tsouth89.Omakade.desktop</launchable>
   <content_rating type="oars-1.1" />
-  <url type="homepage">https://github.com/omakade/omakade</url>
+  <url type="homepage">https://tsouth89.github.io/omakade/</url>
+  <url type="bugtracker">https://github.com/tsouth89/omakade/issues</url>
   <releases>
     <release version="0.5.0" date="2026-08-31" />
     <release version="0.4.0" date="2026-08-31" />

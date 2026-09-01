@@ -23,5 +23,5 @@ jobs:
         run: ctest --preset release
       - name: Validate metadata
         run: |
-          desktop-file-validate packaging/io.github.omakade.Omakade.desktop
-          appstreamcli validate packaging/io.github.omakade.Omakade.metainfo.xml
+          desktop-file-validate packaging/io.github.tsouth89.Omakade.desktop
+          appstreamcli validate packaging/io.github.tsouth89.Omakade.metainfo.xml

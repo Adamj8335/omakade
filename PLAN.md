@@ -2,7 +2,8 @@
 
 Implementation status: M0 through M4 are complete in the 0.5 preview. Steam,
 Lutris, and Heroic import, launch delegation, source filters, and explicit
-duplicate linking are complete. M5 release hardening is next.
+duplicate linking are complete. M5 is the tracked path from the public preview
+to v1.0.
 
 ## Product statement
 
@@ -706,18 +707,42 @@ Gate for each source:
 
 ### M5: Stable release and Omarchy proposal
 
-Status: in progress. Installed documentation, release checks, continuous
-integration, and the Arch package template are complete. Publication awaits a
-real public repository URL, release checksum, compatibility reports, and an
-Omarchy maintainer response path.
+Status: in progress. Work is ordered by user-visible value and each phase has a
+release gate. A phase is only complete when its behavior, migration, and failure
+states are tested.
 
 Deliver:
 
-- Stable Arch package and AUR publication
-- AppStream metadata, support docs, privacy docs, and release process
-- Real-user compatibility report
-- Focused Omarchy Suggestions post
-- Small optional installer/remove integration pull request if invited
+1. **Public foundation**
+   - Public GitHub repository, project homepage, screenshots, topics, and About
+   - Stable application ID, AppStream metadata, support and privacy docs
+   - CI build, tests, metadata validation, and source release process
+2. **Library depth**
+   - Optional attributed metadata, artwork, critic score, and game-length cache
+   - Collections, completion status, tags, and useful smart filters
+   - Correct recent activity and launch history across supported sources
+3. **Trust and control**
+   - Settings for sources, services, cache, appearance, and post-launch behavior
+   - Source health with last scan, discovered paths, and actionable errors
+   - ProtonDB and PCGamingWiki links, controller status, and launch failures
+4. **Distribution**
+   - Reproducible Arch package, clean install, upgrade, and uninstall tests
+   - Checksummed release artifact and short release notes
+   - Real-system compatibility report and focused Omarchy Suggestions post
+   - Small optional install/remove integration pull request if invited
+
+Gate:
+
+- A first-time Omarchy user can install, discover, browse, and launch without
+  setup or a terminal
+- Every supported source reports healthy, unavailable, or failed without silent
+  omissions
+- Core behavior remains useful offline and no optional service blocks startup
+- Existing 0.5 user data survives the v1 database migration
+- Keyboard, mouse, and controller complete the main find-and-play journey
+- Light, dark, blur-disabled, scaled, and ultrawide visual checks pass
+- Clean package install, upgrade, removal, and reinstall pass in a disposable VM
+- No known critical crash, credential exposure, or data-loss issue remains
 
 Gate:
 

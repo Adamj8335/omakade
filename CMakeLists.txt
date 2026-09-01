@@ -89,7 +89,7 @@ qt_add_qml_module(omakade
 
 set_target_properties(omakade PROPERTIES
   OUTPUT_NAME omakade
-  MACOSX_BUNDLE_GUI_IDENTIFIER io.github.omakade.Omakade
+  MACOSX_BUNDLE_GUI_IDENTIFIER io.github.tsouth89.Omakade
   WIN32_EXECUTABLE TRUE
 )
 
@@ -114,13 +114,13 @@ install(TARGETS omakade
   BUNDLE DESTINATION .
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-install(FILES packaging/io.github.omakade.Omakade.desktop
+install(FILES packaging/io.github.tsouth89.Omakade.desktop
   DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
-install(FILES resources/icons/io.github.omakade.Omakade.svg
+install(FILES resources/icons/io.github.tsouth89.Omakade.svg
   DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
 )
-install(FILES packaging/io.github.omakade.Omakade.metainfo.xml
+install(FILES packaging/io.github.tsouth89.Omakade.metainfo.xml
   DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo
 )
 install(FILES LICENSE

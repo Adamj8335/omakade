@@ -36,11 +36,11 @@ int main(int argc, char* argv[]) {
   QGuiApplication::setApplicationDisplayName(QStringLiteral("Omakade"));
   QGuiApplication::setApplicationVersion(QStringLiteral(OMAKADE_VERSION));
   QGuiApplication::setOrganizationName(QStringLiteral("Omakade"));
-  QGuiApplication::setDesktopFileName(QStringLiteral("io.github.omakade.Omakade"));
+  QGuiApplication::setDesktopFileName(QStringLiteral("io.github.tsouth89.Omakade"));
   QQuickStyle::setStyle(QStringLiteral("Basic"));
 
   QGuiApplication application(argc, argv);
-  application.setWindowIcon(QIcon::fromTheme(QStringLiteral("io.github.omakade.Omakade")));
+  application.setWindowIcon(QIcon::fromTheme(QStringLiteral("io.github.tsouth89.Omakade")));
 
   OmarchyTheme theme;
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));

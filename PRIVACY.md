@@ -22,7 +22,8 @@ Omakade retains:
 
 The Steam ID is an account identifier, not a credential. A Steam Web API key
 is stored only through the desktop Secret Service under
-`io.github.omakade.Steam`. It is never written to Omakade's config, database,
+`io.github.tsouth89.Omakade.Steam`. Older preview keys stored as
+`io.github.omakade.Steam` remain readable. The key is never written to Omakade's config, database,
 logs, or process arguments.
 
 ## Network requests

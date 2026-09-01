@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Omakade">
   <defs>
     <linearGradient id="surface" x1="18" y1="10" x2="108" y2="118" gradientUnits="userSpaceOnUse">
       <stop stop-color="#23372b"/>
@@ -16,4 +16,3 @@
   <path d="M84 78 99 93" fill="none" stroke="#f7e8b2" stroke-linecap="round" stroke-width="7"/>
   <circle cx="64" cy="62" r="5" fill="#f7e8b2"/>
 </svg>
-

@@ -22,6 +22,13 @@
 namespace {
 const SecretSchema* steamSchema() {
   static const SecretSchema* schema =
+      secret_schema_new("io.github.tsouth89.Omakade.Steam", SECRET_SCHEMA_NONE, "service",
+                        SECRET_SCHEMA_ATTRIBUTE_STRING, nullptr);
+  return schema;
+}
+
+const SecretSchema* legacySteamSchema() {
+  static const SecretSchema* schema =
       secret_schema_new("io.github.omakade.Steam", SECRET_SCHEMA_NONE, "service",
                         SECRET_SCHEMA_ATTRIBUTE_STRING, nullptr);
   return schema;
@@ -34,6 +41,10 @@ SteamSecretResult lookupSecret(bool includeSecret) {
   GError* error = nullptr;
   gchar* password = secret_password_lookup_sync(steamSchema(), nullptr, &error, "service",
                                                 kSecretService, nullptr);
+  if (error == nullptr && password == nullptr) {
+    password = secret_password_lookup_sync(legacySteamSchema(), nullptr, &error, "service",
+                                           kSecretService, nullptr);
+  }
   SteamSecretResult result;
   if (error != nullptr) {
     result.error = QString::fromUtf8(error->message);
@@ -227,8 +238,13 @@ void SteamAccountService::beginSecretOperation(SecretAction action, const QByteA
                                            "Omakade Steam Web API key", secretValue.constData(),
                                            nullptr, &error, "service", kSecretService, nullptr);
     } else {
-      success = secret_password_clear_sync(steamSchema(), nullptr, &error, "service",
-                                           kSecretService, nullptr);
+      secret_password_clear_sync(steamSchema(), nullptr, &error, "service", kSecretService,
+                                 nullptr);
+      if (error == nullptr) {
+        secret_password_clear_sync(legacySteamSchema(), nullptr, &error, "service",
+                                   kSecretService, nullptr);
+      }
+      success = error == nullptr;
     }
     SteamSecretResult result{.success = success, .found = success, .secret = {}, .error = {}};
     if (error != nullptr) {
