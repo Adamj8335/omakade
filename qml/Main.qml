@@ -1824,7 +1824,7 @@ ApplicationWindow {
                     GlassButton {
                         Layout.fillWidth: true
                         compact: true
-                        text: Preferences.closeAfterLaunch ? "CLOSE AFTER PLAY" : "STAY OPEN"
+                        text: "AUTO-CLOSE: " + (Preferences.closeAfterLaunch ? "ON" : "OFF")
                         selected: Preferences.closeAfterLaunch
                         onClicked: Preferences.closeAfterLaunch = !Preferences.closeAfterLaunch
                     }

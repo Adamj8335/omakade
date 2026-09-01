@@ -20,14 +20,17 @@ set_tests_properties(omakade_qml_smoke PROPERTIES
   TIMEOUT 10
 )
 
-add_test(NAME omakade_controller_navigation COMMAND omakade --controller-navigation-test)
+add_test(NAME omakade_controller_navigation
+  COMMAND omakade --controller-navigation-test --uninstalled-layout-test
+)
 set_tests_properties(omakade_controller_navigation PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 10
 )
 
 add_test(NAME omakade_controller_navigation_tiled
-  COMMAND omakade --controller-navigation-test --owned-layout-test --render-size=820x590
+  COMMAND omakade --controller-navigation-test --owned-layout-test --uninstalled-layout-test
+          --render-size=820x590
 )
 set_tests_properties(omakade_controller_navigation_tiled PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"

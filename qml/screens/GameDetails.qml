@@ -480,6 +480,15 @@ Item {
                                     }
                                 }
                                 GlassButton {
+                                    id: newCollectionButton
+                                    objectName: "newCollectionButton"
+                                    property Item controllerDownTarget:
+                                        insightRefreshButton.visible && insightRefreshButton.enabled
+                                        ? insightRefreshButton
+                                        : achievementSortButton.visible && achievementSortButton.enabled
+                                          ? achievementSortButton
+                                          : achievementRefreshButton.visible && achievementRefreshButton.enabled
+                                            ? achievementRefreshButton : null
                                     compact: true
                                     text: "+ NEW COLLECTION"
                                     onClicked: {
@@ -601,6 +610,7 @@ Item {
 
                 ColumnLayout {
                     id: insightsSection
+                    objectName: "insightsSection"
                     Layout.fillWidth: true
                     Layout.topMargin: 12
                     spacing: 10
@@ -641,6 +651,14 @@ Item {
                         }
                         Item { Layout.fillWidth: true }
                         GlassButton {
+                            id: insightRefreshButton
+                            objectName: "insightRefreshButton"
+                            property Item controllerUpTarget: newCollectionButton
+                            property Item controllerDownTarget:
+                                achievementSortButton.visible && achievementSortButton.enabled
+                                ? achievementSortButton
+                                : achievementRefreshButton.visible && achievementRefreshButton.enabled
+                                  ? achievementRefreshButton : null
                             compact: true
                             text: Insights && Insights.configured
                                   ? (Insights.busy ? "REFRESHING" : "REFRESH")
@@ -720,6 +738,8 @@ Item {
                 }
 
                 ColumnLayout {
+                    id: achievementListSection
+                    objectName: "achievementListSection"
                     Layout.fillWidth: true
                     Layout.topMargin: 12
                     spacing: 9
@@ -779,6 +799,17 @@ Item {
                         }
                         Item { Layout.fillWidth: true }
                         GlassButton {
+                            id: achievementSortButton
+                            objectName: "achievementSortButton"
+                            property Item controllerUpTarget:
+                                insightRefreshButton.visible && insightRefreshButton.enabled
+                                ? insightRefreshButton : newCollectionButton
+                            property Item controllerDownTarget:
+                                achievementRefreshButton.visible && achievementRefreshButton.enabled
+                                ? achievementRefreshButton : null
+                            property Item controllerRightTarget:
+                                achievementRefreshButton.visible && achievementRefreshButton.enabled
+                                ? achievementRefreshButton : null
                             visible: Achievements.total > 1
                             compact: true
                             text: Achievements.sortMode === 0
@@ -786,6 +817,16 @@ Item {
                             onClicked: Achievements.sortMode = (Achievements.sortMode + 1) % 2
                         }
                         GlassButton {
+                            id: achievementRefreshButton
+                            objectName: "achievementRefreshButton"
+                            property Item controllerUpTarget:
+                                achievementSortButton.visible && achievementSortButton.enabled
+                                ? achievementSortButton
+                                : insightRefreshButton.visible && insightRefreshButton.enabled
+                                  ? insightRefreshButton : newCollectionButton
+                            property Item controllerLeftTarget:
+                                achievementSortButton.visible && achievementSortButton.enabled
+                                ? achievementSortButton : null
                             visible: SteamAccount !== null
                             compact: true
                             text: SteamAccount && SteamAccount.hasApiKey

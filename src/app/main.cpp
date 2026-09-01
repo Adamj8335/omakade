@@ -228,7 +228,7 @@ int main(int argc, char* argv[]) {
     qCritical() << "Omakade failed to create its QML root object";
     return EXIT_FAILURE;
   }
-  if (uninstalledLayoutTest) {
+  if (uninstalledLayoutTest && !navigationTest) {
     QMetaObject::invokeMethod(engine.rootObjects().constFirst(), "openGame",
                               Q_ARG(QVariant, QVariant(0)));
   }
@@ -515,6 +515,72 @@ int main(int argc, char* argv[]) {
                                                   fail(QStringLiteral(
                                                       "Controller Left did not move left on "
                                                       "game details"));
+                                                  return;
+                                                }
+                                                auto* newCollection =
+                                                    quickWindow->findChild<QQuickItem*>(
+                                                        QStringLiteral("newCollectionButton"));
+                                                auto* insightsSection =
+                                                    quickWindow->findChild<QQuickItem*>(
+                                                        QStringLiteral("insightsSection"));
+                                                auto* insightRefresh =
+                                                    quickWindow->findChild<QQuickItem*>(
+                                                        QStringLiteral("insightRefreshButton"));
+                                                auto* achievementSection =
+                                                    quickWindow->findChild<QQuickItem*>(
+                                                        QStringLiteral("achievementListSection"));
+                                                auto* achievementSort =
+                                                    quickWindow->findChild<QQuickItem*>(
+                                                        QStringLiteral("achievementSortButton"));
+                                                auto* achievementRefresh =
+                                                    quickWindow->findChild<QQuickItem*>(
+                                                        QStringLiteral("achievementRefreshButton"));
+                                                if (newCollection == nullptr ||
+                                                    insightsSection == nullptr ||
+                                                    insightRefresh == nullptr ||
+                                                    achievementSection == nullptr ||
+                                                    achievementSort == nullptr ||
+                                                    achievementRefresh == nullptr) {
+                                                  fail(QStringLiteral(
+                                                      "Controller navigation test could not find "
+                                                      "detail sections"));
+                                                  return;
+                                                }
+                                                insightsSection->setVisible(true);
+                                                insightRefresh->setVisible(true);
+                                                insightRefresh->setEnabled(true);
+                                                achievementSection->setVisible(true);
+                                                achievementSort->setVisible(true);
+                                                achievementSort->setEnabled(true);
+                                                achievementRefresh->setVisible(true);
+                                                achievementRefresh->setEnabled(true);
+                                                newCollection->forceActiveFocus();
+                                                controller.focusDirectionRequested(Qt::Key_Down);
+                                                if (!insightRefresh->hasActiveFocus()) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Down left the detail content "
+                                                      "flow after collections"));
+                                                  return;
+                                                }
+                                                controller.focusDirectionRequested(Qt::Key_Down);
+                                                if (!achievementSort->hasActiveFocus()) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Down did not reach achievement "
+                                                      "sorting"));
+                                                  return;
+                                                }
+                                                controller.focusDirectionRequested(Qt::Key_Down);
+                                                if (!achievementRefresh->hasActiveFocus()) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Down did not reach Steam "
+                                                      "achievement refresh"));
+                                                  return;
+                                                }
+                                                controller.focusDirectionRequested(Qt::Key_Up);
+                                                if (!achievementSort->hasActiveFocus()) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Up did not reverse the detail "
+                                                      "content flow"));
                                                   return;
                                                 }
                                                 controller.keyRequested(Qt::Key_Escape,

@@ -1619,6 +1619,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   const QString path = directory.path() + QStringLiteral("/config.toml");
   {
     AppSettings settings(path);
+    QVERIFY(!settings.closeAfterLaunch());
     settings.setReducedMotion(true);
     settings.setArtworkCacheLimitMb(512);
     settings.setSteamId(QStringLiteral("76561198000000000"));
