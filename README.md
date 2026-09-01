@@ -83,6 +83,14 @@ sudo pacman -U ./omakade-1.3.0-1-x86_64.pkg.tar.zst
 
 Launch Omakade from the application launcher or run `omakade` in a terminal.
 
+### Include uninstalled Steam games
+
+Omakade shows installed games by default. To include the rest of your Steam
+library, open Settings, save your Steam ID and Web API key, then select **Sync
+owned Steam library**. Your Steam Game Details must be public. After syncing,
+use **All Games** or **Ready to Install** in the library. Installation is handed
+off to Steam.
+
 Omakade keeps its local library and settings when the package is upgraded or
 removed. The owning launchers remain responsible for games, accounts, updates,
 cloud saves, DRM, and compatibility tools.

@@ -838,7 +838,11 @@ ApplicationWindow {
                 }
                 Text {
                     visible: root.width >= 1100
-                    text: libraryView.count + " GAMES"
+                    text: libraryView.count
+                          + (DemoMode ? " GAMES"
+                             : Library.availability === 0 ? " INSTALLED"
+                             : Library.availability === 2 ? " READY TO INSTALL"
+                             : " GAMES")
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
                     font.pixelSize: 9

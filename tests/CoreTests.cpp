@@ -223,6 +223,7 @@ private slots:
   void steamAchievementApiClassifiesFailures();
   void steamOwnedGamesApiParsesLibraryAndPrivacy();
   void steamOwnedGamesRemainOptionalAndFilterByInstallation();
+  void steamOwnedLibraryHandlesTwoThousandGames();
   void steamLauncherBuildsSafeUrls();
   void lutrisScannerImportsOnlyLaunchableGames();
   void lutrisModelIsRepeatableAndPreservesLocalState();
@@ -784,6 +785,55 @@ void CoreTests::steamOwnedGamesRemainOptionalAndFilterByInstallation() {
   library.setAvailability(LibraryFilterModel::Availability::ReadyToInstall);
   QCOMPARE(library.rowCount(), 1);
   QCOMPARE(library.get(0).value(QStringLiteral("appId")).toString(), QStringLiteral("40"));
+}
+
+void CoreTests::steamOwnedLibraryHandlesTwoThousandGames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/library.sqlite3");
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  const QString steamId = QStringLiteral("76561198000000000");
+  settings.setSteamId(steamId);
+  {
+    SteamGameModel schema(database, &settings);
+  }
+
+  const QString connection = QStringLiteral("large-owned-games-fixture");
+  {
+    QSqlDatabase setup = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+    setup.setDatabaseName(database);
+    QVERIFY(setup.open());
+    QVERIFY(setup.transaction());
+    QSqlQuery gameQuery(setup);
+    gameQuery.prepare(QStringLiteral("INSERT INTO games(app_id, title) VALUES(?, ?)"));
+    QSqlQuery ownedQuery(setup);
+    ownedQuery.prepare(
+        QStringLiteral("INSERT INTO owned_games(steam_id, app_id, playtime_minutes, synced_at) "
+                       "VALUES(?, ?, ?, 1700000000)"));
+    for (int index = 1; index <= 2000; ++index) {
+      const QString appId = QString::number(index);
+      gameQuery.bindValue(0, appId);
+      gameQuery.bindValue(1, QStringLiteral("Owned Game %1").arg(index));
+      QVERIFY(gameQuery.exec());
+      ownedQuery.bindValue(0, steamId);
+      ownedQuery.bindValue(1, appId);
+      ownedQuery.bindValue(2, index);
+      QVERIFY(ownedQuery.exec());
+    }
+    QVERIFY(setup.commit());
+    setup.close();
+  }
+  QSqlDatabase::removeDatabase(connection);
+
+  SteamGameModel games(database, &settings);
+  QCOMPARE(games.rowCount(), 2000);
+  LibraryFilterModel library;
+  library.setSourceModel(&games);
+  QCOMPARE(library.rowCount(), 0);
+  library.setAvailability(LibraryFilterModel::Availability::AllGames);
+  QCOMPARE(library.rowCount(), 2000);
+  library.setAvailability(LibraryFilterModel::Availability::ReadyToInstall);
+  QCOMPARE(library.rowCount(), 2000);
 }
 
 void CoreTests::steamLauncherBuildsSafeUrls() {

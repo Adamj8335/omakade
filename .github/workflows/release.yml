@@ -19,7 +19,7 @@ jobs:
           pacman -Syu --noconfirm --needed
           appstream base-devel cmake desktop-file-utils git github-cli libsecret
           ninja pkgconf qt6-base qt6-declarative qt6-wayland sdl3
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Check release version
@@ -75,7 +75,7 @@ jobs:
             CHANGELOG.md > RELEASE_NOTES.md
           test -s RELEASE_NOTES.md
       - name: Attest release artifacts
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: SHA256SUMS
       - name: Publish release
