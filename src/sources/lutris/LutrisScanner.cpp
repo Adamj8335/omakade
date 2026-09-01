@@ -1,5 +1,7 @@
 #include "sources/lutris/LutrisScanner.h"
 
+#include "sources/FlatpakInstall.h"
+
 #include <QDir>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -43,11 +45,21 @@ QStringList LutrisScanner::discoverDatabases() {
   };
   candidates.removeDuplicates();
 
+  // A leftover database from a removed native or Flatpak Lutris would collide with the live
+  // one on bare row ids and could not launch anything, so only keep it when its launcher exists.
+  const bool nativeInstalled = !QStandardPaths::findExecutable(QStringLiteral("lutris")).isEmpty();
+  const bool flatpakInstalled = flatpakAppInstalled(QStringLiteral("net.lutris.Lutris"));
   QStringList found;
   for (const QString& path : candidates) {
-    if (QFileInfo(path).isFile()) {
-      found.append(path);
+    if (!QFileInfo(path).isFile()) {
+      continue;
     }
+    const bool flatpak = path.contains(QStringLiteral("/.var/app/net.lutris.Lutris/"));
+    if ((flatpak && !flatpakInstalled && nativeInstalled) ||
+        (!flatpak && !nativeInstalled && flatpakInstalled)) {
+      continue;
+    }
+    found.append(path);
   }
   return found;
 }

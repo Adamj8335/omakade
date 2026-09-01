@@ -23,6 +23,12 @@
   re-requesting covers Steam does not have.
 - Kept the highlighted card and the open game details on the same game when a
   background rescan rebuilds the library.
+- Added games sideloaded into Heroic, plus Heroic playtime and last-played activity.
+- Resolved the RetroArch Flatpak's sandbox paths so its playlists, thumbnails, and
+  playtime logs are found, and matched playtime logs by the core's short name and
+  archived content name.
+- Ignored a leftover Lutris database whose native or Flatpak launcher is no longer
+  installed, and checked Flatpak launchers without blocking the interface.
 - Prevented space-separated screenshot options from creating an invisible main instance.
 - Pinned third-party workflow actions and enabled monthly dependency updates.
 - Added end-to-end navigation coverage and owned-library regression tests.

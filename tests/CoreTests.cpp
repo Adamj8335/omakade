@@ -155,6 +155,19 @@ void createHeroicFixture(const QString& root) {
   writeFile(
       root + QStringLiteral("/nile_config/nile/library.json"),
       R"([{"product":{"id":"amazon-game","title":"Amazon Trail","productDetail":{"iconUrl":"","details":{"backgroundUrl1":""}}}}])");
+
+  writeFile(
+      root + QStringLiteral("/sideload_apps/library.json"),
+      R"({"games":[{"runner":"sideload","app_name":"j661Z9rpxqYRZSp45Jh92i","title":"Scott Pilgrim EX","install":{"executable":"/home/user/Games/Scott/Game.exe","platform":"Windows","is_dlc":false},"folder_name":"/home/user/Games/Scott","art_cover":"https://cdn2.steamgriddb.com/grid/cover.png","is_installed":true,"art_square":"https://cdn2.steamgriddb.com/grid/square.png"},{"runner":"sideload","app_name":"removedApp","title":"Removed","install":{"executable":"","platform":"Windows","is_dlc":false},"folder_name":"","is_installed":false}]})");
+  writeFile(root + QStringLiteral("/images-cache/") +
+                QString::fromLatin1(
+                    QCryptographicHash::hash("https://cdn2.steamgriddb.com/grid/square.png",
+                                             QCryptographicHash::Sha256)
+                        .toHex()),
+            "sideload cover");
+  writeFile(
+      root + QStringLiteral("/store/timestamp.json"),
+      R"({"EpicApp":{"firstPlayed":"2026-08-01T20:00:00.000Z","lastPlayed":"2026-08-30T21:15:00.000Z","totalPlayed":125}})");
 }
 
 void createFaugusFixture(const QString& root) {
@@ -247,6 +260,7 @@ private slots:
   void launcherRefreshesRunAsynchronously();
   void absentLaunchersPersistEmptySourcePaths();
   void retroArchScannerImportsPlaylistsArtworkAndRuntime();
+  void retroArchScannerResolvesFlatpakPathsAndCoreNames();
   void retroArchModelIsRepeatableAndPreservesLocalState();
   void malformedRetroArchDataDoesNotReplaceCachedGames();
   void retroArchLauncherBuildsSafeCommands();
@@ -1241,14 +1255,34 @@ void CoreTests::heroicScannerImportsEpicGogAndAmazon() {
 
   const HeroicScanResult result = HeroicScanner::scan({root});
   QVERIFY(!result.incomplete);
-  QCOMPARE(result.games.size(), 3);
+  QCOMPARE(result.games.size(), 4);
   QCOMPARE(result.games.at(0).runner, QStringLiteral("legendary"));
   QCOMPARE(result.games.at(0).title, QStringLiteral("Epic Voyage"));
   QVERIFY(result.games.at(0).coverPath.endsWith(QStringLiteral("EpicApp.jpg")));
+  QCOMPARE(result.games.at(0).playtimeMinutes, 125);
+  QVERIFY(result.games.at(0).lastPlayed > 0);
   QCOMPARE(result.games.at(1).runner, QStringLiteral("gog"));
   QCOMPARE(result.games.at(1).title, QStringLiteral("GOG Quest"));
+  QCOMPARE(result.games.at(1).playtimeMinutes, 0);
   QCOMPARE(result.games.at(2).runner, QStringLiteral("nile"));
   QCOMPARE(result.games.at(2).title, QStringLiteral("Amazon Trail"));
+  // Sideloaded games come from sideload_apps/library.json; uninstalled entries stay out.
+  QCOMPARE(result.games.at(3).runner, QStringLiteral("sideload"));
+  QCOMPARE(result.games.at(3).appId, QStringLiteral("j661Z9rpxqYRZSp45Jh92i"));
+  QCOMPARE(result.games.at(3).title, QStringLiteral("Scott Pilgrim EX"));
+  QCOMPARE(result.games.at(3).installPath, QStringLiteral("/home/user/Games/Scott"));
+  QVERIFY(result.games.at(3).coverPath.contains(QStringLiteral("/images-cache/")));
+
+  QTemporaryDir sideloadOnly;
+  QVERIFY(sideloadOnly.isValid());
+  const QString sideloadRoot = sideloadOnly.path() + QStringLiteral("/heroic");
+  writeFile(
+      sideloadRoot + QStringLiteral("/sideload_apps/library.json"),
+      R"({"games":[{"runner":"sideload","app_name":"onlyGame","title":"Only Game","install":{"executable":"/games/only/game.exe","is_dlc":false},"folder_name":"","is_installed":true}]})");
+  const HeroicScanResult sideload = HeroicScanner::scan({sideloadRoot});
+  QCOMPARE(sideload.roots, QStringList({sideloadRoot}));
+  QCOMPARE(sideload.games.size(), 1);
+  QCOMPARE(sideload.games.at(0).installPath, QStringLiteral("/games/only"));
 }
 
 void CoreTests::heroicModelIsRepeatableAndPreservesLocalState() {
@@ -1258,13 +1292,17 @@ void CoreTests::heroicModelIsRepeatableAndPreservesLocalState() {
   createHeroicFixture(root);
   HeroicGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
   model.refreshFromRoots({root});
-  QCOMPARE(model.rowCount(), 3);
+  QCOMPARE(model.rowCount(), 4);
   QCOMPARE(model.detectedPaths(), QStringList({root}));
   QVERIFY(model.lastScan() > 0);
+  QCOMPARE(model.data(model.index(1), GameRoles::AppId).toString(), QStringLiteral("EpicApp"));
+  QCOMPARE(model.data(model.index(1), GameRoles::Hours).toInt(), 2);
+  QVERIFY(model.data(model.index(1), GameRoles::Recent).toBool());
+  QVERIFY(!model.data(model.index(0), GameRoles::Recent).toBool());
   model.toggleFavorite(0);
   model.toggleHidden(0);
   model.refreshFromRoots({root});
-  QCOMPARE(model.rowCount(), 3);
+  QCOMPARE(model.rowCount(), 4);
   QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
   QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
   HeroicGameModel reloaded(directory.path() + QStringLiteral("/omakade.sqlite3"));
@@ -1279,10 +1317,10 @@ void CoreTests::malformedHeroicDataDoesNotReplaceCachedGames() {
   createHeroicFixture(root);
   HeroicGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
   model.refreshFromRoots({root});
-  QCOMPARE(model.rowCount(), 3);
+  QCOMPARE(model.rowCount(), 4);
   writeFile(root + QStringLiteral("/legendaryConfig/legendary/installed.json"), "not json");
   model.refreshFromRoots({root});
-  QCOMPARE(model.rowCount(), 3);
+  QCOMPARE(model.rowCount(), 4);
   QVERIFY(model.statusText().startsWith(QStringLiteral("Heroic scan interrupted")));
 }
 
@@ -1301,6 +1339,10 @@ void CoreTests::heroicLauncherBuildsSafeCommands() {
                .isValid());
   QVERIFY(!GameLauncher::heroicCommand(QStringLiteral("good"), QStringLiteral("unknown"), false)
                .isValid());
+  const LaunchCommand sideload = GameLauncher::heroicCommand(
+      QStringLiteral("j661Z9rpxqYRZSp45Jh92i"), QStringLiteral("sideload"), false);
+  QVERIFY(sideload.isValid());
+  QVERIFY(sideload.arguments.constLast().contains(QStringLiteral("runner=sideload")));
 }
 
 void CoreTests::faugusScannerImportsLaunchableGamesAndArtwork() {
@@ -1432,7 +1474,7 @@ void CoreTests::launcherRefreshesRunAsynchronously() {
   QCOMPARE(heroic.statusText(), QStringLiteral("Scanning Heroic library"));
   QCOMPARE(faugus.statusText(), QStringLiteral("Scanning Faugus library"));
   QTRY_COMPARE_WITH_TIMEOUT(lutris.rowCount(), 1, 3000);
-  QTRY_COMPARE_WITH_TIMEOUT(heroic.rowCount(), 3, 3000);
+  QTRY_COMPARE_WITH_TIMEOUT(heroic.rowCount(), 4, 3000);
   QTRY_COMPARE_WITH_TIMEOUT(faugus.rowCount(), 3, 3000);
 }
 
@@ -1521,6 +1563,63 @@ void CoreTests::retroArchScannerImportsPlaylistsArtworkAndRuntime() {
                    [](const auto& game) { return game.title == QStringLiteral("Sonic & Tails"); });
   QVERIFY(safeSonic != hostileRuntime.games.cend());
   QCOMPARE(safeSonic->playtimeSeconds, 0);
+}
+
+void CoreTests::retroArchScannerResolvesFlatpakPathsAndCoreNames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString appDirectory =
+      directory.path() + QStringLiteral("/.var/app/org.libretro.RetroArch");
+  const QString root = appDirectory + QStringLiteral("/config/retroarch");
+  const QString archive = directory.path() + QStringLiteral("/roms/Sonic Pack.zip");
+  const QString snes = directory.path() + QStringLiteral("/roms/Yoshi`s Island.sfc");
+  writeFile(archive, "zip");
+  writeFile(snes, "rom");
+  // The Flatpak writes sandbox paths into its config; they only exist inside the sandbox.
+  writeFile(root + QStringLiteral("/retroarch.cfg"),
+            "playlist_directory = \"/var/config/retroarch/playlists\"\n"
+            "thumbnails_directory = \"/var/config/retroarch/thumbnails\"\n"
+            "runtime_log_directory = \"/var/config/retroarch/playlists/logs\"\n"
+            "libretro_info_path = \"/var/config/retroarch/cores\"\n");
+  writeFile(
+      root + QStringLiteral("/cores/genesis_plus_gx_libretro.info"),
+      "display_name = \"Sega - MS/GG/MD/CD (Genesis Plus GX)\"\ncorename = \"Genesis Plus GX\"\n");
+  writeFile(
+      root + QStringLiteral("/playlists/Sega - Mega Drive.lpl"),
+      QStringLiteral(
+          R"json({"version":"1.5","default_core_path":"DETECT","default_core_name":"DETECT","items":[{"path":"%1#Sonic.bin","label":"Sonic","core_path":"/var/config/retroarch/cores/genesis_plus_gx_libretro.so","core_name":"Sega - MS/GG/MD/CD (Genesis Plus GX)","db_name":"Sega - Mega Drive.lpl"}]})json")
+          .arg(archive)
+          .toUtf8());
+  writeFile(
+      root + QStringLiteral("/playlists/Nintendo - SNES.lpl"),
+      QStringLiteral(
+          R"json({"version":"1.5","default_core_path":"DETECT","default_core_name":"DETECT","items":[{"path":"%1","label":"Yoshi`s Island","core_path":"/var/config/retroarch/cores/snes9x_libretro.so","core_name":"Nintendo - SNES / SFC (Snes9x)","db_name":"Nintendo - SNES.lpl"}]})json")
+          .arg(snes)
+          .toUtf8());
+  writeFile(root + QStringLiteral("/playlists/logs/Genesis Plus GX/Sonic.lrtl"),
+            R"({"version":"1.0","runtime":"01:00:00","last_played":"2026-08-30 19:45:10"})");
+  writeFile(root + QStringLiteral("/playlists/logs/Snes9x/Yoshi`s Island.lrtl"),
+            R"({"version":"1.0","runtime":"02:00:00","last_played":"2026-08-30 19:45:10"})");
+  writeFile(root + QStringLiteral("/thumbnails/Nintendo - SNES/Named_Boxarts/Yoshi_s Island.png"),
+            "cover");
+
+  QCOMPARE(RetroArchScanner::discoverRoots().contains(root), false);
+  const RetroArchScanResult result = RetroArchScanner::scan({root});
+  QVERIFY(!result.incomplete);
+  QCOMPARE(result.roots, QStringList({root}));
+  QCOMPARE(result.games.size(), 2);
+  const auto sonic = std::find_if(result.games.cbegin(), result.games.cend(), [](const auto& game) {
+    return game.title == QStringLiteral("Sonic");
+  });
+  QVERIFY(sonic != result.games.cend());
+  QVERIFY(sonic->flatpak);
+  QCOMPARE(sonic->playtimeSeconds, 3600);
+  const auto yoshi = std::find_if(result.games.cbegin(), result.games.cend(), [](const auto& game) {
+    return game.title == QStringLiteral("Yoshi`s Island");
+  });
+  QVERIFY(yoshi != result.games.cend());
+  QCOMPARE(yoshi->playtimeSeconds, 7200);
+  QVERIFY(yoshi->coverPath.endsWith(QStringLiteral("Yoshi_s Island.png")));
 }
 
 void CoreTests::retroArchModelIsRepeatableAndPreservesLocalState() {

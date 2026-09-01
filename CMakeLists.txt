@@ -55,6 +55,7 @@ add_library(omakade_core STATIC
   src/metadata/IgdbApi.h
   src/metadata/GameInsightsService.cpp
   src/metadata/GameInsightsService.h
+  src/sources/FlatpakInstall.h
   src/sources/steam/SteamScanner.cpp
   src/sources/steam/SteamScanner.h
   src/sources/steam/ValveKeyValues.cpp

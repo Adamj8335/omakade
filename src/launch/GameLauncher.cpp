@@ -1,6 +1,7 @@
 #include "launch/GameLauncher.h"
 
 #include "launch/SteamLauncher.h"
+#include "sources/FlatpakInstall.h"
 
 #include <QDesktopServices>
 #include <QFileInfo>
@@ -19,7 +20,7 @@ bool validHeroicTarget(const QString& id, const QString& runner) {
   static const QRegularExpression appId(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$"));
   return appId.match(id).hasMatch() &&
          (runner == QStringLiteral("legendary") || runner == QStringLiteral("gog") ||
-          runner == QStringLiteral("nile"));
+          runner == QStringLiteral("nile") || runner == QStringLiteral("sideload"));
 }
 
 bool validFaugusId(const QString& id) {
@@ -329,18 +330,7 @@ bool GameLauncher::launchRetroArch(const QString& contentPath, const QString& co
 }
 
 QString GameLauncher::flatpakError(const QString& appId, const QString& launcherName) const {
-  QProcess process;
-  process.start(QStringLiteral("flatpak"),
-                {QStringLiteral("info"), QStringLiteral("--show-ref"), appId});
-  if (!process.waitForStarted(1000)) {
-    return QStringLiteral("Flatpak could not be started.");
-  }
-  if (!process.waitForFinished(2500)) {
-    process.kill();
-    process.waitForFinished(1000);
-    return QStringLiteral("Flatpak did not respond while checking %1.").arg(launcherName);
-  }
-  return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0
+  return flatpakAppInstalled(appId)
              ? QString{}
              : QStringLiteral("The %1 Flatpak is not installed.").arg(launcherName);
 }

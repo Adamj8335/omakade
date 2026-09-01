@@ -1,6 +1,7 @@
 #include "sources/heroic/HeroicScanner.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -16,6 +17,11 @@ struct Metadata {
   QString title;
   QString coverUrl;
   QString heroUrl;
+};
+
+struct Activity {
+  int playtimeMinutes = 0;
+  qint64 lastPlayed = 0;
 };
 
 QJsonDocument readJson(const QString& path, HeroicScanResult* result, bool required = true) {
@@ -64,6 +70,31 @@ QHash<QString, Metadata> readMetadata(const QString& root, const QString& filena
   return metadata;
 }
 
+// Heroic records play sessions in store/timestamp.json as
+// { "<appName>": { "firstPlayed": ISO, "lastPlayed": ISO, "totalPlayed": minutes } }.
+QHash<QString, Activity> readActivity(const QString& root, HeroicScanResult* result) {
+  QHash<QString, Activity> activity;
+  const QJsonObject entries =
+      readJson(root + QStringLiteral("/store/timestamp.json"), result, false).object();
+  for (auto iterator = entries.begin(); iterator != entries.end(); ++iterator) {
+    const QJsonObject entry = iterator.value().toObject();
+    Activity value;
+    const double minutes = entry.value(QStringLiteral("totalPlayed")).toDouble();
+    value.playtimeMinutes =
+        minutes > 0 && minutes < 60.0 * 24 * 365 * 200 ? static_cast<int>(minutes) : 0;
+    const QString played = entry.value(QStringLiteral("lastPlayed")).toString();
+    QDateTime lastPlayed = QDateTime::fromString(played, Qt::ISODateWithMs);
+    if (!lastPlayed.isValid()) {
+      lastPlayed = QDateTime::fromString(played, Qt::ISODate);
+    }
+    if (lastPlayed.isValid()) {
+      value.lastPlayed = lastPlayed.toSecsSinceEpoch();
+    }
+    activity.insert(iterator.key(), value);
+  }
+  return activity;
+}
+
 QString cachedArtwork(const QString& root, const QString& appId, const QString& url) {
   if (!appId.isEmpty()) {
     const QString iconBase = root + QStringLiteral("/icons/") + appId;
@@ -86,7 +117,8 @@ QString cachedArtwork(const QString& root, const QString& appId, const QString& 
 
 void appendGame(HeroicScanResult* result, QSet<QString>* keys, const QString& root,
                 const QString& runner, const QString& appId, const QString& fallbackTitle,
-                const QString& installPath, const Metadata& metadata, bool flatpak) {
+                const QString& installPath, const Metadata& metadata, const Activity& activity,
+                bool flatpak) {
   const QString key = runner + QLatin1Char(':') + appId;
   const QString title = metadata.title.isEmpty() ? fallbackTitle : metadata.title;
   if (appId.isEmpty() || title.trimmed().isEmpty() || keys->contains(key)) {
@@ -99,12 +131,14 @@ void appendGame(HeroicScanResult* result, QSet<QString>* keys, const QString& ro
                         .installPath = installPath,
                         .coverPath = cachedArtwork(root, appId, metadata.coverUrl),
                         .heroPath = cachedArtwork(root, QString{}, metadata.heroUrl),
+                        .playtimeMinutes = activity.playtimeMinutes,
+                        .lastPlayed = activity.lastPlayed,
                         .flatpak = flatpak});
   keys->insert(key);
 }
 
-void scanLegendary(const QString& root, bool flatpak, HeroicScanResult* result,
-                   QSet<QString>* keys) {
+void scanLegendary(const QString& root, bool flatpak, const QHash<QString, Activity>& activity,
+                   HeroicScanResult* result, QSet<QString>* keys) {
   QString path = root + QStringLiteral("/legendaryConfig/legendary/installed.json");
   if (!QFileInfo(path).isFile()) {
     path = QFileInfo(root).dir().absoluteFilePath(QStringLiteral("legendary/installed.json"));
@@ -124,11 +158,12 @@ void scanLegendary(const QString& root, bool flatpak, HeroicScanResult* result,
     appendGame(result, keys, root, QStringLiteral("legendary"), appId,
                game.value(QStringLiteral("title")).toString(appId),
                game.value(QStringLiteral("install_path")).toString(), metadata.value(appId),
-               flatpak);
+               activity.value(appId), flatpak);
   }
 }
 
-void scanGog(const QString& root, bool flatpak, HeroicScanResult* result, QSet<QString>* keys) {
+void scanGog(const QString& root, bool flatpak, const QHash<QString, Activity>& activity,
+             HeroicScanResult* result, QSet<QString>* keys) {
   const QString path = root + QStringLiteral("/gog_store/installed.json");
   if (!QFileInfo(path).isFile()) {
     return;
@@ -151,11 +186,12 @@ void scanGog(const QString& root, bool flatpak, HeroicScanResult* result, QSet<Q
       title = info.object().value(QStringLiteral("name")).toString(title);
     }
     appendGame(result, keys, root, QStringLiteral("gog"), appId, title, installPath,
-               metadata.value(appId), flatpak);
+               metadata.value(appId), activity.value(appId), flatpak);
   }
 }
 
-void scanNile(const QString& root, bool flatpak, HeroicScanResult* result, QSet<QString>* keys) {
+void scanNile(const QString& root, bool flatpak, const QHash<QString, Activity>& activity,
+              HeroicScanResult* result, QSet<QString>* keys) {
   const QString base = root + QStringLiteral("/nile_config/nile");
   const QString path = base + QStringLiteral("/installed.json");
   if (!QFileInfo(path).isFile()) {
@@ -181,7 +217,41 @@ void scanNile(const QString& root, bool flatpak, HeroicScanResult* result, QSet<
     const QJsonObject game = value.toObject();
     const QString appId = game.value(QStringLiteral("id")).toVariant().toString();
     appendGame(result, keys, root, QStringLiteral("nile"), appId, appId,
-               game.value(QStringLiteral("path")).toString(), metadata.value(appId), flatpak);
+               game.value(QStringLiteral("path")).toString(), metadata.value(appId),
+               activity.value(appId), flatpak);
+  }
+}
+
+// Games added by hand live in sideload_apps/library.json. Unlike the store files this list
+// keeps uninstalled entries, so is_installed must be honoured.
+void scanSideload(const QString& root, bool flatpak, const QHash<QString, Activity>& activity,
+                  HeroicScanResult* result, QSet<QString>* keys) {
+  const QString path = root + QStringLiteral("/sideload_apps/library.json");
+  if (!QFileInfo(path).isFile()) {
+    return;
+  }
+  const QJsonArray games =
+      readJson(path, result, false).object().value(QStringLiteral("games")).toArray();
+  for (const QJsonValue& value : games) {
+    const QJsonObject game = value.toObject();
+    const QJsonObject install = game.value(QStringLiteral("install")).toObject();
+    const QString runner =
+        game.value(QStringLiteral("runner")).toString(QStringLiteral("sideload"));
+    if (runner != QStringLiteral("sideload") ||
+        !game.value(QStringLiteral("is_installed")).toBool() ||
+        install.value(QStringLiteral("is_dlc")).toBool()) {
+      continue;
+    }
+    const QString appId = game.value(QStringLiteral("app_name")).toString();
+    QString installPath = game.value(QStringLiteral("folder_name")).toString();
+    if (installPath.isEmpty()) {
+      installPath = QFileInfo(install.value(QStringLiteral("executable")).toString()).path();
+    }
+    const Metadata metadata{.title = game.value(QStringLiteral("title")).toString(),
+                            .coverUrl = game.value(QStringLiteral("art_square")).toString(),
+                            .heroUrl = game.value(QStringLiteral("art_cover")).toString()};
+    appendGame(result, keys, root, runner, appId, appId, installPath, metadata,
+               activity.value(appId), flatpak);
   }
 }
 } // namespace
@@ -211,15 +281,18 @@ HeroicScanResult HeroicScanner::scan(const QStringList& roots) {
     }
     const bool flatpak = root.contains(QStringLiteral("/.var/app/com.heroicgameslauncher.hgl/"));
     const int before = result.games.size();
-    scanLegendary(root, flatpak, &result, &keys);
-    scanGog(root, flatpak, &result, &keys);
-    scanNile(root, flatpak, &result, &keys);
+    const QHash<QString, Activity> activity = readActivity(root, &result);
+    scanLegendary(root, flatpak, activity, &result, &keys);
+    scanGog(root, flatpak, activity, &result, &keys);
+    scanNile(root, flatpak, activity, &result, &keys);
+    scanSideload(root, flatpak, activity, &result, &keys);
     const bool hasLegendary =
         QFileInfo(root + QStringLiteral("/legendaryConfig/legendary/installed.json")).isFile() ||
         QFileInfo(root).dir().exists(QStringLiteral("legendary/installed.json"));
     if (result.games.size() > before || hasLegendary ||
         QFileInfo(root + QStringLiteral("/gog_store/installed.json")).isFile() ||
-        QFileInfo(root + QStringLiteral("/nile_config/nile/installed.json")).isFile()) {
+        QFileInfo(root + QStringLiteral("/nile_config/nile/installed.json")).isFile() ||
+        QFileInfo(root + QStringLiteral("/sideload_apps/library.json")).isFile()) {
       result.roots.append(root);
     }
   }

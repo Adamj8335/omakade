@@ -32,6 +32,9 @@ QString storeName(const QString& runner) {
   if (runner == QStringLiteral("nile")) {
     return QStringLiteral("Amazon");
   }
+  if (runner == QStringLiteral("sideload")) {
+    return QStringLiteral("Sideload");
+  }
   return QStringLiteral("Heroic");
 }
 } // namespace
@@ -180,8 +183,21 @@ bool HeroicGameModel::ensureSchema() {
       hasPaths = hasPaths || query.value(1).toString() == QStringLiteral("paths");
     }
   }
-  return hasPaths || query.exec(QStringLiteral(
-                         "ALTER TABLE source_state ADD COLUMN paths TEXT NOT NULL DEFAULT ''"));
+  if (!hasPaths && !query.exec(QStringLiteral(
+                       "ALTER TABLE source_state ADD COLUMN paths TEXT NOT NULL DEFAULT ''"))) {
+    return false;
+  }
+  bool hasPlaytime = false;
+  if (query.exec(QStringLiteral("PRAGMA table_info(heroic_games)"))) {
+    while (query.next()) {
+      hasPlaytime = hasPlaytime || query.value(1).toString() == QStringLiteral("playtime_minutes");
+    }
+  }
+  return hasPlaytime ||
+         (query.exec(QStringLiteral("ALTER TABLE heroic_games ADD COLUMN playtime_minutes "
+                                    "INTEGER NOT NULL DEFAULT 0")) &&
+          query.exec(QStringLiteral(
+              "ALTER TABLE heroic_games ADD COLUMN last_played INTEGER NOT NULL DEFAULT 0")));
 }
 
 void HeroicGameModel::loadDatabase() {
@@ -189,8 +205,8 @@ void HeroicGameModel::loadDatabase() {
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral(
           "SELECT game_key, app_id, runner, name, directory, cover_path, hero_path, flatpak, "
-          "favorite, hidden FROM heroic_games WHERE observed_at > 0 ORDER BY name COLLATE "
-          "NOCASE"))) {
+          "favorite, hidden, playtime_minutes, last_played FROM heroic_games WHERE observed_at > 0 "
+          "ORDER BY name COLLATE NOCASE"))) {
     setStatus(QStringLiteral("Could not load cached Heroic games"), query.lastError().text());
     return;
   }
@@ -202,6 +218,8 @@ void HeroicGameModel::loadDatabase() {
                             .installPath = query.value(4).toString(),
                             .coverPath = query.value(5).toString(),
                             .heroPath = query.value(6).toString(),
+                            .playtimeMinutes = query.value(10).toInt(),
+                            .lastPlayed = query.value(11).toLongLong(),
                             .flatpak = query.value(7).toBool()};
     loaded.append({.heroic = record,
                    .favorite = query.value(8).toBool(),
@@ -246,12 +264,12 @@ void HeroicGameModel::applyScan(const HeroicScanResult& result) {
   for (const HeroicGameRecord& game : result.games) {
     query.prepare(QStringLiteral(
         "INSERT INTO heroic_games(game_key, app_id, runner, name, directory, cover_path, "
-        "hero_path, "
-        "flatpak, observed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now')) ON "
-        "CONFLICT(game_key) DO UPDATE SET app_id = excluded.app_id, runner = excluded.runner, name "
-        "= excluded.name, directory = excluded.directory, cover_path = excluded.cover_path, "
-        "hero_path = excluded.hero_path, flatpak = excluded.flatpak, observed_at = "
-        "excluded.observed_at"));
+        "hero_path, flatpak, playtime_minutes, last_played, observed_at) VALUES(?, ?, ?, ?, ?, ?, "
+        "?, ?, ?, ?, strftime('%s', 'now')) ON CONFLICT(game_key) DO UPDATE SET app_id = "
+        "excluded.app_id, runner = excluded.runner, name = excluded.name, directory = "
+        "excluded.directory, cover_path = excluded.cover_path, hero_path = excluded.hero_path, "
+        "flatpak = excluded.flatpak, playtime_minutes = excluded.playtime_minutes, last_played = "
+        "excluded.last_played, observed_at = excluded.observed_at"));
     query.addBindValue(game.key);
     query.addBindValue(game.appId);
     query.addBindValue(game.runner);
@@ -260,6 +278,8 @@ void HeroicGameModel::applyScan(const HeroicScanResult& result) {
     query.addBindValue(game.coverPath);
     query.addBindValue(game.heroPath);
     query.addBindValue(game.flatpak);
+    query.addBindValue(game.playtimeMinutes);
+    query.addBindValue(game.lastPlayed);
     okay = okay && query.exec();
   }
   query.prepare(QStringLiteral(
@@ -290,8 +310,11 @@ QVariant HeroicGameModel::valueForRole(const Game& game, int role) const {
   case GameRoles::Subtitle:
     return QStringLiteral("Heroic · %1").arg(storeName(game.heroic.runner));
   case GameRoles::Description:
-    return QStringLiteral("Installed locally through Heroic.");
+    return game.heroic.runner == QStringLiteral("sideload")
+               ? QStringLiteral("Added manually to Heroic.")
+               : QStringLiteral("Installed locally through Heroic.");
   case GameRoles::Hours:
+    return game.heroic.playtimeMinutes / 60;
   case GameRoles::Progress:
   case GameRoles::AchievementsUnlocked:
   case GameRoles::AchievementsTotal:
@@ -300,9 +323,9 @@ QVariant HeroicGameModel::valueForRole(const Game& game, int role) const {
   case GameRoles::Favorite:
     return game.favorite;
   case GameRoles::Recent:
-    return false;
+    return game.heroic.lastPlayed > 0;
   case GameRoles::LastPlayed:
-    return 0;
+    return game.heroic.lastPlayed;
   case GameRoles::AccentStart:
     return game.accentStart;
   case GameRoles::AccentEnd:

@@ -23,7 +23,26 @@ struct Paths {
   QString playlists;
   QString thumbnails;
   QString runtimeLogs;
+  QStringList coreInfoDirectories;
 };
+
+const QString kFlatpakMarker = QStringLiteral("/.var/app/org.libretro.RetroArch/");
+
+// The RetroArch Flatpak writes its own sandbox paths (/var/config, /var/data) into
+// retroarch.cfg. Map them back to the host so playlists, thumbnails, and logs resolve.
+QString hostPath(QString path, const QString& root) {
+  const qsizetype marker = root.indexOf(kFlatpakMarker);
+  if (marker < 0 || path.isEmpty()) {
+    return path;
+  }
+  const QString appDirectory = root.left(marker + kFlatpakMarker.size() - 1);
+  if (path.startsWith(QStringLiteral("/var/config/"))) {
+    path.replace(0, 11, appDirectory + QStringLiteral("/config"));
+  } else if (path.startsWith(QStringLiteral("/var/data/"))) {
+    path.replace(0, 9, appDirectory + QStringLiteral("/data"));
+  }
+  return path;
+}
 
 QString expandedPath(QString path) {
   path = path.trimmed();
@@ -45,28 +64,77 @@ QString configValue(const QString& contents, const QString& key) {
 Paths pathsFor(const QString& root) {
   Paths paths{.playlists = root + QStringLiteral("/playlists"),
               .thumbnails = root + QStringLiteral("/thumbnails"),
-              .runtimeLogs = {}};
+              .runtimeLogs = {},
+              .coreInfoDirectories = {}};
   QFile config(root + QStringLiteral("/retroarch.cfg"));
   if (config.open(QIODevice::ReadOnly | QIODevice::Text) && config.size() <= kMaximumJsonBytes) {
     const QString contents = QString::fromUtf8(config.readAll());
-    const QString playlists = configValue(contents, QStringLiteral("playlist_directory"));
-    const QString thumbnails = configValue(contents, QStringLiteral("thumbnails_directory"));
-    paths.runtimeLogs = configValue(contents, QStringLiteral("runtime_log_directory"));
+    const QString playlists =
+        hostPath(configValue(contents, QStringLiteral("playlist_directory")), root);
+    const QString thumbnails =
+        hostPath(configValue(contents, QStringLiteral("thumbnails_directory")), root);
+    paths.runtimeLogs =
+        hostPath(configValue(contents, QStringLiteral("runtime_log_directory")), root);
+    const QString info =
+        hostPath(configValue(contents, QStringLiteral("libretro_info_path")), root);
     if (!playlists.isEmpty()) {
       paths.playlists = playlists;
     }
     if (!thumbnails.isEmpty()) {
       paths.thumbnails = thumbnails;
     }
+    if (!info.isEmpty()) {
+      paths.coreInfoDirectories.append(info);
+    }
   }
   if (paths.runtimeLogs.isEmpty()) {
     paths.runtimeLogs = paths.playlists + QStringLiteral("/logs");
   }
+  paths.coreInfoDirectories.append(root + QStringLiteral("/cores"));
+  paths.coreInfoDirectories.append(QStringLiteral("/usr/share/libretro/info"));
   return paths;
 }
 
+// RetroArch names runtime log folders after the short core name from the core's .info file,
+// while playlists store the long display name. Resolve every candidate we can.
+QStringList coreNameCandidates(const Paths& paths, const QString& corePath, const QString& coreName,
+                               QHash<QString, QString>* infoCache) {
+  QStringList candidates;
+  const auto add = [&candidates](const QString& value) {
+    const QString trimmed = value.trimmed();
+    if (!trimmed.isEmpty() && !candidates.contains(trimmed)) {
+      candidates.append(trimmed);
+    }
+  };
+  const QString coreBase = QFileInfo(corePath).completeBaseName();
+  if (!coreBase.isEmpty()) {
+    if (!infoCache->contains(coreBase)) {
+      QString resolved;
+      static const QRegularExpression coreNameLine(
+          QStringLiteral("(?m)^\\s*corename\\s*=\\s*\"([^\"\\r\\n]+)\""));
+      for (const QString& directory : paths.coreInfoDirectories) {
+        QFile info(directory + QLatin1Char('/') + coreBase + QStringLiteral(".info"));
+        if (!info.open(QIODevice::ReadOnly | QIODevice::Text) ||
+            info.size() > kMaximumRuntimeBytes) {
+          continue;
+        }
+        resolved = coreNameLine.match(QString::fromUtf8(info.readAll())).captured(1);
+        if (!resolved.isEmpty()) {
+          break;
+        }
+      }
+      infoCache->insert(coreBase, resolved);
+    }
+    add(infoCache->value(coreBase));
+  }
+  static const QRegularExpression parenthesized(QStringLiteral("\\(([^()]+)\\)\\s*$"));
+  add(parenthesized.match(coreName).captured(1));
+  add(coreName);
+  return candidates;
+}
+
 QString sanitizedThumbnailName(QString name) {
-  static const QRegularExpression invalid(QStringLiteral("[&*/:\"<>?\\\\|]"));
+  static const QRegularExpression invalid(QStringLiteral("[&*/:`<>?\\\\|]"));
   return name.replace(invalid, QStringLiteral("_")).trimmed();
 }
 
@@ -98,17 +166,23 @@ QString artworkPath(const QString& thumbnails, const QString& playlist, const QS
 }
 
 QString runtimeFileName(const QString& contentPath) {
-  const QString fileName = QFileInfo(contentPath).fileName();
+  // Archived content is stored as archive.zip#inner.rom and RetroArch logs the inner name.
+  const qsizetype archive = contentPath.lastIndexOf(QLatin1Char('#'));
+  const QString fileName =
+      QFileInfo(archive >= 0 ? contentPath.mid(archive + 1) : contentPath).fileName();
   const qsizetype dot = fileName.lastIndexOf(QLatin1Char('.'));
   return (dot > 0 ? fileName.left(dot) : fileName) + QStringLiteral(".lrtl");
 }
 
-void readRuntime(const Paths& paths, const QString& contentPath, const QString& coreName,
+void readRuntime(const Paths& paths, const QString& contentPath, const QStringList& coreNames,
                  qint64* seconds, qint64* lastPlayed) {
   const QString fileName = runtimeFileName(contentPath);
-  const QStringList candidates = {paths.runtimeLogs + QLatin1Char('/') + coreName +
-                                      QLatin1Char('/') + fileName,
-                                  paths.runtimeLogs + QLatin1Char('/') + fileName};
+  QStringList candidates;
+  for (const QString& coreName : coreNames) {
+    candidates.append(paths.runtimeLogs + QLatin1Char('/') + coreName + QLatin1Char('/') +
+                      fileName);
+  }
+  candidates.append(paths.runtimeLogs + QLatin1Char('/') + fileName);
   for (const QString& path : candidates) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly) || file.size() > kMaximumRuntimeBytes) {
@@ -179,6 +253,7 @@ QStringList RetroArchScanner::discoverRoots() {
 RetroArchScanResult RetroArchScanner::scan(const QStringList& roots) {
   RetroArchScanResult result;
   QSet<QString> contentPaths;
+  QHash<QString, QString> infoCache;
   for (const QString& root : roots) {
     const Paths paths = pathsFor(root);
     QDir playlistDirectory(paths.playlists);
@@ -186,7 +261,7 @@ RetroArchScanResult RetroArchScanner::scan(const QStringList& roots) {
       continue;
     }
     result.roots.append(root);
-    const bool flatpak = root.contains(QStringLiteral("/.var/app/org.libretro.RetroArch/"));
+    const bool flatpak = root.contains(kFlatpakMarker);
     const QFileInfoList playlists = playlistDirectory.entryInfoList(
         {QStringLiteral("*.lpl")}, QDir::Files | QDir::Readable, QDir::Name);
     for (const QFileInfo& playlistInfo : playlists) {
@@ -223,7 +298,7 @@ RetroArchScanResult RetroArchScanner::scan(const QStringList& roots) {
         }
         const QJsonObject item = value.toObject();
         const QString contentPath =
-            expandedPath(item.value(QStringLiteral("path")).toString().left(4096));
+            hostPath(expandedPath(item.value(QStringLiteral("path")).toString().left(4096)), root);
         const QString title = item.value(QStringLiteral("label")).toString().trimmed().left(512);
         if (contentPath.isEmpty() || title.isEmpty() || contentPaths.contains(contentPath)) {
           continue;
@@ -252,7 +327,8 @@ RetroArchScanResult RetroArchScanner::scan(const QStringList& roots) {
                                           shortenedLabel(title)};
         qint64 playtimeSeconds = 0;
         qint64 lastPlayed = 0;
-        readRuntime(paths, contentPath, coreName, &playtimeSeconds, &lastPlayed);
+        readRuntime(paths, contentPath, coreNameCandidates(paths, corePath, coreName, &infoCache),
+                    &playtimeSeconds, &lastPlayed);
         result.games.append(
             {.gameId = identityFor(contentPath),
              .title = title,

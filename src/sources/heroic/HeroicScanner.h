@@ -12,6 +12,8 @@ struct HeroicGameRecord {
   QString installPath;
   QString coverPath;
   QString heroPath;
+  int playtimeMinutes = 0;
+  qint64 lastPlayed = 0;
   bool flatpak = false;
 };
 
