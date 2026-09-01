@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1
+
+- Improved keyboard and controller navigation across game details, settings,
+  filters, and dialogs.
+- Preserved favorites and hidden state when launcher games disappear and return.
+- Moved Lutris, Heroic, and Faugus scans off the interface thread.
+- Fixed stale Steam achievement rows and controller repeat after disconnecting.
+- Added stricter limits for artwork, achievement caches, and Steam metadata parsing.
+
 ## 1.2.0
 
 - Added native and Flatpak RetroArch playlist discovery and launch delegation.
