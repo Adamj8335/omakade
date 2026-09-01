@@ -52,6 +52,8 @@ ApplicationWindow {
         } else if (Launcher.launch(selectedInstallation.source, selectedInstallation.appId,
                                    selectedInstallation.flatpak || false,
                                    selectedInstallation.runner || "")) {
+            Library.recordLaunch(selectedIndex, selectedInstallation.source,
+                                 selectedInstallation.runner || "", selectedInstallation.appId)
             showToast("Opening " + selectedGame.title + " in " + selectedInstallation.source)
         } else {
             showToast(Launcher.lastError)

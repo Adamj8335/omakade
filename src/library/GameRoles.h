@@ -13,6 +13,7 @@ enum Role {
   AchievementsTotal,
   Favorite,
   Recent,
+  LastPlayed,
   AccentStart,
   AccentEnd,
   CoverMark,

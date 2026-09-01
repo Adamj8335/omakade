@@ -56,6 +56,7 @@ QHash<int, QByteArray> LutrisGameModel::roleNames() const {
           {GameRoles::AchievementsTotal, "achievementsTotal"},
           {GameRoles::Favorite, "favorite"},
           {GameRoles::Recent, "recent"},
+          {GameRoles::LastPlayed, "lastPlayed"},
           {GameRoles::AccentStart, "accentStart"},
           {GameRoles::AccentEnd, "accentEnd"},
           {GameRoles::CoverMark, "coverMark"},
@@ -239,6 +240,8 @@ QVariant LutrisGameModel::valueForRole(const Game& game, int role) const {
     return game.favorite;
   case GameRoles::Recent:
     return game.lutris.lastPlayed > 0;
+  case GameRoles::LastPlayed:
+    return game.lutris.lastPlayed;
   case GameRoles::AccentStart:
     return game.accentStart;
   case GameRoles::AccentEnd:

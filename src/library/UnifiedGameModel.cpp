@@ -3,6 +3,7 @@
 #include "library/GameRoles.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -87,13 +88,22 @@ QVariant UnifiedGameModel::data(const QModelIndex& index, int role) const {
     }
     return sources.join(QStringLiteral(" + "));
   }
-  if (role == GameRoles::Favorite || role == GameRoles::Recent || role == GameRoles::Hidden) {
+  if (role == GameRoles::Favorite || role == GameRoles::Hidden) {
     bool value = role == GameRoles::Hidden;
     for (const SourceRow& member : members) {
       const bool memberValue = member.model->index(member.row, 0).data(role).toBool();
       value = role == GameRoles::Hidden ? value && memberValue : value || memberValue;
     }
     return value;
+  }
+  if (role == GameRoles::Recent || role == GameRoles::LastPlayed) {
+    qint64 lastPlayed = 0;
+    for (const SourceRow& member : members) {
+      const QModelIndex game = member.model->index(member.row, 0);
+      lastPlayed = std::max(lastPlayed, game.data(GameRoles::LastPlayed).toLongLong());
+      lastPlayed = std::max(lastPlayed, m_lastLaunchForGame.value(gameKey(member)));
+    }
+    return role == GameRoles::Recent ? lastPlayed > 0 : lastPlayed;
   }
   if (role == GameRoles::Hours) {
     int hours = 0;
@@ -353,6 +363,45 @@ bool UnifiedGameModel::unlinkGames(int row) {
   return true;
 }
 
+bool UnifiedGameModel::recordLaunch(int row, const QString& sourceName, const QString& runner,
+                                    const QString& appId) {
+  const SourceRow selected = mapRow(row);
+  if (selected.model == nullptr || !m_database.isOpen()) {
+    return false;
+  }
+  SourceRow launched;
+  const QString normalizedRunner = runner.isNull() ? QStringLiteral("") : runner;
+  for (const SourceRow& member : groupRows(selected)) {
+    const QModelIndex game = member.model->index(member.row, 0);
+    if (game.data(GameRoles::Source).toString() == sourceName &&
+        runnerFor(game) == normalizedRunner &&
+        game.data(GameRoles::AppId).toString() == appId) {
+      launched = member;
+      break;
+    }
+  }
+  const QString key = gameKey(launched);
+  if (key.isEmpty()) {
+    return false;
+  }
+  const qint64 launchedAt = QDateTime::currentSecsSinceEpoch();
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "INSERT INTO launch_activity(source, runner, app_id, last_launched, launch_count) "
+      "VALUES(?, ?, ?, ?, 1) ON CONFLICT(source, runner, app_id) DO UPDATE SET last_launched = "
+      "excluded.last_launched, launch_count = launch_count + 1"));
+  query.addBindValue(sourceName);
+  query.addBindValue(normalizedRunner);
+  query.addBindValue(appId);
+  query.addBindValue(launchedAt);
+  if (!query.exec()) {
+    return false;
+  }
+  m_lastLaunchForGame.insert(key, launchedAt);
+  emit dataChanged(index(row), index(row), {GameRoles::Recent, GameRoles::LastPlayed});
+  return true;
+}
+
 UnifiedGameModel::SourceRow UnifiedGameModel::mapRow(int row) const {
   if (row < 0 || row >= m_rows.size()) {
     return {};
@@ -424,6 +473,10 @@ QVariantMap UnifiedGameModel::gameMap(const SourceRow& source) const {
   } else {
     result.insert(QStringLiteral("customCover"), false);
   }
+  const qint64 lastPlayed = std::max(game.data(GameRoles::LastPlayed).toLongLong(),
+                                     m_lastLaunchForGame.value(gameKey(source)));
+  result.insert(QStringLiteral("lastPlayed"), lastPlayed);
+  result.insert(QStringLiteral("recent"), lastPlayed > 0);
   return result;
 }
 
@@ -468,15 +521,22 @@ bool UnifiedGameModel::openArtworkDatabase(const QString& path) {
           "0, PRIMARY KEY(source, runner, app_id))"))) {
     return false;
   }
+  if (!query.exec(QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS launch_activity (source TEXT NOT NULL, runner TEXT NOT "
+          "NULL, app_id TEXT NOT NULL, last_launched INTEGER NOT NULL, launch_count INTEGER NOT "
+          "NULL DEFAULT 1, PRIMARY KEY(source, runner, app_id))"))) {
+    return false;
+  }
   int schemaVersion = 0;
   if (query.exec(QStringLiteral("PRAGMA user_version")) && query.next()) {
     schemaVersion = query.value(0).toInt();
   }
-  if (schemaVersion < 3 && !query.exec(QStringLiteral("PRAGMA user_version = 3"))) {
+  if (schemaVersion < 4 && !query.exec(QStringLiteral("PRAGMA user_version = 4"))) {
     return false;
   }
   loadArtworkOverrides();
   loadLinks();
+  loadLaunchActivity();
   return true;
 }
 
@@ -509,5 +569,19 @@ void UnifiedGameModel::loadLinks() {
     if (query.value(4).toBool()) {
       m_primaryForGroup.insert(groupId, key);
     }
+  }
+}
+
+void UnifiedGameModel::loadLaunchActivity() {
+  m_lastLaunchForGame.clear();
+  QSqlQuery query(m_database);
+  if (!query.exec(QStringLiteral(
+          "SELECT source, runner, app_id, last_launched FROM launch_activity"))) {
+    return;
+  }
+  while (query.next()) {
+    const QString key = query.value(0).toString() + QChar::Null + query.value(1).toString() +
+                        QChar::Null + query.value(2).toString();
+    m_lastLaunchForGame.insert(key, query.value(3).toLongLong());
   }
 }

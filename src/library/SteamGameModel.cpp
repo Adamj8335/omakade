@@ -111,6 +111,7 @@ QHash<int, QByteArray> SteamGameModel::roleNames() const {
       {GameRoles::AchievementsTotal, "achievementsTotal"},
       {GameRoles::Favorite, "favorite"},
       {GameRoles::Recent, "recent"},
+      {GameRoles::LastPlayed, "lastPlayed"},
       {GameRoles::AccentStart, "accentStart"},
       {GameRoles::AccentEnd, "accentEnd"},
       {GameRoles::CoverMark, "coverMark"},
@@ -257,6 +258,8 @@ QVariant SteamGameModel::valueForRole(const Game& game, int role) const {
     return game.favorite;
   case GameRoles::Recent:
     return game.steam.lastPlayed > 0;
+  case GameRoles::LastPlayed:
+    return game.steam.lastPlayed;
   case GameRoles::AccentStart:
     return game.accentStart;
   case GameRoles::AccentEnd:

@@ -39,6 +39,8 @@ public:
   Q_INVOKABLE bool resetCustomCover(int row);
   Q_INVOKABLE QVariantList installations(int row) const;
   Q_INVOKABLE QVariantList linkCandidates(int row, const QString& search) const;
+  Q_INVOKABLE bool recordLaunch(int row, const QString& source, const QString& runner,
+                                const QString& appId);
   Q_INVOKABLE bool linkGames(int row, const QString& source, const QString& runner,
                              const QString& appId);
   Q_INVOKABLE bool unlinkGames(int row);

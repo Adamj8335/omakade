@@ -69,6 +69,7 @@ QHash<int, QByteArray> HeroicGameModel::roleNames() const {
           {GameRoles::AchievementsTotal, "achievementsTotal"},
           {GameRoles::Favorite, "favorite"},
           {GameRoles::Recent, "recent"},
+          {GameRoles::LastPlayed, "lastPlayed"},
           {GameRoles::AccentStart, "accentStart"},
           {GameRoles::AccentEnd, "accentEnd"},
           {GameRoles::CoverMark, "coverMark"},
@@ -242,6 +243,8 @@ QVariant HeroicGameModel::valueForRole(const Game& game, int role) const {
     return game.favorite;
   case GameRoles::Recent:
     return false;
+  case GameRoles::LastPlayed:
+    return 0;
   case GameRoles::AccentStart:
     return game.accentStart;
   case GameRoles::AccentEnd:

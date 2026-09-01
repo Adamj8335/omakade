@@ -31,6 +31,7 @@ private:
     int achievementsTotal = 0;
     bool favorite = false;
     bool recent = false;
+    qint64 lastPlayed = 0;
     QColor accentStart;
     QColor accentEnd;
     QString coverMark;

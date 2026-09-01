@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added persistent launch activity across Steam, Lutris, and Heroic.
+- Made Recently Played sort by exact activity time instead of a yes or no flag.
+
 ## 0.5.0
 
 - Added Steam, Lutris, and Heroic libraries in one view.

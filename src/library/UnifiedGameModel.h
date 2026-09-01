@@ -23,6 +23,8 @@ public:
   Q_INVOKABLE bool resetCustomCover(int row);
   Q_INVOKABLE QVariantList installations(int row) const;
   Q_INVOKABLE QVariantList linkCandidates(int row, const QString& search) const;
+  Q_INVOKABLE bool recordLaunch(int row, const QString& source, const QString& runner,
+                                const QString& appId);
   Q_INVOKABLE bool linkGames(int row, const QString& source, const QString& runner,
                              const QString& appId);
   Q_INVOKABLE bool unlinkGames(int row);
@@ -41,6 +43,7 @@ private:
   bool openArtworkDatabase(const QString& path);
   void loadArtworkOverrides();
   void loadLinks();
+  void loadLaunchActivity();
 
   QVector<QAbstractItemModel*> m_models;
   QVector<SourceRow> m_rows;
@@ -51,4 +54,5 @@ private:
   QHash<QString, QString> m_coverOverrides;
   QHash<QString, QString> m_groupForGame;
   QHash<QString, QString> m_primaryForGroup;
+  QHash<QString, qint64> m_lastLaunchForGame;
 };

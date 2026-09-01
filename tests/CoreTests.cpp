@@ -175,6 +175,7 @@ private slots:
   void unifiedLibraryFiltersSourcesAndRoutesFavorites();
   void customCoverPersistsAndResets();
   void explicitLinksPersistAndPreserveInstallations();
+  void launchActivityPersistsAndSortsExactly();
   void lutrisLauncherBuildsSafeCommands();
   void heroicScannerImportsEpicGogAndAmazon();
   void heroicModelIsRepeatableAndPreservesLocalState();
@@ -403,7 +404,7 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QSqlQuery query(verify);
     QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
     QVERIFY(query.next());
-    QCOMPARE(query.value(0).toInt(), 3);
+    QCOMPARE(query.value(0).toInt(), 4);
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('achievement_summary', 'achievements')")));
@@ -411,9 +412,9 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QCOMPARE(query.value(0).toInt(), 2);
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
-                       "('artwork_overrides', 'game_link_members')")));
+                       "('artwork_overrides', 'game_link_members', 'launch_activity')")));
     QVERIFY(query.next());
-    QCOMPARE(query.value(0).toInt(), 2);
+    QCOMPARE(query.value(0).toInt(), 3);
     verify.close();
   }
   QSqlDatabase::removeDatabase(verifyConnection);
@@ -649,6 +650,52 @@ void CoreTests::explicitLinksPersistAndPreserveInstallations() {
   QCOMPARE(games.installations(0).size(), 2);
   QVERIFY(games.unlinkGames(0));
   QCOMPARE(games.rowCount(), 3);
+}
+
+void CoreTests::launchActivityPersistsAndSortsExactly() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+
+  {
+    MockGameModel demo(nullptr, 20);
+    UnifiedGameModel games(database);
+    games.addSourceModel(&demo);
+    LibraryFilterModel library;
+    library.setSourceModel(&games);
+    library.setMode(LibraryFilterModel::Mode::Recent);
+    QCOMPARE(library.rowCount(), 9);
+
+    library.setMode(LibraryFilterModel::Mode::All);
+    int launchRow = -1;
+    for (int row = 0; row < library.rowCount(); ++row) {
+      if (library.get(row).value(QStringLiteral("appId")) == QStringLiteral("demo-10")) {
+        launchRow = row;
+        break;
+      }
+    }
+    QVERIFY(launchRow >= 0);
+    QVERIFY(library.recordLaunch(launchRow, QStringLiteral("Demo"), QString{},
+                                 QStringLiteral("demo-10")));
+    QVERIFY(!library.recordLaunch(launchRow, QStringLiteral("Steam"), QString{},
+                                  QStringLiteral("10")));
+    library.setMode(LibraryFilterModel::Mode::Recent);
+    QCOMPARE(library.rowCount(), 10);
+    library.setSortMode(LibraryFilterModel::SortMode::RecentlyPlayed);
+    QCOMPARE(library.get(0).value(QStringLiteral("appId")).toString(),
+             QStringLiteral("demo-10"));
+  }
+
+  MockGameModel demo(nullptr, 20);
+  UnifiedGameModel games(database);
+  games.addSourceModel(&demo);
+  LibraryFilterModel library;
+  library.setSourceModel(&games);
+  library.setMode(LibraryFilterModel::Mode::Recent);
+  QCOMPARE(library.rowCount(), 10);
+  library.setSortMode(LibraryFilterModel::SortMode::RecentlyPlayed);
+  QCOMPARE(library.get(0).value(QStringLiteral("appId")).toString(),
+           QStringLiteral("demo-10"));
 }
 
 void CoreTests::lutrisLauncherBuildsSafeCommands() {

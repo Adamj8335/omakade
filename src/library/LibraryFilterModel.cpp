@@ -146,6 +146,15 @@ bool LibraryFilterModel::linkGames(int row, const QString& source, const QString
   return games->linkGames(mapToSource(index(row, 0)).row(), source, runner, appId);
 }
 
+bool LibraryFilterModel::recordLaunch(int row, const QString& source, const QString& runner,
+                                      const QString& appId) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || row < 0 || row >= rowCount()) {
+    return false;
+  }
+  return games->recordLaunch(mapToSource(index(row, 0)).row(), source, runner, appId);
+}
+
 bool LibraryFilterModel::unlinkGames(int row) {
   auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
   if (games == nullptr || row < 0 || row >= rowCount()) {
@@ -196,7 +205,11 @@ bool LibraryFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sour
 
 bool LibraryFilterModel::lessThan(const QModelIndex& left, const QModelIndex& right) const {
   if (m_sortMode == SortMode::RecentlyPlayed) {
-    return left.data(GameRoles::Recent).toBool() > right.data(GameRoles::Recent).toBool();
+    const qint64 leftPlayed = left.data(GameRoles::LastPlayed).toLongLong();
+    const qint64 rightPlayed = right.data(GameRoles::LastPlayed).toLongLong();
+    if (leftPlayed != rightPlayed) {
+      return leftPlayed > rightPlayed;
+    }
   }
   if (m_sortMode == SortMode::Playtime) {
     return left.data(GameRoles::Hours).toInt() > right.data(GameRoles::Hours).toInt();

@@ -63,6 +63,7 @@ MockGameModel::MockGameModel(QObject* parent, int gameCount) : QAbstractListMode
         .achievementsTotal = total,
         .favorite = index % 9 == 0 || index == 3,
         .recent = index < 8 || index % 17 == 0,
+        .lastPlayed = (index < 8 || index % 17 == 0) ? 1700000000 - index : 0,
         .accentStart = QColor(QString::fromUtf8(kColors.at(index % kColors.size()))),
         .accentEnd = QColor(QString::fromUtf8(kColors.at((index * 5 + 3) % kColors.size()))),
         .coverMark = QString::fromUtf8(kMarks.at(index % kMarks.size())),
@@ -99,6 +100,7 @@ QHash<int, QByteArray> MockGameModel::roleNames() const {
       {GameRoles::AchievementsTotal, "achievementsTotal"},
       {GameRoles::Favorite, "favorite"},
       {GameRoles::Recent, "recent"},
+      {GameRoles::LastPlayed, "lastPlayed"},
       {GameRoles::AccentStart, "accentStart"},
       {GameRoles::AccentEnd, "accentEnd"},
       {GameRoles::CoverMark, "coverMark"},
@@ -159,6 +161,8 @@ QVariant MockGameModel::valueForRole(const Game& game, int role) const {
     return game.favorite;
   case GameRoles::Recent:
     return game.recent;
+  case GameRoles::LastPlayed:
+    return game.lastPlayed;
   case GameRoles::AccentStart:
     return game.accentStart;
   case GameRoles::AccentEnd:
