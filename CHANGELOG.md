@@ -21,6 +21,8 @@
   visit, and reported that state plainly.
 - Required a 17-digit Steam ID, reported when Steam is still busy, and stopped
   re-requesting covers Steam does not have.
+- Kept the highlighted card and the open game details on the same game when a
+  background rescan rebuilds the library.
 - Prevented space-separated screenshot options from creating an invisible main instance.
 - Pinned third-party workflow actions and enabled monthly dependency updates.
 - Added end-to-end navigation coverage and owned-library regression tests.

@@ -99,11 +99,34 @@ void UnifiedGameModel::addSourceModel(QAbstractItemModel* model) {
   connect(model, &QAbstractItemModel::modelReset, this, &UnifiedGameModel::rebuildRows);
   connect(model, &QAbstractItemModel::rowsInserted, this, &UnifiedGameModel::rebuildRows);
   connect(model, &QAbstractItemModel::rowsRemoved, this, &UnifiedGameModel::rebuildRows);
-  connect(model, &QAbstractItemModel::dataChanged, this, [this] {
-    if (!m_rows.isEmpty()) {
-      emit dataChanged(index(0), index(m_rows.size() - 1));
-    }
-  });
+  connect(model, &QAbstractItemModel::dataChanged, this,
+          [this, model](const QModelIndex& topLeft, const QModelIndex& bottomRight,
+                        const QList<int>& roles) {
+            // Forward only the affected rows so the proxy does not re-filter and re-sort the
+            // whole library for every cover download or favorite toggle.
+            if (!topLeft.isValid() || !bottomRight.isValid()) {
+              if (!m_rows.isEmpty()) {
+                emit dataChanged(index(0), index(m_rows.size() - 1));
+              }
+              return;
+            }
+            QSet<QString> changedGroups;
+            for (int row = topLeft.row(); row <= bottomRight.row(); ++row) {
+              const QString groupId = m_groupForGame.value(gameKey({.model = model, .row = row}));
+              if (!groupId.isEmpty()) {
+                changedGroups.insert(groupId);
+              }
+            }
+            for (int row = 0; row < m_rows.size(); ++row) {
+              const SourceRow& source = m_rows.at(row);
+              const bool direct = source.model == model && source.row >= topLeft.row() &&
+                                  source.row <= bottomRight.row();
+              if (direct || (!changedGroups.isEmpty() &&
+                             changedGroups.contains(m_groupForGame.value(gameKey(source))))) {
+                emit dataChanged(index(row), index(row), roles);
+              }
+            }
+          });
 }
 
 void UnifiedGameModel::setSourceEnabled(const QString& source, bool enabled) {

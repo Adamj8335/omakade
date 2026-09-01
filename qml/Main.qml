@@ -343,18 +343,15 @@ ApplicationWindow {
     }
 
     function refreshSelected(source, runner, appId) {
-        for (let index = 0; index < Library.rowCount(); ++index) {
-            const game = Library.get(index)
-            if (game.source === source && (game.runner || "") === (runner || "")
-                    && game.appId === appId) {
-                selectedIndex = index
-                selectedGame = game
-                selectedInstallations = Library.installations(index)
-                selectedInstallation = preferredInstallation(selectedInstallations, selectedGame)
-                return true
-            }
+        const index = Library.indexOf(source, runner || "", appId)
+        if (index < 0) {
+            return false
         }
-        return false
+        selectedIndex = index
+        selectedGame = Library.get(index)
+        selectedInstallations = Library.installations(index)
+        selectedInstallation = preferredInstallation(selectedInstallations, selectedGame)
+        return true
     }
 
     function linkCandidate(candidate) {
@@ -1563,7 +1560,7 @@ ApplicationWindow {
                         id: steamIdField
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
-                        placeholderText: "Steam ID"
+                        placeholderText: "Steam ID (17 digits, starts with 7656119)"
                         text: SteamAccount ? SteamAccount.steamId : ""
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
@@ -1953,11 +1950,29 @@ ApplicationWindow {
             if (SteamAccount.ownedGameCount === 0) {
                 Library.availability = 0
             }
-            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+            if (libraryView.currentIndex < 0 && Library.rowCount() > 0) {
+                libraryView.currentIndex = 0
+            }
             if (root.detailOpen
                     && !root.refreshSelected(root.selectedGame.source,
                                              root.selectedGame.runner || "",
                                              root.selectedGame.appId)) {
+                root.closeDetails()
+            }
+        }
+    }
+
+    Connections {
+        // Background rescans reset the library model. Re-resolve the open game by identity so
+        // detail actions never land on whichever game now occupies the old row index.
+        target: Library
+        function onModelReset() {
+            if (!root.detailOpen || !root.selectedGame || !root.selectedGame.appId) {
+                return
+            }
+            if (!root.refreshSelected(root.selectedGame.source,
+                                      root.selectedGame.runner || "",
+                                      root.selectedGame.appId)) {
                 root.closeDetails()
             }
         }

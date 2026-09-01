@@ -30,6 +30,34 @@ Item {
         }
     }
 
+    // Keep the highlighted card across model resets caused by background rescans.
+    property var pendingCurrent: null
+
+    Connections {
+        target: root.libraryModel
+        function onModelAboutToBeReset() {
+            if (grid.currentIndex >= 0 && grid.currentIndex < grid.count) {
+                const game = root.libraryModel.get(grid.currentIndex)
+                root.pendingCurrent = { source: game.source, runner: game.runner || "",
+                                        appId: game.appId }
+            } else {
+                root.pendingCurrent = null
+            }
+        }
+        function onModelReset() {
+            const pending = root.pendingCurrent
+            root.pendingCurrent = null
+            if (!pending) {
+                return
+            }
+            const index = root.libraryModel.indexOf(pending.source, pending.runner, pending.appId)
+            if (index >= 0) {
+                grid.currentIndex = index
+                Qt.callLater(function() { grid.positionViewAtIndex(index, GridView.Contain) })
+            }
+        }
+    }
+
     GridView {
         id: grid
         objectName: "libraryGrid"
