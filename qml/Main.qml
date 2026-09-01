@@ -149,6 +149,12 @@ ApplicationWindow {
         if (RetroArchLibrary && Preferences.retroArchEnabled) RetroArchLibrary.refresh()
     }
 
+    function focusAboveGrid() {
+        if (!root.focusSpatial(librarySurface, Qt.Key_Up)) {
+            sortButton.forceActiveFocus(Qt.TabFocusReason)
+        }
+    }
+
     function toggleLibraryControls() {
         if (root.navigationContainer() !== null) {
             return
@@ -523,6 +529,22 @@ ApplicationWindow {
         scale: root.detailOpen ? 0.985 : 1
         visible: opacity > 0
         enabled: !root.detailOpen
+
+        // Arrow keys move between the filters and toolbar controls, and Down with nothing
+        // below drops back into the game grid. Controller directions take the same path.
+        Keys.onPressed: function(event) {
+            if (root.navigationContainer() !== null || libraryView.gridFocused) {
+                return
+            }
+            if (event.key !== Qt.Key_Up && event.key !== Qt.Key_Down
+                    && event.key !== Qt.Key_Left && event.key !== Qt.Key_Right) {
+                return
+            }
+            if (!root.focusSpatial(librarySurface, event.key) && event.key === Qt.Key_Down) {
+                libraryView.focusGrid()
+            }
+            event.accepted = true
+        }
 
         Behavior on opacity {
             enabled: !Preferences.reducedMotion
@@ -1042,6 +1064,7 @@ ApplicationWindow {
                 onRefreshRequested: {
                     root.rescanLibraries()
                 }
+                onFocusAboveRequested: root.focusAboveGrid()
             }
         }
     }

@@ -335,9 +335,17 @@ int main(int argc, char* argv[]) {
         QTimer::singleShot(
             50, quickWindow,
             [quickWindow, &application, &controller, grid, search, fail, ownedLayoutTest] {
-              if (!grid->hasActiveFocus() || search->hasActiveFocus() ||
-                  grid->property("currentIndex").toInt() != 0) {
-                fail(QStringLiteral("Controller Up left the first library row"));
+              if (grid->hasActiveFocus() || search->hasActiveFocus()) {
+                fail(
+                    QStringLiteral("Controller Up did not move from the top row into the filters"));
+                return;
+              }
+              // Down walks row by row through the controls and then into the grid.
+              for (int step = 0; step < 6 && !grid->hasActiveFocus(); ++step) {
+                controller.focusDirectionRequested(Qt::Key_Down);
+              }
+              if (!grid->hasActiveFocus() || grid->property("currentIndex").toInt() != 0) {
+                fail(QStringLiteral("Controller Down did not return to the first library row"));
                 return;
               }
               auto* sort = quickWindow->findChild<QQuickItem*>(QStringLiteral("sortButton"));

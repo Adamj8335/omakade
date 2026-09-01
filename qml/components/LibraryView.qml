@@ -19,6 +19,7 @@ Item {
     signal favoriteToggled(int index)
     signal refreshRequested()
     signal coverRequested(string source, string appId)
+    signal focusAboveRequested()
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -134,6 +135,9 @@ Item {
             if (currentIndex >= columns) {
                 currentIndex -= columns
                 positionViewAtIndex(currentIndex, GridView.Contain)
+            } else {
+                // Top row: hand focus to the filters and toolbar above the grid.
+                root.focusAboveRequested()
             }
             event.accepted = true
         }
