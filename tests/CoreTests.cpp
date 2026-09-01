@@ -3,10 +3,15 @@
 #include "app/AppSettings.h"
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
+#include "launch/GameLauncher.h"
 #include "launch/SteamLauncher.h"
+#include "library/GameRoles.h"
 #include "library/LibraryFilterModel.h"
+#include "library/LutrisGameModel.h"
 #include "library/MockGameModel.h"
 #include "library/SteamGameModel.h"
+#include "library/UnifiedGameModel.h"
+#include "sources/lutris/LutrisScanner.h"
 #include "sources/steam/SteamScanner.h"
 #include "sources/steam/ValveKeyValues.h"
 #include "theme/OmarchyTheme.h"
@@ -88,6 +93,34 @@ void createSteamFixture(const QString& root, const QString& secondLibrary) {
             "\"UserLocalConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"apps\" { "
             "\"10\" { \"LastPlayed\" \"1700000000\" \"Playtime\" \"125\" } } } } } }\n");
 }
+
+void createLutrisFixture(const QString& dataRoot) {
+  QDir().mkpath(dataRoot);
+  const QString connection =
+      QStringLiteral("lutris-fixture-%1").arg(QUuid::createUuid().toString());
+  {
+    QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+    database.setDatabaseName(dataRoot + QStringLiteral("/pga.db"));
+    QVERIFY(database.open());
+    QSqlQuery query(database);
+    QVERIFY(query.exec(QStringLiteral(
+        "CREATE TABLE games (id INTEGER PRIMARY KEY, slug TEXT, name TEXT, runner TEXT, directory "
+        "TEXT, platform TEXT, year INTEGER, lastplayed INTEGER, playtime REAL, installed INTEGER, "
+        "configpath TEXT)")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO games VALUES(7, 'signal-hill', 'Signal Hill', 'wine', '/games/signal', "
+        "'Windows', 2024, 1700000000, 2.5, 1, 'signal-hill')")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO games VALUES(8, 'not-installed', 'Not Installed', 'linux', '/games/no', "
+        "'Linux', 2020, 0, 0, 0, 'not-installed')")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO games VALUES(9, 'broken', 'Broken Install', 'wine', '/games/broken', "
+        "'Windows', 2020, 0, 0, 1, '')")));
+    database.close();
+  }
+  QSqlDatabase::removeDatabase(connection);
+  writeFile(dataRoot + QStringLiteral("/coverart/signal-hill.jpg"), "cover");
+}
 } // namespace
 
 class CoreTests final : public QObject {
@@ -109,6 +142,11 @@ private slots:
   void steamAchievementApiParsesPlayerSchemaAndRarity();
   void steamAchievementApiClassifiesFailures();
   void steamLauncherBuildsSafeUrls();
+  void lutrisScannerImportsOnlyLaunchableGames();
+  void lutrisModelIsRepeatableAndPreservesLocalState();
+  void malformedLutrisDataDoesNotReplaceCachedGames();
+  void unifiedLibraryFiltersSourcesAndRoutesFavorites();
+  void lutrisLauncherBuildsSafeCommands();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
   void secondInstanceRequestsActivation();
@@ -396,6 +434,91 @@ void CoreTests::steamLauncherBuildsSafeUrls() {
   QCOMPARE(SteamLauncher::manageUrl(QStringLiteral("440")),
            QUrl(QStringLiteral("steam://nav/games/details/440")));
   QVERIFY(SteamLauncher::launchUrl(QStringLiteral("440;touch /tmp/nope")).isEmpty());
+}
+
+void CoreTests::lutrisScannerImportsOnlyLaunchableGames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString dataRoot = directory.path() + QStringLiteral("/lutris");
+  createLutrisFixture(dataRoot);
+
+  const LutrisScanResult result = LutrisScanner::scan({dataRoot + QStringLiteral("/pga.db")});
+  QVERIFY(!result.incomplete);
+  QCOMPARE(result.games.size(), 1);
+  QCOMPARE(result.games.constFirst().id, QStringLiteral("7"));
+  QCOMPARE(result.games.constFirst().title, QStringLiteral("Signal Hill"));
+  QCOMPARE(result.games.constFirst().playtimeMinutes, 150);
+  QVERIFY(result.games.constFirst().coverPath.endsWith(QStringLiteral("signal-hill.jpg")));
+}
+
+void CoreTests::lutrisModelIsRepeatableAndPreservesLocalState() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString dataRoot = directory.path() + QStringLiteral("/lutris");
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  createLutrisFixture(dataRoot);
+
+  LutrisGameModel model(database);
+  const QString source = dataRoot + QStringLiteral("/pga.db");
+  model.refreshFromDatabases({source});
+  QCOMPARE(model.rowCount(), 1);
+  model.toggleFavorite(0);
+  model.toggleHidden(0);
+  model.refreshFromDatabases({source});
+  QCOMPARE(model.rowCount(), 1);
+  QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
+  QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
+}
+
+void CoreTests::malformedLutrisDataDoesNotReplaceCachedGames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString dataRoot = directory.path() + QStringLiteral("/lutris");
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  createLutrisFixture(dataRoot);
+  LutrisGameModel model(database);
+  model.refreshFromDatabases({dataRoot + QStringLiteral("/pga.db")});
+  QCOMPARE(model.rowCount(), 1);
+
+  const QString malformed = directory.path() + QStringLiteral("/malformed.db");
+  writeFile(malformed, "not sqlite");
+  model.refreshFromDatabases({malformed});
+  QCOMPARE(model.rowCount(), 1);
+  QVERIFY(model.statusText().startsWith(QStringLiteral("Lutris scan interrupted")));
+}
+
+void CoreTests::unifiedLibraryFiltersSourcesAndRoutesFavorites() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString dataRoot = directory.path() + QStringLiteral("/lutris");
+  createLutrisFixture(dataRoot);
+  MockGameModel demo(nullptr, 2);
+  LutrisGameModel lutris(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  lutris.refreshFromDatabases({dataRoot + QStringLiteral("/pga.db")});
+  UnifiedGameModel games;
+  games.addSourceModel(&demo);
+  games.addSourceModel(&lutris);
+  LibraryFilterModel library;
+  library.setSourceModel(&games);
+
+  QCOMPARE(library.rowCount(), 3);
+  library.setSourceFilter(QStringLiteral("Lutris"));
+  QCOMPARE(library.rowCount(), 1);
+  QCOMPARE(library.get(0).value(QStringLiteral("title")).toString(), QStringLiteral("Signal Hill"));
+  library.toggleFavorite(0);
+  QVERIFY(lutris.data(lutris.index(0), GameRoles::Favorite).toBool());
+}
+
+void CoreTests::lutrisLauncherBuildsSafeCommands() {
+  const LaunchCommand native = GameLauncher::lutrisCommand(QStringLiteral("42"), false);
+  QCOMPARE(native.program, QStringLiteral("lutris"));
+  QCOMPARE(native.arguments, QStringList{QStringLiteral("lutris:rungameid/42")});
+  const LaunchCommand flatpak = GameLauncher::lutrisCommand(QStringLiteral("42"), true);
+  QCOMPARE(flatpak.program, QStringLiteral("flatpak"));
+  QCOMPARE(flatpak.arguments,
+           QStringList({QStringLiteral("run"), QStringLiteral("net.lutris.Lutris"),
+                        QStringLiteral("lutris:rungameid/42")}));
+  QVERIFY(!GameLauncher::lutrisCommand(QStringLiteral("42;touch /tmp/nope"), false).isValid());
 }
 
 void CoreTests::stressLibraryContainsOneThousandGames() {

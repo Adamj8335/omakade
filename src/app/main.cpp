@@ -3,10 +3,12 @@
 #include "app/AppSettings.h"
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
-#include "launch/SteamLauncher.h"
+#include "launch/GameLauncher.h"
 #include "library/LibraryFilterModel.h"
+#include "library/LutrisGameModel.h"
 #include "library/MockGameModel.h"
 #include "library/SteamGameModel.h"
+#include "library/UnifiedGameModel.h"
 #include "theme/OmarchyTheme.h"
 
 #include <QAbstractItemModel>
@@ -54,16 +56,25 @@ int main(int argc, char* argv[]) {
   AppSettings preferences;
   ControllerInput controller;
   std::unique_ptr<QAbstractItemModel> games;
+  std::unique_ptr<LutrisGameModel> lutrisGames;
   SteamGameModel* steamLibrary = nullptr;
+  LutrisGameModel* lutrisLibrary = nullptr;
   if (demoMode || stressMode) {
     games = std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100);
   } else {
     auto steam = std::make_unique<SteamGameModel>(QString{}, &preferences);
     steamLibrary = steam.get();
     games = std::move(steam);
+    lutrisGames = std::make_unique<LutrisGameModel>(steamLibrary->databasePath());
+    lutrisLibrary = lutrisGames.get();
+  }
+  UnifiedGameModel unifiedGames;
+  unifiedGames.addSourceModel(games.get());
+  if (lutrisGames != nullptr) {
+    unifiedGames.addSourceModel(lutrisGames.get());
   }
   LibraryFilterModel library;
-  library.setSourceModel(games.get());
+  library.setSourceModel(&unifiedGames);
   AchievementModel achievements(steamLibrary == nullptr ? QStringLiteral(":memory:")
                                                         : steamLibrary->databasePath(),
                                 &preferences);
@@ -76,7 +87,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(steamAccount.get(), &SteamAccountService::achievementsUpdated, steamLibrary,
                      &SteamGameModel::reloadAchievementSummary);
   }
-  SteamLauncher launcher;
+  GameLauncher launcher;
 
   QObject::connect(&controller, &ControllerInput::keyRequested, &application,
                    [&application](int key, int modifiers) {
@@ -100,6 +111,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Theme"), &theme);
   engine.rootContext()->setContextProperty(QStringLiteral("Library"), &library);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamLibrary"), steamLibrary);
+  engine.rootContext()->setContextProperty(QStringLiteral("LutrisLibrary"), lutrisLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("Launcher"), &launcher);
   engine.rootContext()->setContextProperty(QStringLiteral("Preferences"), &preferences);
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
@@ -144,6 +156,9 @@ int main(int argc, char* argv[]) {
 
   if (steamLibrary != nullptr) {
     QTimer::singleShot(0, steamLibrary, &SteamGameModel::refresh);
+  }
+  if (lutrisLibrary != nullptr) {
+    QTimer::singleShot(150, lutrisLibrary, &LutrisGameModel::refresh);
   }
 
   if (smokeTest) {

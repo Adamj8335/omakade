@@ -217,13 +217,12 @@ Item {
                     }
 
                     GlassButton {
-                        visible: root.game.source === "Steam"
-                        text: "MANAGE IN STEAM"
+                        visible: root.game.source === "Steam" || root.game.source === "Lutris"
+                        text: "MANAGE IN " + (root.game.source || "LAUNCHER").toUpperCase()
                         onClicked: root.manageRequested()
                     }
 
                     GlassButton {
-                        visible: root.game.source === "Steam"
                         text: root.game.hidden ? "UNHIDE" : "HIDE"
                         onClicked: root.hiddenRequested()
                     }

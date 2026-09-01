@@ -8,6 +8,8 @@ class LibraryFilterModel final : public QSortFilterProxyModel {
   Q_PROPERTY(Mode mode READ mode WRITE setMode NOTIFY modeChanged)
   Q_PROPERTY(SortMode sortMode READ sortMode WRITE setSortMode NOTIFY sortModeChanged)
   Q_PROPERTY(bool showHidden READ showHidden WRITE setShowHidden NOTIFY showHiddenChanged)
+  Q_PROPERTY(
+      QString sourceFilter READ sourceFilter WRITE setSourceFilter NOTIFY sourceFilterChanged)
 
 public:
   enum class Mode { All = 0, Favorites, Recent, Hidden };
@@ -26,6 +28,8 @@ public:
   void setSortMode(SortMode value);
   [[nodiscard]] bool showHidden() const;
   void setShowHidden(bool value);
+  [[nodiscard]] QString sourceFilter() const;
+  void setSourceFilter(const QString& value);
 
   Q_INVOKABLE QVariantMap get(int row) const;
   Q_INVOKABLE void toggleFavorite(int row);
@@ -36,6 +40,7 @@ signals:
   void modeChanged();
   void sortModeChanged();
   void showHiddenChanged();
+  void sourceFilterChanged();
 
 protected:
   [[nodiscard]] bool filterAcceptsRow(int sourceRow,
@@ -47,4 +52,5 @@ private:
   Mode m_mode = Mode::All;
   SortMode m_sortMode = SortMode::Title;
   bool m_showHidden = false;
+  QString m_sourceFilter;
 };

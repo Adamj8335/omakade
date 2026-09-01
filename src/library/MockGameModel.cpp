@@ -109,6 +109,7 @@ QHash<int, QByteArray> MockGameModel::roleNames() const {
       {GameRoles::LogoPath, "logoPath"},
       {GameRoles::InstallPath, "installPath"},
       {GameRoles::Source, "source"},
+      {GameRoles::Flatpak, "flatpak"},
       {GameRoles::Hidden, "hidden"},
   };
 }
@@ -177,6 +178,8 @@ QVariant MockGameModel::valueForRole(const Game& game, int role) const {
     return game.installPath;
   case GameRoles::Source:
     return game.source;
+  case GameRoles::Flatpak:
+    return false;
   case GameRoles::Hidden:
     return false;
   default:

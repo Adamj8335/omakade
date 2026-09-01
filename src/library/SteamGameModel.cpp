@@ -121,6 +121,7 @@ QHash<int, QByteArray> SteamGameModel::roleNames() const {
       {GameRoles::LogoPath, "logoPath"},
       {GameRoles::InstallPath, "installPath"},
       {GameRoles::Source, "source"},
+      {GameRoles::Flatpak, "flatpak"},
       {GameRoles::Hidden, "hidden"},
   };
 }
@@ -274,6 +275,8 @@ QVariant SteamGameModel::valueForRole(const Game& game, int role) const {
         .absoluteFilePath(game.steam.installDirectory);
   case GameRoles::Source:
     return QStringLiteral("Steam");
+  case GameRoles::Flatpak:
+    return false;
   case GameRoles::Hidden:
     return game.hidden;
   default:

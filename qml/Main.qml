@@ -20,8 +20,10 @@ ApplicationWindow {
     function openGame(index) {
         selectedIndex = index
         selectedGame = Library.get(index)
-        if (!DemoMode) {
+        if (!DemoMode && selectedGame.source === "Steam") {
             Achievements.load(selectedGame.appId)
+        } else {
+            Achievements.load("")
         }
         detailOpen = true
     }
@@ -39,16 +41,18 @@ ApplicationWindow {
     function playSelected() {
         if (DemoMode) {
             showToast("Demo games cannot be launched")
-        } else if (Launcher.launch(selectedGame.appId)) {
-            showToast("Opening " + selectedGame.title + " in Steam")
+        } else if (Launcher.launch(selectedGame.source, selectedGame.appId,
+                                   selectedGame.flatpak || false)) {
+            showToast("Opening " + selectedGame.title + " in " + selectedGame.source)
         } else {
             showToast(Launcher.lastError)
         }
     }
 
     function manageSelected() {
-        if (Launcher.manage(selectedGame.appId)) {
-            showToast("Opening Steam library details")
+        if (Launcher.manage(selectedGame.source, selectedGame.appId,
+                            selectedGame.flatpak || false)) {
+            showToast("Opening " + selectedGame.source)
         } else {
             showToast(Launcher.lastError)
         }
@@ -357,6 +361,38 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 12
 
+                Row {
+                    spacing: 5
+                    visible: !DemoMode
+                    GlassButton {
+                        text: "ALL SOURCES"
+                        compact: true
+                        selected: Library.sourceFilter === ""
+                        onClicked: {
+                            Library.sourceFilter = ""
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
+                    GlassButton {
+                        text: "STEAM"
+                        compact: true
+                        selected: Library.sourceFilter === "Steam"
+                        onClicked: {
+                            Library.sourceFilter = "Steam"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
+                    GlassButton {
+                        text: "LUTRIS"
+                        compact: true
+                        selected: Library.sourceFilter === "Lutris"
+                        onClicked: {
+                            Library.sourceFilter = "Lutris"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
+                }
+
                 Text {
                     text: Library.mode === 1 ? "FAVORITES" : Library.mode === 2 ? "RECENTLY PLAYED" : Library.mode === 3 ? "HIDDEN" : "YOUR LIBRARY"
                     color: Theme.foreground
@@ -402,17 +438,24 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 libraryModel: Library
                 scanning: SteamLibrary ? SteamLibrary.scanning : false
-                emptyTitle: SteamLibrary && !SteamLibrary.steamDetected
-                            ? "Steam was not found"
-                            : Library.mode === 3 ? "No hidden games" : "No installed games"
-                emptyMessage: SteamLibrary && SteamLibrary.errorText.length > 0
-                              ? SteamLibrary.errorText
-                              : "Install a Steam game, then rescan your library."
+                emptyTitle: Library.sourceFilter === "Lutris" && LutrisLibrary && !LutrisLibrary.lutrisDetected
+                            ? "Lutris was not found"
+                            : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
+                              ? "Steam was not found"
+                              : Library.mode === 3 ? "No hidden games" : "No installed games"
+                emptyMessage: Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
+                              ? LutrisLibrary.errorText
+                              : SteamLibrary && SteamLibrary.errorText.length > 0
+                                ? SteamLibrary.errorText
+                                : "Install a game in Steam or Lutris, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
                 onRefreshRequested: {
                     if (SteamLibrary) {
                         SteamLibrary.refresh()
+                    }
+                    if (LutrisLibrary) {
+                        LutrisLibrary.refresh()
                     }
                 }
             }
@@ -518,6 +561,15 @@ ApplicationWindow {
                 Text {
                     Layout.fillWidth: true
                     text: SteamLibrary ? SteamLibrary.statusText : "Demo library"
+                    color: Theme.accent
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: LutrisLibrary !== null
+                    text: LutrisLibrary ? LutrisLibrary.statusText : ""
                     color: Theme.accent
                     font.family: Theme.fontFamily
                     font.pixelSize: 12

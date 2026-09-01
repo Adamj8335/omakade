@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Omakade VERSION 0.3.0 LANGUAGES CXX)
+project(Omakade VERSION 0.4.0 LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
@@ -31,16 +31,24 @@ add_library(omakade_core STATIC
   src/library/LibraryFilterModel.cpp
   src/library/LibraryFilterModel.h
   src/library/GameRoles.h
+  src/library/LutrisGameModel.cpp
+  src/library/LutrisGameModel.h
   src/library/MockGameModel.cpp
   src/library/MockGameModel.h
   src/library/SteamGameModel.cpp
   src/library/SteamGameModel.h
+  src/library/UnifiedGameModel.cpp
+  src/library/UnifiedGameModel.h
+  src/launch/GameLauncher.cpp
+  src/launch/GameLauncher.h
   src/launch/SteamLauncher.cpp
   src/launch/SteamLauncher.h
   src/sources/steam/SteamScanner.cpp
   src/sources/steam/SteamScanner.h
   src/sources/steam/ValveKeyValues.cpp
   src/sources/steam/ValveKeyValues.h
+  src/sources/lutris/LutrisScanner.cpp
+  src/sources/lutris/LutrisScanner.h
   src/theme/OmarchyTheme.cpp
   src/theme/OmarchyTheme.h
 )

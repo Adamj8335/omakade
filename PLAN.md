@@ -1,7 +1,7 @@
 # Omakade product and delivery plan
 
-Implementation status: M0 through M3 are complete in the 0.3 preview. M4 is
-the next milestone and begins the unified library with Lutris.
+Implementation status: M0 through M3 are complete. M4 is in progress in the
+0.4 preview, with Lutris import, launch delegation, and source filters complete.
 
 ## Product statement
 
@@ -669,6 +669,9 @@ Gate:
 - Cached achievement data remains usable offline
 
 ### M4: Unified library
+
+Status: in progress. Lutris installed-game import and launch, the shared model,
+and source filters are complete in the 0.4 preview. Heroic is next.
 
 Deliver in this order:
 

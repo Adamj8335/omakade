@@ -23,6 +23,7 @@ enum Role {
   LogoPath,
   InstallPath,
   Source,
+  Flatpak,
   Hidden,
 };
 }

@@ -2,15 +2,15 @@
 
 Omakade is a beautiful, local-first game library built for Omarchy.
 
-The current build is the M3 preview. It discovers native and Flatpak Steam
-libraries, indexes installed games locally, uses Steam artwork and local
-achievement data, and delegates launching back to Steam. Run with `--demo` to
-explore the interface with a deterministic fictional library.
+The current build is the 0.4 unified-library preview. It discovers native and
+Flatpak Steam and Lutris libraries, indexes installed games locally, and
+delegates launching back to the owning platform. Run with `--demo` to explore
+the interface with a deterministic fictional library.
 
 Omakade follows the active Omarchy palette and font, updates after theme
-changes, works offline, and never writes into Steam data. Favorites, hidden
-games, achievement details, and downloaded artwork persist in bounded local
-caches. Missing Steam covers are resolved from Steam's public CDN when
+changes, works offline, and never writes into Steam or Lutris data. Favorites,
+hidden games, achievement details, and downloaded artwork persist in bounded
+local caches. Missing Steam covers are resolved from Steam's public CDN when
 available, with an intentional procedural fallback.
 
 Steam Web API enrichment is optional. Omakade uses the Steam client's local
@@ -18,6 +18,10 @@ achievement cache without setup. A user may add a Steam Web API key through
 the diagnostics panel to refresh complete schemas, unlock dates, and rarity.
 The key is stored by Secret Service and never written to Omakade's config or
 database.
+
+Lutris support reads installed entries from its local `pga.db` in read-only
+mode, reuses local cover art, and supports both native and Flatpak launches.
+Omakade never edits Lutris game records or runner configuration.
 
 ## Build
 

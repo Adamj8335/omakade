@@ -31,6 +31,19 @@ void LibraryFilterModel::setShowHidden(bool value) {
   emit showHiddenChanged();
 }
 
+QString LibraryFilterModel::sourceFilter() const { return m_sourceFilter; }
+
+void LibraryFilterModel::setSourceFilter(const QString& value) {
+  const QString normalized = value.trimmed();
+  if (m_sourceFilter.compare(normalized, Qt::CaseInsensitive) == 0) {
+    return;
+  }
+  m_sourceFilter = normalized;
+  beginFilterChange();
+  endFilterChange(Direction::Rows);
+  emit sourceFilterChanged();
+}
+
 QString LibraryFilterModel::searchText() const { return m_searchText; }
 
 void LibraryFilterModel::setSearchText(const QString& value) {
@@ -91,6 +104,12 @@ void LibraryFilterModel::toggleHidden(int row) {
 
 bool LibraryFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
   const QModelIndex sourceIndex = sourceModel()->index(sourceRow, 0, sourceParent);
+
+  if (!m_sourceFilter.isEmpty() &&
+      sourceIndex.data(GameRoles::Source).toString().compare(m_sourceFilter, Qt::CaseInsensitive) !=
+          0) {
+    return false;
+  }
 
   const bool hidden = sourceIndex.data(GameRoles::Hidden).toBool();
   if (m_mode == Mode::Hidden && !hidden) {
