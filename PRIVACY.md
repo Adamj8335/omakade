@@ -17,6 +17,7 @@ Omakade retains:
 - Steam ID, cache limit, and reduced-motion preference in
   `$XDG_CONFIG_HOME/omakade/config.toml`
 - Downloaded covers and achievement icons in `$XDG_CACHE_HOME/omakade/`
+- Copies of covers selected by the user in `$XDG_DATA_HOME/omakade/artwork/`
 
 The Steam ID is an account identifier, not a credential. A Steam Web API key
 is stored only through the desktop Secret Service under
@@ -39,3 +40,5 @@ endpoints. Failed requests do not remove cached data.
 The diagnostics panel can clear downloaded achievement art and remove the API
 key from Secret Service. Removing Omakade does not remove its XDG data by
 default, so users can preserve settings across reinstallations.
+Resetting a custom cover removes Omakade's private copy and restores the
+source-provided artwork. It does not change the original selected image.

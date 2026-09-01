@@ -62,18 +62,20 @@ int main(int argc, char* argv[]) {
   SteamGameModel* steamLibrary = nullptr;
   LutrisGameModel* lutrisLibrary = nullptr;
   HeroicGameModel* heroicLibrary = nullptr;
+  QString libraryDatabasePath;
   if (demoMode || stressMode) {
     games = std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100);
   } else {
     auto steam = std::make_unique<SteamGameModel>(QString{}, &preferences);
     steamLibrary = steam.get();
+    libraryDatabasePath = steamLibrary->databasePath();
     games = std::move(steam);
     lutrisGames = std::make_unique<LutrisGameModel>(steamLibrary->databasePath());
     lutrisLibrary = lutrisGames.get();
     heroicGames = std::make_unique<HeroicGameModel>(steamLibrary->databasePath());
     heroicLibrary = heroicGames.get();
   }
-  UnifiedGameModel unifiedGames;
+  UnifiedGameModel unifiedGames(libraryDatabasePath);
   unifiedGames.addSourceModel(games.get());
   if (lutrisGames != nullptr) {
     unifiedGames.addSourceModel(lutrisGames.get());

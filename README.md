@@ -12,6 +12,9 @@ changes, works offline, and never writes into Steam or Lutris data. Favorites,
 hidden games, achievement details, and downloaded artwork persist in bounded
 local caches. Missing Steam covers are resolved from Steam's public CDN when
 available, with an intentional procedural fallback.
+Bad or missing covers can be replaced from the game details screen. Omakade
+keeps that selected image in its own data directory and can restore the
+launcher-provided cover at any time.
 
 Steam Web API enrichment is optional. Omakade uses the Steam client's local
 achievement cache without setup. A user may add a Steam Web API key through
@@ -55,6 +58,7 @@ face button to favorite.
 - Library: `~/.local/share/omakade/library.sqlite3`
 - Settings: `~/.config/omakade/config.toml`
 - Downloaded artwork: `~/.cache/omakade/`
+- Selected custom covers: `~/.local/share/omakade/artwork/`
 
 Core library discovery, local achievements, artwork, search, organization,
 controller navigation, and launching require no Steam API key or network

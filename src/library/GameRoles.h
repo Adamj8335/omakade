@@ -26,5 +26,6 @@ enum Role {
   Runner,
   Flatpak,
   Hidden,
+  CustomCover,
 };
 }

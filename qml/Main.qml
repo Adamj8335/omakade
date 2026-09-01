@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "components"
 import "screens"
@@ -57,6 +58,21 @@ ApplicationWindow {
             showToast("Opening " + selectedGame.source)
         } else {
             showToast(Launcher.lastError)
+        }
+    }
+
+    FileDialog {
+        id: coverDialog
+        title: "Choose cover artwork"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["Images (*.jpg *.jpeg *.png *.webp)"]
+        onAccepted: {
+            if (Library.setCustomCover(root.selectedIndex, selectedFile)) {
+                root.selectedGame = Library.get(root.selectedIndex)
+                root.showToast("Cover updated")
+            } else {
+                root.showToast("That image could not be used")
+            }
         }
     }
 
@@ -501,6 +517,13 @@ ApplicationWindow {
             }
             onPlayRequested: root.playSelected()
             onManageRequested: root.manageSelected()
+            onCoverRequested: coverDialog.open()
+            onCoverResetRequested: {
+                if (Library.resetCustomCover(root.selectedIndex)) {
+                    root.selectedGame = Library.get(root.selectedIndex)
+                    root.showToast("Original cover restored")
+                }
+            }
             onConnectRequested: root.diagnosticsOpen = true
             onHiddenRequested: {
                 Library.toggleHidden(root.selectedIndex)

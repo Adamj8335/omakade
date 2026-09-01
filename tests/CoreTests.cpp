@@ -21,6 +21,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QImage>
 #include <QSignalSpy>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -172,6 +173,7 @@ private slots:
   void lutrisModelIsRepeatableAndPreservesLocalState();
   void malformedLutrisDataDoesNotReplaceCachedGames();
   void unifiedLibraryFiltersSourcesAndRoutesFavorites();
+  void customCoverPersistsAndResets();
   void lutrisLauncherBuildsSafeCommands();
   void heroicScannerImportsEpicGogAndAmazon();
   void heroicModelIsRepeatableAndPreservesLocalState();
@@ -553,6 +555,41 @@ void CoreTests::unifiedLibraryFiltersSourcesAndRoutesFavorites() {
   QCOMPARE(library.get(0).value(QStringLiteral("title")).toString(), QStringLiteral("Signal Hill"));
   library.toggleFavorite(0);
   QVERIFY(lutris.data(lutris.index(0), GameRoles::Favorite).toBool());
+}
+
+void CoreTests::customCoverPersistsAndResets() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  const QString source = directory.path() + QStringLiteral("/cover.png");
+  QImage image(20, 30, QImage::Format_RGB32);
+  image.fill(Qt::red);
+  QVERIFY(image.save(source));
+
+  {
+    MockGameModel demo(nullptr, 1);
+    UnifiedGameModel games(database);
+    games.addSourceModel(&demo);
+    LibraryFilterModel library;
+    library.setSourceModel(&games);
+    QVERIFY(library.setCustomCover(0, QUrl::fromLocalFile(source)));
+    const QVariantMap game = library.get(0);
+    QVERIFY(game.value(QStringLiteral("customCover")).toBool());
+    QVERIFY(
+        QFileInfo(QUrl(game.value(QStringLiteral("coverPath")).toString()).toLocalFile()).isFile());
+  }
+
+  MockGameModel demo(nullptr, 1);
+  UnifiedGameModel games(database);
+  games.addSourceModel(&demo);
+  LibraryFilterModel library;
+  library.setSourceModel(&games);
+  QVERIFY(library.get(0).value(QStringLiteral("customCover")).toBool());
+  QVERIFY(library.resetCustomCover(0));
+  QVERIFY(!library.get(0).value(QStringLiteral("customCover")).toBool());
+  writeFile(directory.path() + QStringLiteral("/invalid.png"), "not an image");
+  QVERIFY(!library.setCustomCover(
+      0, QUrl::fromLocalFile(directory.path() + QStringLiteral("/invalid.png"))));
 }
 
 void CoreTests::lutrisLauncherBuildsSafeCommands() {

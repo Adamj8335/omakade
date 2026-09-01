@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QSortFilterProxyModel>
+#include <QUrl>
 
 class LibraryFilterModel final : public QSortFilterProxyModel {
   Q_OBJECT
@@ -34,6 +35,8 @@ public:
   Q_INVOKABLE QVariantMap get(int row) const;
   Q_INVOKABLE void toggleFavorite(int row);
   Q_INVOKABLE void toggleHidden(int row);
+  Q_INVOKABLE bool setCustomCover(int row, const QUrl& sourceUrl);
+  Q_INVOKABLE bool resetCustomCover(int row);
 
 signals:
   void searchTextChanged();

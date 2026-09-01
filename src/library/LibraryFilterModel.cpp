@@ -1,6 +1,7 @@
 #include "library/LibraryFilterModel.h"
 
 #include "library/GameRoles.h"
+#include "library/UnifiedGameModel.h"
 
 LibraryFilterModel::LibraryFilterModel(QObject* parent) : QSortFilterProxyModel(parent) {
   setDynamicSortFilter(true);
@@ -100,6 +101,22 @@ void LibraryFilterModel::toggleHidden(int row) {
   }
   QMetaObject::invokeMethod(sourceModel(), "toggleHidden",
                             Q_ARG(int, mapToSource(index(row, 0)).row()));
+}
+
+bool LibraryFilterModel::setCustomCover(int row, const QUrl& sourceUrl) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || row < 0 || row >= rowCount()) {
+    return false;
+  }
+  return games->setCustomCover(mapToSource(index(row, 0)).row(), sourceUrl);
+}
+
+bool LibraryFilterModel::resetCustomCover(int row) {
+  auto* games = qobject_cast<UnifiedGameModel*>(sourceModel());
+  if (games == nullptr || row < 0 || row >= rowCount()) {
+    return false;
+  }
+  return games->resetCustomCover(mapToSource(index(row, 0)).row());
 }
 
 bool LibraryFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {

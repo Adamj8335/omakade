@@ -685,8 +685,8 @@ Gate:
 ### M4: Unified library
 
 Status: in progress. Lutris and Heroic installed-game import and launch, the
-shared model, and source filters are complete in the 0.4 preview. Explicit
-duplicate linking is next.
+shared model, source filters, and persistent user-selected cover overrides are
+complete in the 0.4 preview. Explicit duplicate linking is next.
 
 Deliver in this order:
 

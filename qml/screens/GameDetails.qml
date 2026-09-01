@@ -17,6 +17,8 @@ Item {
     signal manageRequested()
     signal hiddenRequested()
     signal connectRequested()
+    signal coverRequested()
+    signal coverResetRequested()
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -94,58 +96,81 @@ Item {
             width: parent.width
             spacing: Math.max(28, width * 0.045)
 
-            Rectangle {
+            ColumnLayout {
                 Layout.preferredWidth: Math.min(330, root.width * 0.28)
-                Layout.preferredHeight: Layout.preferredWidth * 1.5
                 Layout.alignment: Qt.AlignTop
-                radius: Math.max(6, Theme.cornerRadius)
-                clip: true
-                border.color: root.alpha(Theme.foreground, 0.22)
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: root.game.accentStart || Theme.accent }
-                    GradientStop { position: 1.0; color: root.game.accentEnd || Theme.blue }
-                }
-
-                Image {
-                    id: coverArtwork
-                    anchors.fill: parent
-                    source: root.game.coverPath || ""
-                    asynchronous: true
-                    cache: false
-                    fillMode: Image.PreserveAspectCrop
-                    sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
-                    sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
-                    opacity: status === Image.Ready ? 1 : 0
-                }
+                spacing: 8
 
                 Rectangle {
-                    visible: coverArtwork.status !== Image.Ready
-                    width: parent.width * 0.95
-                    height: width
-                    radius: width / 2
-                    x: parent.width * 0.44
-                    y: -height * 0.18
-                    color: root.alpha(Theme.brightForeground, 0.10)
-                }
-
-                Text {
-                    visible: coverArtwork.status !== Image.Ready
-                    anchors.centerIn: parent
-                    text: root.game.coverMark || "◇"
-                    color: root.alpha(Theme.brightForeground, 0.9)
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Math.max(74, parent.width * 0.34)
-                }
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    height: parent.height * 0.34
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: width * 1.5
+                    radius: Math.max(6, Theme.cornerRadius)
+                    clip: true
+                    border.color: root.alpha(Theme.foreground, 0.22)
                     gradient: Gradient {
-                        GradientStop { position: 0.0; color: "transparent" }
-                        GradientStop { position: 1.0; color: root.alpha(Theme.darkerBackground, 0.84) }
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: root.game.accentStart || Theme.accent }
+                        GradientStop { position: 1.0; color: root.game.accentEnd || Theme.blue }
+                    }
+
+                    Image {
+                        id: coverArtwork
+                        anchors.fill: parent
+                        source: root.game.coverPath || ""
+                        asynchronous: true
+                        cache: false
+                        fillMode: Image.PreserveAspectCrop
+                        sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
+                        sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
+                        opacity: status === Image.Ready ? 1 : 0
+                    }
+
+                    Rectangle {
+                        visible: coverArtwork.status !== Image.Ready
+                        width: parent.width * 0.95
+                        height: width
+                        radius: width / 2
+                        x: parent.width * 0.44
+                        y: -height * 0.18
+                        color: root.alpha(Theme.brightForeground, 0.10)
+                    }
+
+                    Text {
+                        visible: coverArtwork.status !== Image.Ready
+                        anchors.centerIn: parent
+                        text: root.game.coverMark || "◇"
+                        color: root.alpha(Theme.brightForeground, 0.9)
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Math.max(74, parent.width * 0.34)
+                    }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: parent.height * 0.34
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "transparent" }
+                            GradientStop { position: 1.0; color: root.alpha(Theme.darkerBackground, 0.84) }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: !DemoMode
+                    spacing: 8
+                    GlassButton {
+                        Layout.fillWidth: true
+                        compact: true
+                        text: "CHANGE COVER"
+                        onClicked: root.coverRequested()
+                    }
+                    GlassButton {
+                        visible: root.game.customCover || false
+                        compact: true
+                        text: "RESET"
+                        onClicked: root.coverResetRequested()
                     }
                 }
             }
