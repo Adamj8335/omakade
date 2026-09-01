@@ -24,6 +24,7 @@ The 0.5 preview includes:
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
 - Local Steam achievements plus optional Web API enrichment
+- Optional IGDB critic aggregates and game-length estimates
 - Local, downloaded, and user-selected cover artwork
 - Explicit linking for games installed through multiple sources
 - Keyboard, mouse, and controller navigation
@@ -64,7 +65,8 @@ to return, and F11 to toggle fullscreen. `Ctrl+M` toggles reduced motion and
 
 Core library discovery, local achievements, artwork, search, organization,
 controller navigation, and launching require no Steam API key or network
-connection. Optional Steam credentials are stored by Secret Service.
+connection. Optional Steam and IGDB credentials are stored by Secret Service,
+and cached game insights stay available offline.
 
 See [PRIVACY.md](PRIVACY.md) for retained data and external requests,
 [CHANGELOG.md](CHANGELOG.md) for release notes, and the current

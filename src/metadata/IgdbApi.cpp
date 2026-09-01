@@ -98,10 +98,10 @@ bool IgdbApi::parseGame(const QByteArray& contents, IgdbGameInsight* insight, QS
   insight->gameId = parsedId;
   insight->title = title;
   const double score = value.value(QStringLiteral("aggregated_rating")).toDouble(-1);
-  insight->criticScore = std::isfinite(score) && score >= 0 && score <= 100
-                             ? static_cast<int>(std::round(score))
-                             : -1;
-  insight->criticReviewCount = boundedInteger(value.value(QStringLiteral("aggregated_rating_count")));
+  insight->criticScore =
+      std::isfinite(score) && score >= 0 && score <= 100 ? static_cast<int>(std::round(score)) : -1;
+  insight->criticReviewCount =
+      boundedInteger(value.value(QStringLiteral("aggregated_rating_count")));
   return true;
 }
 

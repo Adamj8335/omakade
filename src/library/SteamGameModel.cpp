@@ -332,6 +332,14 @@ bool SteamGameModel::ensureSchema() {
           "unlocked INTEGER NOT NULL, unlock_time INTEGER NOT NULL, rarity REAL NOT NULL, "
           "hidden INTEGER NOT NULL, current_progress REAL NOT NULL, maximum_progress REAL "
           "NOT NULL, source TEXT NOT NULL, PRIMARY KEY(app_id, api_name))"),
+      QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS game_insights ("
+          "source TEXT NOT NULL, app_id TEXT NOT NULL, provider TEXT NOT NULL, provider_game_id "
+          "INTEGER NOT NULL, title TEXT NOT NULL, critic_score INTEGER NOT NULL DEFAULT -1, "
+          "critic_review_count INTEGER NOT NULL DEFAULT 0, rushed_seconds INTEGER NOT NULL "
+          "DEFAULT 0, normal_seconds INTEGER NOT NULL DEFAULT 0, complete_seconds INTEGER NOT "
+          "NULL DEFAULT 0, time_sample_count INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT "
+          "NULL, PRIMARY KEY(source, app_id, provider))"),
   };
   for (const QString& statement : statements) {
     if (!query.exec(statement)) {
@@ -339,7 +347,7 @@ bool SteamGameModel::ensureSchema() {
       return false;
     }
   }
-  if (schemaVersion < 2 && !query.exec(QStringLiteral("PRAGMA user_version = 2"))) {
+  if (schemaVersion < 5 && !query.exec(QStringLiteral("PRAGMA user_version = 5"))) {
     setStatus(QStringLiteral("Could not update the library database version"),
               query.lastError().text());
     return false;

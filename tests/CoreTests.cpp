@@ -13,6 +13,7 @@
 #include "library/SteamGameModel.h"
 #include "library/UnifiedGameModel.h"
 #include "metadata/IgdbApi.h"
+#include "metadata/GameInsightsService.h"
 #include "sources/heroic/HeroicScanner.h"
 #include "sources/lutris/LutrisScanner.h"
 #include "sources/steam/SteamScanner.h"
@@ -183,6 +184,7 @@ private slots:
   void malformedHeroicDataDoesNotReplaceCachedGames();
   void heroicLauncherBuildsSafeCommands();
   void igdbApiBuildsSafeQueriesAndParsesInsights();
+  void igdbInsightsLoadFromOfflineCache();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
   void secondInstanceRequestsActivation();
@@ -406,12 +408,17 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QSqlQuery query(verify);
     QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
     QVERIFY(query.next());
-    QCOMPARE(query.value(0).toInt(), 4);
+    QCOMPARE(query.value(0).toInt(), 5);
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('achievement_summary', 'achievements')")));
     QVERIFY(query.next());
     QCOMPARE(query.value(0).toInt(), 2);
+    QVERIFY(query.exec(
+        QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = "
+                       "'game_insights'")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 1);
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('artwork_overrides', 'game_link_members', 'launch_activity')")));
@@ -810,6 +817,43 @@ void CoreTests::igdbApiBuildsSafeQueriesAndParsesInsights() {
   QVERIFY(!IgdbApi::parseGame("not json", &insight, &error));
 }
 
+void CoreTests::igdbInsightsLoadFromOfflineCache() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString databasePath = directory.path() + QStringLiteral("/library.sqlite3");
+  const QString connection = QStringLiteral("igdb-cache-fixture");
+  {
+    QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+    database.setDatabaseName(databasePath);
+    QVERIFY(database.open());
+    QSqlQuery query(database);
+    QVERIFY(query.exec(QStringLiteral(
+        "CREATE TABLE game_insights (source TEXT NOT NULL, app_id TEXT NOT NULL, provider TEXT "
+        "NOT NULL, provider_game_id INTEGER NOT NULL, title TEXT NOT NULL, critic_score INTEGER "
+        "NOT NULL, critic_review_count INTEGER NOT NULL, rushed_seconds INTEGER NOT NULL, "
+        "normal_seconds INTEGER NOT NULL, complete_seconds INTEGER NOT NULL, time_sample_count "
+        "INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(source, app_id, provider))")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO game_insights VALUES('Steam', '10', 'igdb', 1942, 'Cached Game', 88, 31, "
+        "7200, 14400, 28800, 99, 1700000000)")));
+    database.close();
+  }
+  QSqlDatabase::removeDatabase(connection);
+
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  GameInsightsService insights(databasePath, &settings);
+  QTRY_VERIFY_WITH_TIMEOUT(!insights.busy(), 2000);
+  insights.loadSteam(QStringLiteral("10"));
+  QVERIFY(insights.available());
+  QCOMPARE(insights.criticScore(), 88);
+  QCOMPARE(insights.criticReviewCount(), 31);
+  QCOMPARE(insights.rushedHours(), 2);
+  QCOMPARE(insights.normalHours(), 4);
+  QCOMPARE(insights.completeHours(), 8);
+  QCOMPARE(insights.timeSampleCount(), 99);
+  QCOMPARE(insights.statusText(), QStringLiteral("Cached IGDB data"));
+}
+
 void CoreTests::stressLibraryContainsOneThousandGames() {
   MockGameModel games(nullptr, 1000);
   QCOMPARE(games.rowCount(), 1000);
@@ -826,11 +870,13 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     settings.setReducedMotion(true);
     settings.setArtworkCacheLimitMb(512);
     settings.setSteamId(QStringLiteral("76561198000000000"));
+    settings.setIgdbClientId(QStringLiteral("publicclient123"));
   }
   AppSettings reloaded(path);
   QVERIFY(reloaded.reducedMotion());
   QCOMPARE(reloaded.artworkCacheLimitMb(), 512);
   QCOMPARE(reloaded.steamId(), QStringLiteral("76561198000000000"));
+  QCOMPARE(reloaded.igdbClientId(), QStringLiteral("publicclient123"));
 }
 
 void CoreTests::secondInstanceRequestsActivation() {

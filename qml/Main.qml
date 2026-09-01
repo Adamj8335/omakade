@@ -30,8 +30,14 @@ ApplicationWindow {
                                ? selectedInstallations[0] : selectedGame
         if (!DemoMode && selectedGame.source === "Steam") {
             Achievements.load(selectedGame.appId)
+            if (Insights) {
+                Insights.loadSteam(selectedGame.appId)
+            }
         } else {
             Achievements.load("")
+            if (Insights) {
+                Insights.loadSteam("")
+            }
         }
         detailOpen = true
     }
@@ -74,8 +80,14 @@ ApplicationWindow {
         selectedInstallation = installation
         if (!DemoMode && installation.source === "Steam") {
             Achievements.load(installation.appId)
+            if (Insights) {
+                Insights.loadSteam(installation.appId)
+            }
         } else {
             Achievements.load("")
+            if (Insights) {
+                Insights.loadSteam("")
+            }
         }
     }
 
@@ -779,16 +791,20 @@ ApplicationWindow {
         Rectangle {
             anchors.centerIn: parent
             width: Math.min(610, parent.width - 48)
-            height: Math.min(610, parent.height - 48)
+            height: Math.min(760, parent.height - 48)
             radius: Math.max(8, Theme.cornerRadius)
             color: root.alpha(Theme.background, 0.98)
             border.color: root.alpha(Theme.foreground, 0.2)
 
             MouseArea { anchors.fill: parent }
 
-            ColumnLayout {
+            ScrollView {
                 anchors.fill: parent
                 anchors.margins: 28
+                contentWidth: availableWidth
+
+            ColumnLayout {
+                width: parent.width
                 spacing: 14
 
                 Text {
@@ -939,8 +955,89 @@ ApplicationWindow {
                     text: "GET A KEY FROM STEAM"
                     onClicked: Qt.openUrlExternally("https://steamcommunity.com/dev/apikey")
                 }
-                Item { Layout.fillHeight: true }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: root.alpha(Theme.foreground, 0.12)
+                }
+                Text {
+                    text: "OPTIONAL GAME INSIGHTS"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: Insights ? Insights.statusText : "IGDB is unavailable in demo mode."
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
                 RowLayout {
+                    Layout.fillWidth: true
+                    enabled: Insights !== null && !Insights.busy
+                    TextField {
+                        id: igdbClientIdField
+                        Layout.fillWidth: true
+                        placeholderText: "Twitch developer client ID"
+                        text: Insights ? Insights.clientId : ""
+                        color: Theme.foreground
+                        placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                        font.family: Theme.fontFamily
+                        background: Rectangle {
+                            radius: Math.max(5, Theme.cornerRadius)
+                            color: root.alpha(Theme.foreground, 0.045)
+                            border.color: root.alpha(Theme.foreground, 0.15)
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "SAVE ID"
+                        onClicked: Insights.setClientId(igdbClientIdField.text)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: Insights !== null && !Insights.busy
+                    TextField {
+                        id: igdbSecretField
+                        Layout.fillWidth: true
+                        placeholderText: Insights && Insights.hasClientSecret
+                                         ? "Client secret stored securely" : "Twitch developer client secret"
+                        color: Theme.foreground
+                        placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                        echoMode: TextInput.Password
+                        font.family: Theme.fontFamily
+                        background: Rectangle {
+                            radius: Math.max(5, Theme.cornerRadius)
+                            color: root.alpha(Theme.foreground, 0.045)
+                            border.color: root.alpha(Theme.foreground, 0.15)
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "SAVE SECRET"
+                        onClicked: {
+                            Insights.storeClientSecret(igdbSecretField.text)
+                            igdbSecretField.clear()
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        visible: Insights ? Insights.configured : false
+                        text: "REMOVE"
+                        onClicked: Insights.removeCredentials()
+                    }
+                }
+                GlassButton {
+                    compact: true
+                    text: "CREATE IGDB CREDENTIALS"
+                    onClicked: Qt.openUrlExternally("https://dev.twitch.tv/console/apps")
+                }
+                RowLayout {
+                    Layout.topMargin: 8
                     spacing: 8
                     GlassButton {
                         compact: true
@@ -964,6 +1061,7 @@ ApplicationWindow {
                         onClicked: root.diagnosticsOpen = false
                     }
                 }
+            }
             }
         }
     }

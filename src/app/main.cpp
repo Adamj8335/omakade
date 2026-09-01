@@ -10,6 +10,7 @@
 #include "library/MockGameModel.h"
 #include "library/SteamGameModel.h"
 #include "library/UnifiedGameModel.h"
+#include "metadata/GameInsightsService.h"
 #include "theme/OmarchyTheme.h"
 
 #include <QAbstractItemModel>
@@ -89,6 +90,7 @@ int main(int argc, char* argv[]) {
                                                         : steamLibrary->databasePath(),
                                 &preferences);
   std::unique_ptr<SteamAccountService> steamAccount;
+  std::unique_ptr<GameInsightsService> gameInsights;
   if (steamLibrary != nullptr) {
     steamAccount =
         std::make_unique<SteamAccountService>(steamLibrary->databasePath(), &preferences);
@@ -96,6 +98,8 @@ int main(int argc, char* argv[]) {
                      [&achievements](const QString& appId) { achievements.load(appId); });
     QObject::connect(steamAccount.get(), &SteamAccountService::achievementsUpdated, steamLibrary,
                      &SteamGameModel::reloadAchievementSummary);
+    gameInsights =
+        std::make_unique<GameInsightsService>(steamLibrary->databasePath(), &preferences);
   }
   GameLauncher launcher;
 
@@ -128,6 +132,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
   engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamAccount"), steamAccount.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("Insights"), gameInsights.get());
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"), demoMode || stressMode);
   engine.rootContext()->setContextProperty(QStringLiteral("StartupMilliseconds"),
                                            startupTimer.elapsed());

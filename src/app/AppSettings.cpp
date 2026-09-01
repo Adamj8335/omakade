@@ -47,6 +47,20 @@ void AppSettings::setSteamId(const QString& value) {
   emit steamIdChanged();
 }
 
+QString AppSettings::igdbClientId() const { return m_igdbClientId; }
+
+void AppSettings::setIgdbClientId(const QString& value) {
+  static const QRegularExpression valid(QStringLiteral("^[A-Za-z0-9]{5,64}$"));
+  const QString normalized = value.trimmed();
+  if ((!normalized.isEmpty() && !valid.match(normalized).hasMatch()) ||
+      m_igdbClientId == normalized) {
+    return;
+  }
+  m_igdbClientId = normalized;
+  save();
+  emit igdbClientIdChanged();
+}
+
 QString AppSettings::defaultPath() {
   return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
          QStringLiteral("/omakade/config.toml");
@@ -73,6 +87,12 @@ void AppSettings::load() {
   if (steamIdMatch.hasMatch()) {
     m_steamId = steamIdMatch.captured(1);
   }
+  const QRegularExpression igdbClientId(
+      QStringLiteral("(?m)^igdb_client_id\\s*=\\s*\"([A-Za-z0-9]{5,64})\"\\s*$"));
+  const QRegularExpressionMatch igdbClientIdMatch = igdbClientId.match(contents);
+  if (igdbClientIdMatch.hasMatch()) {
+    m_igdbClientId = igdbClientIdMatch.captured(1);
+  }
 }
 
 void AppSettings::save() const {
@@ -81,10 +101,12 @@ void AppSettings::save() const {
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     return;
   }
-  file.write(QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\nsteam_id = \"%3\"\n")
+  file.write(QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\nsteam_id = "
+                            "\"%3\"\nigdb_client_id = \"%4\"\n")
                  .arg(m_reducedMotion ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_artworkCacheLimitMb)
                  .arg(m_steamId)
+                 .arg(m_igdbClientId)
                  .toUtf8());
   file.commit();
 }

@@ -29,6 +29,10 @@ Item {
         return Qt.rgba(color.r, color.g, color.b, value)
     }
 
+    function insightValue(value) {
+        return value > 0 ? value + " H" : "NO DATA"
+    }
+
     Keys.onEscapePressed: function(event) {
         root.backRequested()
         event.accepted = true
@@ -351,6 +355,105 @@ Item {
                                 }
                             }
                         }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 12
+                    spacing: 10
+                    visible: root.selectedInstallation.source === "Steam" && Insights !== null
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "GAME INSIGHTS · IGDB"
+                            color: Theme.brightForeground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 12
+                            font.weight: Font.Bold
+                            font.letterSpacing: 0.6
+                        }
+                        Item { Layout.fillWidth: true }
+                        GlassButton {
+                            compact: true
+                            text: Insights && Insights.configured
+                                  ? (Insights.busy ? "REFRESHING" : "REFRESH")
+                                  : "CONNECT IGDB"
+                            enabled: Insights && !Insights.busy
+                            onClicked: {
+                                if (Insights.configured) {
+                                    Insights.refreshSteam(root.game.appId)
+                                } else {
+                                    root.connectRequested()
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: Insights ? Insights.statusText : ""
+                        color: Theme.mutedText
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                    }
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        visible: Insights ? Insights.available : false
+                        columns: root.width < 1120 ? 2 : 4
+                        columnSpacing: 10
+                        rowSpacing: 10
+
+                        Repeater {
+                            model: Insights ? [
+                                { label: "IGDB CRITIC", value: Insights.criticScore >= 0 ? Insights.criticScore + " / 100" : "NO SCORE" },
+                                { label: "RUSHED", value: root.insightValue(Insights.rushedHours) },
+                                { label: "MAIN + EXTRAS", value: root.insightValue(Insights.normalHours) },
+                                { label: "COMPLETIONIST", value: root.insightValue(Insights.completeHours) }
+                            ] : []
+
+                            Rectangle {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 130
+                                Layout.preferredHeight: 72
+                                radius: Math.max(5, Theme.cornerRadius)
+                                color: root.alpha(Theme.foreground, 0.045)
+                                border.color: root.alpha(Theme.foreground, 0.13)
+
+                                Column {
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.leftMargin: 14
+                                    spacing: 6
+                                    Text {
+                                        text: modelData.label
+                                        color: Theme.mutedText
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: 8
+                                        font.weight: Font.DemiBold
+                                    }
+                                    Text {
+                                        text: modelData.value
+                                        color: Theme.brightForeground
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: 14
+                                        font.weight: Font.DemiBold
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        visible: Insights ? Insights.available : false
+                        text: "Critic aggregate and time estimates provided by IGDB"
+                        color: root.alpha(Theme.foreground, 0.48)
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 8
                     }
                 }
 

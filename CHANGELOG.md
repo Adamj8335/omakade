@@ -4,6 +4,8 @@
 
 - Added persistent launch activity across Steam, Lutris, and Heroic.
 - Made Recently Played sort by exact activity time instead of a yes or no flag.
+- Added optional IGDB critic aggregates and game-length estimates with an
+  offline cache and Secret Service credential storage.
 
 ## 0.5.0
 

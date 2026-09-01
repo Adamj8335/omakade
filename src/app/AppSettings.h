@@ -10,6 +10,8 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int artworkCacheLimitMb READ artworkCacheLimitMb WRITE setArtworkCacheLimitMb NOTIFY
                  artworkCacheLimitMbChanged)
   Q_PROPERTY(QString steamId READ steamId WRITE setSteamId NOTIFY steamIdChanged)
+  Q_PROPERTY(
+      QString igdbClientId READ igdbClientId WRITE setIgdbClientId NOTIFY igdbClientIdChanged)
 
 public:
   explicit AppSettings(const QString& path = {}, QObject* parent = nullptr);
@@ -20,11 +22,14 @@ public:
   void setArtworkCacheLimitMb(int value);
   [[nodiscard]] QString steamId() const;
   void setSteamId(const QString& value);
+  [[nodiscard]] QString igdbClientId() const;
+  void setIgdbClientId(const QString& value);
 
 signals:
   void reducedMotionChanged();
   void artworkCacheLimitMbChanged();
   void steamIdChanged();
+  void igdbClientIdChanged();
 
 private:
   [[nodiscard]] static QString defaultPath();
@@ -35,4 +40,5 @@ private:
   bool m_reducedMotion = false;
   int m_artworkCacheLimitMb = 1024;
   QString m_steamId;
+  QString m_igdbClientId;
 };

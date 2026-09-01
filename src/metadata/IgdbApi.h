@@ -24,7 +24,6 @@ public:
                                               QString* error = nullptr);
   [[nodiscard]] static bool parseGame(const QByteArray& contents, IgdbGameInsight* insight,
                                       QString* error = nullptr);
-  [[nodiscard]] static bool parseTimeToBeat(const QByteArray& contents,
-                                            IgdbGameInsight* insight,
+  [[nodiscard]] static bool parseTimeToBeat(const QByteArray& contents, IgdbGameInsight* insight,
                                             QString* error = nullptr);
 };
