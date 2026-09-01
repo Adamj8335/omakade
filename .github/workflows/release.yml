@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: >-
+          pacman -Syu --noconfirm --needed
+          appstream base-devel cmake desktop-file-utils git github-cli libsecret
+          ninja pkgconf qt6-base qt6-declarative qt6-wayland sdl3
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check release version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          project_version="$(sed -n 's/^project(Omakade VERSION \([^ ]*\).*/\1/p' CMakeLists.txt)"
+          test "$version" = "$project_version"
+          grep -q "<release version=\"$version\"" packaging/io.github.tsouth89.Omakade.metainfo.xml
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Build and test
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+          ctest --preset release
+          desktop-file-validate packaging/io.github.tsouth89.Omakade.desktop
+          appstreamcli validate packaging/io.github.tsouth89.Omakade.metainfo.xml
+      - name: Create source and package
+        run: |
+          git archive --format=tar --prefix="omakade-$VERSION/" "$GITHUB_SHA" | gzip -n > "omakade-$VERSION.tar.gz"
+          source_sha="$(sha256sum "omakade-$VERSION.tar.gz" | cut -d ' ' -f 1)"
+          sed -e "s/@VERSION@/$VERSION/g" -e "s/@SOURCE_SHA256@/$source_sha/g" \
+            packaging/arch/PKGBUILD.in > packaging/arch/PKGBUILD
+          cp "omakade-$VERSION.tar.gz" packaging/arch/
+          useradd --create-home builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- bash -lc "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --cleanbuild --noconfirm"
+          cp packaging/arch/omakade-*.pkg.tar.zst .
+          cp packaging/arch/PKGBUILD "PKGBUILD-$VERSION"
+          sha256sum "omakade-$VERSION.tar.gz" omakade-*.pkg.tar.zst "PKGBUILD-$VERSION" > SHA256SUMS
+          awk '/^## Unreleased/{copy=1; next} /^## /{copy=0} copy' CHANGELOG.md > RELEASE_NOTES.md
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          "omakade-$VERSION.tar.gz"
+          omakade-*.pkg.tar.zst
+          "PKGBUILD-$VERSION"
+          SHA256SUMS
+          --repo "$GITHUB_REPOSITORY"
+          --title "Omakade $VERSION"
+          --notes-file RELEASE_NOTES.md

@@ -25,3 +25,11 @@ jobs:
         run: |
           desktop-file-validate packaging/io.github.tsouth89.Omakade.desktop
           appstreamcli validate packaging/io.github.tsouth89.Omakade.metainfo.xml
+      - name: Verify staged install
+        run: |
+          cmake --install build/release --prefix "$PWD/stage/usr"
+          test -x stage/usr/bin/omakade
+          test -f stage/usr/share/applications/io.github.tsouth89.Omakade.desktop
+          test -f stage/usr/share/metainfo/io.github.tsouth89.Omakade.metainfo.xml
+          desktop-file-validate stage/usr/share/applications/io.github.tsouth89.Omakade.desktop
+          appstreamcli validate stage/usr/share/metainfo/io.github.tsouth89.Omakade.metainfo.xml
