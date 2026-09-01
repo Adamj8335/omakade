@@ -111,6 +111,9 @@ ApplicationWindow {
             Library.recordLaunch(selectedIndex, selectedInstallation.source,
                                  selectedInstallation.runner || "", selectedInstallation.appId)
             showToast("Opening " + selectedGame.title + " in " + selectedInstallation.source)
+            if (Preferences.closeAfterLaunch) {
+                Qt.callLater(Qt.quit)
+            }
         } else {
             showToast(Launcher.lastError)
         }
@@ -1072,7 +1075,8 @@ ApplicationWindow {
                         { label: "LOCAL ARTWORK", value: SteamLibrary ? SteamLibrary.artworkCount + " covers" : "Procedural demo art" },
                         { label: "CONTROLLER", value: Controller.connected ? Controller.name : "Not connected" },
                         { label: "DATABASE", value: SteamLibrary ? SteamLibrary.databasePath : "Not used in demo mode" },
-                        { label: "ACHIEVEMENT ART", value: (Achievements.cacheBytes / 1048576).toFixed(1) + " MB / " + Preferences.artworkCacheLimitMb + " MB" }
+                        { label: "ACHIEVEMENT ART", value: (Achievements.cacheBytes / 1048576).toFixed(1) + " MB / " + Preferences.artworkCacheLimitMb + " MB" },
+                        { label: "VERSION", value: AppVersion }
                     ]
                     RowLayout {
                         required property var modelData
@@ -1312,6 +1316,12 @@ ApplicationWindow {
                         text: Preferences.reducedMotion ? "MOTION OFF" : "MOTION ON"
                         selected: Preferences.reducedMotion
                         onClicked: Preferences.reducedMotion = !Preferences.reducedMotion
+                    }
+                    GlassButton {
+                        compact: true
+                        text: Preferences.closeAfterLaunch ? "CLOSE AFTER PLAY" : "STAY OPEN"
+                        selected: Preferences.closeAfterLaunch
+                        onClicked: Preferences.closeAfterLaunch = !Preferences.closeAfterLaunch
                     }
                     GlassButton {
                         compact: true

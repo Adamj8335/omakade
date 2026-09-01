@@ -15,6 +15,8 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool steamEnabled READ steamEnabled WRITE setSteamEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool lutrisEnabled READ lutrisEnabled WRITE setLutrisEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool heroicEnabled READ heroicEnabled WRITE setHeroicEnabled NOTIFY sourcesChanged)
+  Q_PROPERTY(bool closeAfterLaunch READ closeAfterLaunch WRITE setCloseAfterLaunch NOTIFY
+                 closeAfterLaunchChanged)
 
 public:
   explicit AppSettings(const QString& path = {}, QObject* parent = nullptr);
@@ -33,6 +35,8 @@ public:
   void setLutrisEnabled(bool value);
   [[nodiscard]] bool heroicEnabled() const;
   void setHeroicEnabled(bool value);
+  [[nodiscard]] bool closeAfterLaunch() const;
+  void setCloseAfterLaunch(bool value);
 
 signals:
   void reducedMotionChanged();
@@ -40,6 +44,7 @@ signals:
   void steamIdChanged();
   void igdbClientIdChanged();
   void sourcesChanged();
+  void closeAfterLaunchChanged();
 
 private:
   [[nodiscard]] static QString defaultPath();
@@ -54,4 +59,5 @@ private:
   bool m_steamEnabled = true;
   bool m_lutrisEnabled = true;
   bool m_heroicEnabled = true;
+  bool m_closeAfterLaunch = false;
 };

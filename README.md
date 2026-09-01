@@ -26,6 +26,7 @@ The 0.5 preview includes:
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
 - Runtime source controls with scan status and detected locations
+- Optional close-after-launch behavior
 - Collections, tags, completion states, and smart organization filters
 - Local Steam achievements plus optional Web API enrichment
 - Optional IGDB critic aggregates and game-length estimates

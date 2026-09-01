@@ -19,6 +19,12 @@
   <content_rating type="oars-1.1" />
   <url type="homepage">https://tsouth89.github.io/omakade/</url>
   <url type="bugtracker">https://github.com/tsouth89/omakade/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://tsouth89.github.io/omakade/assets/library-preview.webp</image>
+      <caption>A unified, theme-native game library</caption>
+    </screenshot>
+  </screenshots>
   <releases>
     <release version="0.5.0" date="2026-08-31" />
     <release version="0.4.0" date="2026-08-31" />

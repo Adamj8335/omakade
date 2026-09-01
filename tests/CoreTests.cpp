@@ -1012,6 +1012,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     settings.setIgdbClientId(QStringLiteral("publicclient123"));
     settings.setSteamEnabled(false);
     settings.setLutrisEnabled(false);
+    settings.setCloseAfterLaunch(true);
   }
   AppSettings reloaded(path);
   QVERIFY(reloaded.reducedMotion());
@@ -1021,6 +1022,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   QVERIFY(!reloaded.steamEnabled());
   QVERIFY(!reloaded.lutrisEnabled());
   QVERIFY(reloaded.heroicEnabled());
+  QVERIFY(reloaded.closeAfterLaunch());
 }
 
 void CoreTests::secondInstanceRequestsActivation() {

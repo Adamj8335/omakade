@@ -94,6 +94,17 @@ void AppSettings::setHeroicEnabled(bool value) {
   emit sourcesChanged();
 }
 
+bool AppSettings::closeAfterLaunch() const { return m_closeAfterLaunch; }
+
+void AppSettings::setCloseAfterLaunch(bool value) {
+  if (m_closeAfterLaunch == value) {
+    return;
+  }
+  m_closeAfterLaunch = value;
+  save();
+  emit closeAfterLaunchChanged();
+}
+
 QString AppSettings::defaultPath() {
   return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
          QStringLiteral("/omakade/config.toml");
@@ -135,6 +146,7 @@ void AppSettings::load() {
   m_steamEnabled = readEnabled(QStringLiteral("steam_enabled"), true);
   m_lutrisEnabled = readEnabled(QStringLiteral("lutris_enabled"), true);
   m_heroicEnabled = readEnabled(QStringLiteral("heroic_enabled"), true);
+  m_closeAfterLaunch = readEnabled(QStringLiteral("close_after_launch"), false);
 }
 
 void AppSettings::save() const {
@@ -145,7 +157,7 @@ void AppSettings::save() const {
   }
   file.write(QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\nsteam_id = "
                             "\"%3\"\nigdb_client_id = \"%4\"\nsteam_enabled = %5\n"
-                            "lutris_enabled = %6\nheroic_enabled = %7\n")
+                            "lutris_enabled = %6\nheroic_enabled = %7\nclose_after_launch = %8\n")
                  .arg(m_reducedMotion ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_artworkCacheLimitMb)
                  .arg(m_steamId)
@@ -153,6 +165,7 @@ void AppSettings::save() const {
                  .arg(m_steamEnabled ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_lutrisEnabled ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_heroicEnabled ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(m_closeAfterLaunch ? QStringLiteral("true") : QStringLiteral("false"))
                  .toUtf8());
   file.commit();
 }

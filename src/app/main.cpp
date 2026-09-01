@@ -162,6 +162,8 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"), demoMode || stressMode);
   engine.rootContext()->setContextProperty(QStringLiteral("StartupMilliseconds"),
                                            startupTimer.elapsed());
+  engine.rootContext()->setContextProperty(QStringLiteral("AppVersion"),
+                                           QCoreApplication::applicationVersion());
 
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,

@@ -12,6 +12,7 @@
   and per-source errors.
 - Added stale-install checks, Flatpak launcher verification, actionable launch
   errors, and ProtonDB and PCGamingWiki links.
+- Added an opt-in close-after-launch setting and visible version diagnostics.
 
 ## 0.5.0
 
