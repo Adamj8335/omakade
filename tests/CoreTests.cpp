@@ -393,6 +393,8 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
   QSqlDatabase::removeDatabase(setupConnection);
 
   SteamGameModel model(database);
+  UnifiedGameModel unified(database);
+  SteamGameModel reopened(database);
   const QString verifyConnection = QStringLiteral("migration-verify");
   {
     QSqlDatabase verify = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), verifyConnection);
@@ -401,10 +403,15 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QSqlQuery query(verify);
     QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
     QVERIFY(query.next());
-    QCOMPARE(query.value(0).toInt(), 2);
+    QCOMPARE(query.value(0).toInt(), 3);
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('achievement_summary', 'achievements')")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 2);
+    QVERIFY(query.exec(
+        QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
+                       "('artwork_overrides', 'game_link_members')")));
     QVERIFY(query.next());
     QCOMPARE(query.value(0).toInt(), 2);
     verify.close();

@@ -303,6 +303,10 @@ bool SteamGameModel::openDatabase(const QString& path) {
 
 bool SteamGameModel::ensureSchema() {
   QSqlQuery query(m_database);
+  int schemaVersion = 0;
+  if (query.exec(QStringLiteral("PRAGMA user_version")) && query.next()) {
+    schemaVersion = query.value(0).toInt();
+  }
   const QStringList statements = {
       QStringLiteral("PRAGMA foreign_keys = ON"),
       QStringLiteral("CREATE TABLE IF NOT EXISTS games ("
@@ -325,13 +329,17 @@ bool SteamGameModel::ensureSchema() {
           "unlocked INTEGER NOT NULL, unlock_time INTEGER NOT NULL, rarity REAL NOT NULL, "
           "hidden INTEGER NOT NULL, current_progress REAL NOT NULL, maximum_progress REAL "
           "NOT NULL, source TEXT NOT NULL, PRIMARY KEY(app_id, api_name))"),
-      QStringLiteral("PRAGMA user_version = 2"),
   };
   for (const QString& statement : statements) {
     if (!query.exec(statement)) {
       setStatus(QStringLiteral("Could not prepare the library database"), query.lastError().text());
       return false;
     }
+  }
+  if (schemaVersion < 2 && !query.exec(QStringLiteral("PRAGMA user_version = 2"))) {
+    setStatus(QStringLiteral("Could not update the library database version"),
+              query.lastError().text());
+    return false;
   }
   return true;
 }

@@ -468,6 +468,13 @@ bool UnifiedGameModel::openArtworkDatabase(const QString& path) {
           "0, PRIMARY KEY(source, runner, app_id))"))) {
     return false;
   }
+  int schemaVersion = 0;
+  if (query.exec(QStringLiteral("PRAGMA user_version")) && query.next()) {
+    schemaVersion = query.value(0).toInt();
+  }
+  if (schemaVersion < 3 && !query.exec(QStringLiteral("PRAGMA user_version = 3"))) {
+    return false;
+  }
   loadArtworkOverrides();
   loadLinks();
   return true;
