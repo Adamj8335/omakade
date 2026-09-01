@@ -18,11 +18,15 @@
      ./build/release/omakade --render-screenshot=/tmp/omakade.png \
      --render-size=1380x880
    ```
-5. Tag the reviewed commit as `vX.Y.Z`.
+5. Tag the reviewed local commit as `vX.Y.Z` and push the tag. Do not push the
+   version update to `main` yet.
 6. Confirm the Release workflow builds the source archive and Arch package,
    installs, launches, reinstalls, removes, and reinstalls the package, publishes
    SHA-256 checksums and signed provenance, then creates the GitHub release.
-7. Install, upgrade, remove, and reinstall the published package in a disposable
+7. Download the public assets, verify their checksums and provenance, then push
+   the reviewed commit to `main`. This prevents README install links from going
+   live before their release assets.
+8. Install, upgrade, remove, and reinstall the published package in a disposable
    Omarchy environment.
 
 Do not publish a package while the source URL or checksum is a placeholder.
