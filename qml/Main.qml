@@ -938,6 +938,7 @@ ApplicationWindow {
             ScrollView {
                 anchors.fill: parent
                 anchors.margins: 28
+                rightPadding: 18
                 contentWidth: availableWidth
 
             ColumnLayout {

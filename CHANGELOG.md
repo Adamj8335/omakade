@@ -7,6 +7,7 @@
 - Added a persistent accent outline to the selected game card.
 - Improved the new-collection layout and clarified Twitch setup for IGDB.
 - Hid unavailable game-insight metrics and reflowed the remaining cards.
+- Reserved scroll gutters so tiled layouts never place content under a scrollbar.
 
 ## 1.0.0
 

@@ -98,6 +98,7 @@ Item {
         anchors.leftMargin: Math.max(28, parent.width * 0.055)
         anchors.rightMargin: Math.max(28, parent.width * 0.055)
         anchors.bottomMargin: 22
+        rightPadding: 18
         contentWidth: availableWidth
         clip: true
 
