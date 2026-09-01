@@ -706,6 +706,11 @@ Gate for each source:
 
 ### M5: Stable release and Omarchy proposal
 
+Status: in progress. Installed documentation, release checks, continuous
+integration, and the Arch package template are complete. Publication awaits a
+real public repository URL, release checksum, compatibility reports, and an
+Omarchy maintainer response path.
+
 Deliver:
 
 - Stable Arch package and AUR publication

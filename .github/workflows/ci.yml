@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: >-
+          pacman -Syu --noconfirm --needed
+          appstream base-devel cmake desktop-file-utils git libsecret ninja
+          pkgconf qt6-base qt6-declarative sdl3
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset release
+      - name: Build
+        run: cmake --build --preset release
+      - name: Test
+        run: ctest --preset release
+      - name: Validate metadata
+        run: |
+          desktop-file-validate packaging/io.github.omakade.Omakade.desktop
+          appstreamcli validate packaging/io.github.omakade.Omakade.metainfo.xml

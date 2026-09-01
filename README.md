@@ -69,4 +69,6 @@ controller navigation, and launching require no Steam API key or network
 connection. See [PRIVACY.md](PRIVACY.md) for retained data and external
 requests.
 
-See [PLAN.md](PLAN.md) for product scope and release gates.
+See [SUPPORT.md](SUPPORT.md) for bug-report guidance,
+[CHANGELOG.md](CHANGELOG.md) for release notes, and [PLAN.md](PLAN.md) for
+product scope and release gates.

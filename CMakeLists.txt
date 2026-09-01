@@ -123,6 +123,12 @@ install(FILES resources/icons/io.github.omakade.Omakade.svg
 install(FILES packaging/io.github.omakade.Omakade.metainfo.xml
   DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo
 )
+install(FILES LICENSE
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/omakade
+)
+install(FILES README.md PRIVACY.md SUPPORT.md CHANGELOG.md
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/omakade
+)
 
 include(CTest)
 if(BUILD_TESTING)
