@@ -252,7 +252,8 @@ void RetroArchGameModel::applyScan(const RetroArchScanResult& result) {
       "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
       "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
-  query.addBindValue(result.roots.join(QLatin1Char('\n')));
+  query.addBindValue(result.roots.isEmpty() ? QStringLiteral("")
+                                            : result.roots.join(QLatin1Char('\n')));
   okay = okay && query.exec();
   if (!okay || !m_database.commit()) {
     m_database.rollback();

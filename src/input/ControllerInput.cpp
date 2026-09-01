@@ -176,13 +176,11 @@ void ControllerInput::handleButton(int button) {
 }
 
 void ControllerInput::emitDirection(int key) {
-  if (!m_focusNavigation) {
+  if (m_focusNavigation) {
+    emit focusDirectionRequested(key);
+  } else {
     emit keyRequested(key, Qt::NoModifier);
-    return;
   }
-  const bool forward = key == Qt::Key_Down || key == Qt::Key_Right;
-  emit keyRequested(forward ? Qt::Key_Tab : Qt::Key_Backtab,
-                    forward ? Qt::NoModifier : Qt::ShiftModifier);
 }
 
 void ControllerInput::updateAxisKey() {

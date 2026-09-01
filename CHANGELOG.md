@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2
+
+- Fixed controller Up and Down navigation in the game library.
+- Made controller focus movement follow the actual screen direction on details
+  and overlay screens.
+- Fixed absent launchers reporting database errors in Settings.
+- Reflowed Settings actions so they remain visible in tiled windows.
+
 ## 1.2.1
 
 - Improved keyboard and controller navigation across game details, settings,

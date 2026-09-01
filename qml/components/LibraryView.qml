@@ -102,8 +102,18 @@ Item {
             }
         }
         Keys.onUpPressed: function(event) {
-            if (currentIndex >= 0 && currentIndex < columns) {
+            if (currentIndex >= columns) {
+                currentIndex -= columns
+                positionViewAtIndex(currentIndex, GridView.Contain)
+            } else if (currentIndex >= 0) {
                 root.toolbarRequested()
+            }
+            event.accepted = true
+        }
+        Keys.onDownPressed: function(event) {
+            if (currentIndex >= 0 && currentIndex + columns < count) {
+                currentIndex += columns
+                positionViewAtIndex(currentIndex, GridView.Contain)
                 event.accepted = true
             }
         }

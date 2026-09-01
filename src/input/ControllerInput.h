@@ -37,6 +37,7 @@ signals:
   void controllerChanged();
   void focusNavigationChanged();
   void favoriteRequested();
+  void focusDirectionRequested(int key);
   void keyRequested(int key, int modifiers);
 
 private:

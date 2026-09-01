@@ -71,6 +71,59 @@ ApplicationWindow {
         }
     }
 
+    function focusSpatial(container, key) {
+        if (!container) {
+            return
+        }
+        const current = root.activeFocusItem
+        if (!root.isWithin(current, container)) {
+            root.focusWithin(container, true)
+            return
+        }
+        const currentCenter = current.mapToItem(root, current.width / 2,
+                                                current.height / 2)
+        let best = null
+        let bestScore = Number.MAX_VALUE
+        let candidate = current.nextItemInFocusChain(true)
+        for (let attempts = 0; candidate && candidate !== current
+             && attempts < 300; ++attempts) {
+            if (root.isWithin(candidate, container) && candidate.visible
+                    && candidate.enabled && candidate.activeFocusOnTab) {
+                const center = candidate.mapToItem(root, candidate.width / 2,
+                                                   candidate.height / 2)
+                const dx = center.x - currentCenter.x
+                const dy = center.y - currentCenter.y
+                let primary = 0
+                let cross = 0
+                if (key === Qt.Key_Up) {
+                    primary = -dy
+                    cross = Math.abs(dx)
+                } else if (key === Qt.Key_Down) {
+                    primary = dy
+                    cross = Math.abs(dx)
+                } else if (key === Qt.Key_Left) {
+                    primary = -dx
+                    cross = Math.abs(dy)
+                } else if (key === Qt.Key_Right) {
+                    primary = dx
+                    cross = Math.abs(dy)
+                }
+                if (primary > 3) {
+                    const score = primary + cross * 2.5
+                    if (score < bestScore) {
+                        best = candidate
+                        bestScore = score
+                    }
+                }
+            }
+            candidate = candidate.nextItemInFocusChain(true)
+        }
+        if (best) {
+            best.forceActiveFocus(Qt.TabFocusReason)
+            root.revealNavigationItem(container, best)
+        }
+    }
+
     function revealInScrollView(scrollView, item) {
         const flickable = scrollView ? scrollView.contentItem : null
         if (!flickable || !item) {
@@ -1267,7 +1320,7 @@ ApplicationWindow {
                         }
                         Text {
                             Layout.fillWidth: true
-                            visible: modelData.error.length > 0
+                            visible: modelData.enabled && modelData.error.length > 0
                             text: modelData.error
                             color: Theme.yellow
                             font.family: Theme.fontFamily
@@ -1557,37 +1610,45 @@ ApplicationWindow {
                     }
                     Item { Layout.fillWidth: true }
                 }
-                RowLayout {
-                    spacing: 8
+                GridLayout {
+                    Layout.fillWidth: true
+                    columnSpacing: 8
+                    rowSpacing: 8
+                    columns: 3
                     GlassButton {
+                        Layout.fillWidth: true
                         compact: true
                         text: Preferences.reducedMotion ? "MOTION OFF" : "MOTION ON"
                         selected: Preferences.reducedMotion
                         onClicked: Preferences.reducedMotion = !Preferences.reducedMotion
                     }
                     GlassButton {
+                        Layout.fillWidth: true
                         compact: true
                         text: Preferences.closeAfterLaunch ? "CLOSE AFTER PLAY" : "STAY OPEN"
                         selected: Preferences.closeAfterLaunch
                         onClicked: Preferences.closeAfterLaunch = !Preferences.closeAfterLaunch
                     }
                     GlassButton {
+                        Layout.fillWidth: true
                         compact: true
                         text: "CACHE -"
                         onClicked: Preferences.artworkCacheLimitMb -= 128
                     }
                     GlassButton {
+                        Layout.fillWidth: true
                         compact: true
                         text: "CACHE +"
                         onClicked: Preferences.artworkCacheLimitMb += 128
                     }
                     GlassButton {
+                        Layout.fillWidth: true
                         compact: true
                         text: "CLEAR ART"
                         onClicked: Achievements.clearCache()
                     }
-                    Item { Layout.fillWidth: true }
                     GlassButton {
+                        Layout.fillWidth: true
                         text: "CLOSE"
                         primary: true
                         onClicked: root.diagnosticsOpen = false
@@ -1693,6 +1754,14 @@ ApplicationWindow {
 
     Connections {
         target: Controller
+        function onFocusDirectionRequested(key) {
+            const container = root.navigationContainer()
+            if (!container && !libraryView.gridFocused && key === Qt.Key_Down) {
+                libraryView.focusGrid()
+                return
+            }
+            root.focusSpatial(container || librarySurface, key)
+        }
         function onFavoriteRequested() {
             if (root.detailOpen && !root.diagnosticsOpen && !root.linkDialogOpen
                     && !root.collectionDeleteOpen) {

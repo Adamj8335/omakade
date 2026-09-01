@@ -239,6 +239,7 @@ private slots:
   void malformedFaugusDataDoesNotReplaceCachedGames();
   void faugusLauncherBuildsSafeCommands();
   void launcherRefreshesRunAsynchronously();
+  void absentLaunchersPersistEmptySourcePaths();
   void retroArchScannerImportsPlaylistsArtworkAndRuntime();
   void retroArchModelIsRepeatableAndPreservesLocalState();
   void malformedRetroArchDataDoesNotReplaceCachedGames();
@@ -1171,6 +1172,51 @@ void CoreTests::launcherRefreshesRunAsynchronously() {
   QTRY_COMPARE_WITH_TIMEOUT(faugus.rowCount(), 3, 3000);
 }
 
+void CoreTests::absentLaunchersPersistEmptySourcePaths() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  {
+    SteamGameModel model(database);
+    model.refreshFromRoots({});
+    QVERIFY(model.errorText().isEmpty());
+  }
+  {
+    LutrisGameModel model(database);
+    model.refreshFromDatabases({});
+    QVERIFY(model.errorText().isEmpty());
+  }
+  {
+    HeroicGameModel model(database);
+    model.refreshFromRoots({});
+    QVERIFY(model.errorText().isEmpty());
+  }
+  {
+    FaugusGameModel model(database);
+    model.refreshFromRoots({});
+    QVERIFY(model.errorText().isEmpty());
+  }
+  {
+    RetroArchGameModel model(database);
+    model.refreshFromRoots({});
+    QVERIFY(model.errorText().isEmpty());
+  }
+
+  const QString connection = QStringLiteral("empty-source-paths-") + QUuid::createUuid().toString();
+  {
+    QSqlDatabase stored = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+    stored.setDatabaseName(database);
+    QVERIFY(stored.open());
+    QSqlQuery query(stored);
+    QVERIFY(query.exec(QStringLiteral(
+        "SELECT COUNT(*) FROM source_state WHERE source IN "
+        "('lutris', 'heroic', 'faugus', 'retroarch') AND paths = '' AND paths IS NOT NULL")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 4);
+  }
+  QSqlDatabase::removeDatabase(connection);
+}
+
 void CoreTests::retroArchScannerImportsPlaylistsArtworkAndRuntime() {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -1419,6 +1465,7 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   QTRY_VERIFY_WITH_TIMEOUT(controller.connected(), 1000);
   const int connectedCount = controller.controllerCount();
   QSignalSpy keys(&controller, &ControllerInput::keyRequested);
+  QSignalSpy focusDirections(&controller, &ControllerInput::focusDirectionRequested);
   QSignalSpy favorites(&controller, &ControllerInput::favoriteRequested);
   SDL_Joystick* joystick = SDL_OpenJoystick(id);
   QVERIFY(joystick != nullptr);
@@ -1446,9 +1493,24 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   SDL_UpdateJoysticks();
   QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTX, -20000));
   SDL_UpdateJoysticks();
-  QTRY_VERIFY_WITH_TIMEOUT(!keys.isEmpty(), 1000);
-  QCOMPARE(keys.first().at(0).toInt(), static_cast<int>(Qt::Key_Backtab));
-  QCOMPARE(keys.first().at(1).toInt(), static_cast<int>(Qt::ShiftModifier));
+  QTRY_VERIFY_WITH_TIMEOUT(!focusDirections.isEmpty(), 1000);
+  QCOMPARE(focusDirections.first().at(0).toInt(), static_cast<int>(Qt::Key_Left));
+  QVERIFY(keys.isEmpty());
+
+  focusDirections.clear();
+  QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTX, 0));
+  QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTY, -20000));
+  SDL_UpdateJoysticks();
+  QTRY_VERIFY_WITH_TIMEOUT(!focusDirections.isEmpty(), 1000);
+  QCOMPARE(focusDirections.first().at(0).toInt(), static_cast<int>(Qt::Key_Up));
+
+  focusDirections.clear();
+  QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTY, 0));
+  SDL_UpdateJoysticks();
+  QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTY, 20000));
+  SDL_UpdateJoysticks();
+  QTRY_VERIFY_WITH_TIMEOUT(!focusDirections.isEmpty(), 1000);
+  QCOMPARE(focusDirections.first().at(0).toInt(), static_cast<int>(Qt::Key_Down));
 
   SDL_CloseJoystick(joystick);
   SDL_Event removed{};
