@@ -5,6 +5,7 @@
 - Added controller navigation across library modes, source filters,
   organization controls, Settings, and game details.
 - Kept detail-page controller movement in content order below collections.
+- Added controller and keyboard scrolling through Steam achievement cards.
 - Clarified that automatic closing after launch is an opt-in setting.
 - Added a visible whole-library Rescan action.
 - Added optional owned Steam library sync, installed and ready-to-install

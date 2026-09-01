@@ -134,6 +134,8 @@ Item {
 
     ScrollView {
         id: detailsScroll
+        objectName: "detailsScroll"
+        readonly property real navigationContentY: contentItem ? contentItem.contentY : 0
         anchors.fill: parent
         anchors.topMargin: 80
         anchors.leftMargin: Math.max(28, parent.width * 0.055)
@@ -874,6 +876,7 @@ Item {
                     }
 
                     GridLayout {
+                        id: achievementGrid
                         Layout.fillWidth: true
                         visible: Achievements.total > 0
                         columns: root.width < 1160 ? 1 : 2
@@ -884,6 +887,7 @@ Item {
                             model: Achievements
 
                             Rectangle {
+                                required property int index
                                 required property string title
                                 required property string description
                                 required property string iconPath
@@ -891,14 +895,25 @@ Item {
                                 required property double unlockTime
                                 required property real rarity
                                 required property bool hidden
+                                objectName: "achievementCard" + index
+                                activeFocusOnTab: true
+                                Accessible.name: title
+                                Accessible.role: Accessible.ListItem
+                                Accessible.focused: activeFocus
+                                property Item controllerUpTarget:
+                                    index < achievementGrid.columns
+                                    ? achievementRefreshButton : null
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 260
                                 Layout.preferredHeight: 82
                                 radius: Math.max(6, Theme.cornerRadius)
                                 color: root.alpha(Theme.foreground, unlocked ? 0.075 : 0.035)
-                                border.color: unlocked
-                                              ? root.alpha(Theme.accent, 0.34)
-                                              : root.alpha(Theme.foreground, 0.10)
+                                border.width: activeFocus ? 2 : 1
+                                border.color: activeFocus
+                                              ? Theme.accent
+                                              : unlocked
+                                                ? root.alpha(Theme.accent, 0.34)
+                                                : root.alpha(Theme.foreground, 0.10)
 
                                 RowLayout {
                                     anchors.fill: parent

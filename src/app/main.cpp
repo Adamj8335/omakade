@@ -29,6 +29,10 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QTemporaryDir>
 #include <QTimer>
 #include <QWindow>
 
@@ -157,9 +161,61 @@ int main(int argc, char* argv[]) {
   if (uninstalledLayoutTest) {
     library.setAvailability(LibraryFilterModel::Availability::AllGames);
   }
-  AchievementModel achievements(steamLibrary == nullptr ? QStringLiteral(":memory:")
-                                                        : steamLibrary->databasePath(),
-                                &preferences);
+  std::unique_ptr<QTemporaryDir> navigationData;
+  QString achievementDatabasePath =
+      steamLibrary == nullptr ? QStringLiteral(":memory:") : steamLibrary->databasePath();
+  if (navigationTest) {
+    navigationData = std::make_unique<QTemporaryDir>();
+    achievementDatabasePath = navigationData->filePath(QStringLiteral("achievements.sqlite3"));
+    const QString connectionName = QStringLiteral("omakade-navigation-fixture");
+    {
+      QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+      database.setDatabaseName(achievementDatabasePath);
+      if (!database.open()) {
+        qFatal("Could not open controller navigation fixture database: %s",
+               qPrintable(database.lastError().text()));
+      }
+      QSqlQuery query(database);
+      const auto execute = [&query](const QString& statement) {
+        if (!query.exec(statement)) {
+          qFatal("Could not prepare controller navigation fixture: %s",
+                 qPrintable(query.lastError().text()));
+        }
+      };
+      execute(QStringLiteral("CREATE TABLE achievement_summary (app_id TEXT PRIMARY KEY, "
+                             "unlocked INTEGER, total INTEGER)"));
+      execute(QStringLiteral(
+          "CREATE TABLE achievements (app_id TEXT, api_name TEXT, title TEXT, description TEXT, "
+          "icon_url TEXT, icon_path TEXT, unlocked INTEGER, unlock_time INTEGER, rarity REAL, "
+          "hidden INTEGER, current_progress REAL, maximum_progress REAL)"));
+      if (!query.exec(
+              QStringLiteral("INSERT INTO achievement_summary VALUES ('demo-0', 6, 12)"))) {
+        qFatal("Could not add controller achievement summary: %s",
+               qPrintable(query.lastError().text()));
+      }
+      query.prepare(QStringLiteral(
+          "INSERT INTO achievements VALUES ('demo-0', ?, ?, 'Controller navigation fixture', '', "
+          "'', "
+          "?, ?, ?, 0, 0, 0)"));
+      for (int index = 0; index < 12; ++index) {
+        query.bindValue(0, QStringLiteral("fixture-%1").arg(index));
+        query.bindValue(1, QStringLiteral("Achievement %1").arg(index + 1));
+        query.bindValue(2, index < 6 ? 1 : 0);
+        query.bindValue(3, index < 6 ? 1700000000 + index : 0);
+        query.bindValue(4, 10.0 + index);
+        if (!query.exec()) {
+          qFatal("Could not add controller achievement: %s",
+                 qPrintable(query.lastError().text()));
+        }
+      }
+      database.close();
+    }
+    QSqlDatabase::removeDatabase(connectionName);
+  }
+  AchievementModel achievements(achievementDatabasePath, &preferences);
+  if (navigationTest) {
+    achievements.load(QStringLiteral("demo-0"));
+  }
   std::unique_ptr<SteamAccountService> steamAccount;
   std::unique_ptr<GameInsightsService> gameInsights;
   if (steamLibrary != nullptr) {
@@ -535,12 +591,16 @@ int main(int argc, char* argv[]) {
                                                 auto* achievementRefresh =
                                                     quickWindow->findChild<QQuickItem*>(
                                                         QStringLiteral("achievementRefreshButton"));
+                                                auto* detailsScroll =
+                                                    quickWindow->findChild<QQuickItem*>(
+                                                        QStringLiteral("detailsScroll"));
                                                 if (newCollection == nullptr ||
                                                     insightsSection == nullptr ||
                                                     insightRefresh == nullptr ||
                                                     achievementSection == nullptr ||
                                                     achievementSort == nullptr ||
-                                                    achievementRefresh == nullptr) {
+                                                    achievementRefresh == nullptr ||
+                                                    detailsScroll == nullptr) {
                                                   fail(QStringLiteral(
                                                       "Controller navigation test could not find "
                                                       "detail sections"));
@@ -576,11 +636,51 @@ int main(int argc, char* argv[]) {
                                                       "achievement refresh"));
                                                   return;
                                                 }
-                                                controller.focusDirectionRequested(Qt::Key_Up);
-                                                if (!achievementSort->hasActiveFocus()) {
+                                                const qreal initialContentY =
+                                                    detailsScroll->property("navigationContentY")
+                                                        .toReal();
+                                                controller.focusDirectionRequested(Qt::Key_Down);
+                                                QQuickItem* firstAchievement =
+                                                    quickWindow->activeFocusItem();
+                                                if (firstAchievement == nullptr ||
+                                                    firstAchievement->objectName() !=
+                                                        QStringLiteral("achievementCard0")) {
                                                   fail(QStringLiteral(
-                                                      "Controller Up did not reverse the detail "
-                                                      "content flow"));
+                                                      "Controller Down did not enter the "
+                                                      "achievement list"));
+                                                  return;
+                                                }
+                                                controller.focusDirectionRequested(Qt::Key_Down);
+                                                QQuickItem* nextAchievement =
+                                                    quickWindow->activeFocusItem();
+                                                if (nextAchievement == nullptr ||
+                                                    nextAchievement == firstAchievement ||
+                                                    !nextAchievement->objectName().startsWith(
+                                                        QStringLiteral("achievementCard"))) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Down did not traverse "
+                                                      "achievement cards"));
+                                                  return;
+                                                }
+                                                for (int step = 0; step < 4; ++step) {
+                                                  controller.focusDirectionRequested(Qt::Key_Down);
+                                                }
+                                                if (detailsScroll->property("navigationContentY")
+                                                        .toReal() <= initialContentY) {
+                                                  fail(QStringLiteral(
+                                                      "Controller achievement navigation did not "
+                                                      "scroll details"));
+                                                  return;
+                                                }
+                                                controller.focusDirectionRequested(Qt::Key_Up);
+                                                if (quickWindow->activeFocusItem() == nullptr ||
+                                                    !quickWindow->activeFocusItem()
+                                                         ->objectName()
+                                                         .startsWith(
+                                                             QStringLiteral("achievementCard"))) {
+                                                  fail(QStringLiteral(
+                                                      "Controller Up did not reverse achievement "
+                                                      "navigation"));
                                                   return;
                                                 }
                                                 controller.keyRequested(Qt::Key_Escape,
