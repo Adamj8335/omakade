@@ -20,6 +20,12 @@ set_tests_properties(omakade_qml_smoke PROPERTIES
   TIMEOUT 10
 )
 
+add_test(NAME omakade_controller_navigation COMMAND omakade --controller-navigation-test)
+set_tests_properties(omakade_controller_navigation PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 10
+)
+
 add_test(NAME omakade_render_smoke
   COMMAND omakade --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-render.png
           --render-size=820x590

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3
+
+- Restored controller navigation on game details.
+- Kept controller focus inside the game grid at the top library row.
+- Added an end-to-end controller navigation test for the library and details.
+
 ## 1.2.2
 
 - Fixed controller Up and Down navigation in the game library.

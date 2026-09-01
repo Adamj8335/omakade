@@ -80,7 +80,7 @@ ApplicationWindow {
             root.focusWithin(container, true)
             return
         }
-        const currentCenter = current.mapToItem(root, current.width / 2,
+        const currentCenter = current.mapToItem(container, current.width / 2,
                                                 current.height / 2)
         let best = null
         let bestScore = Number.MAX_VALUE
@@ -89,7 +89,7 @@ ApplicationWindow {
              && attempts < 300; ++attempts) {
             if (root.isWithin(candidate, container) && candidate.visible
                     && candidate.enabled && candidate.activeFocusOnTab) {
-                const center = candidate.mapToItem(root, candidate.width / 2,
+                const center = candidate.mapToItem(container, candidate.width / 2,
                                                    candidate.height / 2)
                 const dx = center.x - currentCenter.x
                 const dy = center.y - currentCenter.y
@@ -571,6 +571,7 @@ ApplicationWindow {
 
                 TextField {
                     id: searchField
+                    objectName: "searchField"
                     Layout.preferredWidth: Math.min(300, root.width * 0.26)
                     Layout.minimumWidth: 190
                     Layout.preferredHeight: 38
@@ -829,6 +830,7 @@ ApplicationWindow {
 
             LibraryView {
                 id: libraryView
+                objectName: "libraryView"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 libraryModel: Library
@@ -859,7 +861,6 @@ ApplicationWindow {
                                 : "Install a game in Steam, Lutris, Heroic, Faugus, or RetroArch, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
-                onToolbarRequested: searchField.forceActiveFocus(Qt.BacktabFocusReason)
                 onRefreshRequested: {
                     if (SteamLibrary && Preferences.steamEnabled) {
                         SteamLibrary.refresh()

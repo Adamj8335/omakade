@@ -343,6 +343,7 @@ Item {
 
                     GlassButton {
                         id: playButton
+                        objectName: "playButton"
                         text: "PLAY"
                         iconText: "▶"
                         primary: true

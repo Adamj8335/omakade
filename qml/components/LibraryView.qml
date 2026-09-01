@@ -18,7 +18,6 @@ Item {
     signal gameActivated(int index)
     signal favoriteToggled(int index)
     signal refreshRequested()
-    signal toolbarRequested()
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -32,6 +31,7 @@ Item {
 
     GridView {
         id: grid
+        objectName: "libraryGrid"
         anchors.fill: parent
         anchors.rightMargin: libraryScrollTrack.visible ? 20 : 0
         clip: true
@@ -105,8 +105,6 @@ Item {
             if (currentIndex >= columns) {
                 currentIndex -= columns
                 positionViewAtIndex(currentIndex, GridView.Contain)
-            } else if (currentIndex >= 0) {
-                root.toolbarRequested()
             }
             event.accepted = true
         }
