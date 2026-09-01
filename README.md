@@ -46,7 +46,7 @@ Download the package and `SHA256SUMS` from the
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.0.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.0.1-1-x86_64.pkg.tar.zst
 ```
 
 Omakade keeps its local library and settings when the package is upgraded or

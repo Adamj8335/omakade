@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1
 
 - Added a distinct Omakade launcher icon and matching in-app brand mark.
 - Made the library scrollbar larger and easier to drag with a mouse.
