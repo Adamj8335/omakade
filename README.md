@@ -29,6 +29,7 @@ The 0.5 preview includes:
 - Optional IGDB critic aggregates and game-length estimates
 - Local, downloaded, and user-selected cover artwork
 - Explicit linking for games installed through multiple sources
+- ProtonDB and PCGamingWiki shortcuts with actionable launch errors
 - Keyboard, mouse, and controller navigation
 
 Omakade reads launcher data without modifying it. Core discovery, browsing,

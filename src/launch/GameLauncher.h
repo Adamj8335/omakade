@@ -21,7 +21,7 @@ public:
   [[nodiscard]] static LaunchCommand heroicCommand(const QString& id, const QString& runner,
                                                    bool flatpak);
   Q_INVOKABLE bool launch(const QString& source, const QString& id, bool flatpak = false,
-                          const QString& runner = {});
+                          const QString& runner = {}, const QString& installPath = {});
   Q_INVOKABLE bool manage(const QString& source, const QString& id, bool flatpak = false,
                           const QString& runner = {});
 
@@ -31,6 +31,7 @@ signals:
 private:
   bool launchLutris(const QString& id, bool flatpak, bool manageOnly);
   bool launchHeroic(const QString& id, const QString& runner, bool flatpak, bool manageOnly);
+  [[nodiscard]] QString flatpakError(const QString& appId, const QString& launcherName) const;
   void setError(const QString& error);
   QString m_lastError;
 };

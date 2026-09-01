@@ -10,6 +10,8 @@
   organization filters.
 - Added runtime source controls with persisted scan times, detected locations,
   and per-source errors.
+- Added stale-install checks, Flatpak launcher verification, actionable launch
+  errors, and ProtonDB and PCGamingWiki links.
 
 ## 0.5.0
 

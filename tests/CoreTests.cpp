@@ -185,6 +185,7 @@ private slots:
   void heroicModelIsRepeatableAndPreservesLocalState();
   void malformedHeroicDataDoesNotReplaceCachedGames();
   void heroicLauncherBuildsSafeCommands();
+  void launcherReportsInvalidAndStaleTargets();
   void igdbApiBuildsSafeQueriesAndParsesInsights();
   void igdbInsightsLoadFromOfflineCache();
   void stressLibraryContainsOneThousandGames();
@@ -906,6 +907,18 @@ void CoreTests::heroicLauncherBuildsSafeCommands() {
                .isValid());
   QVERIFY(!GameLauncher::heroicCommand(QStringLiteral("good"), QStringLiteral("unknown"), false)
                .isValid());
+}
+
+void CoreTests::launcherReportsInvalidAndStaleTargets() {
+  GameLauncher launcher;
+  QVERIFY(!launcher.launch(QStringLiteral("Lutris"), QStringLiteral("bad")));
+  QCOMPARE(launcher.lastError(), QStringLiteral("This game has an invalid Lutris ID."));
+  QVERIFY(!launcher.launch(QStringLiteral("Heroic"), QStringLiteral("valid"), false,
+                           QStringLiteral("unknown")));
+  QCOMPARE(launcher.lastError(), QStringLiteral("This game has an invalid Heroic target."));
+  QVERIFY(!launcher.launch(QStringLiteral("Steam"), QStringLiteral("440"), false, {},
+                           QStringLiteral("/path/that/does/not/exist")));
+  QVERIFY(launcher.lastError().startsWith(QStringLiteral("The installed files are missing.")));
 }
 
 void CoreTests::igdbApiBuildsSafeQueriesAndParsesInsights() {

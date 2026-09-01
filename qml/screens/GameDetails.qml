@@ -238,6 +238,27 @@ Item {
                     }
                 }
 
+                RowLayout {
+                    spacing: 8
+                    visible: !DemoMode
+
+                    GlassButton {
+                        visible: root.selectedInstallation.source === "Steam"
+                        compact: true
+                        text: "PROTONDB"
+                        onClicked: Qt.openUrlExternally(
+                            "https://www.protondb.com/app/" + root.selectedInstallation.appId)
+                    }
+
+                    GlassButton {
+                        compact: true
+                        text: "PCGAMINGWIKI"
+                        onClicked: Qt.openUrlExternally(
+                            "https://www.pcgamingwiki.com/w/index.php?search="
+                            + encodeURIComponent(root.game.title || ""))
+                    }
+                }
+
                 Text {
                     Layout.fillWidth: true
                     Layout.maximumWidth: 720

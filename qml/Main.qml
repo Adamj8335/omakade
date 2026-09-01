@@ -106,7 +106,8 @@ ApplicationWindow {
             showToast("Demo games cannot be launched")
         } else if (Launcher.launch(selectedInstallation.source, selectedInstallation.appId,
                                    selectedInstallation.flatpak || false,
-                                   selectedInstallation.runner || "")) {
+                                   selectedInstallation.runner || "",
+                                   selectedInstallation.installPath || "")) {
             Library.recordLaunch(selectedIndex, selectedInstallation.source,
                                  selectedInstallation.runner || "", selectedInstallation.appId)
             showToast("Opening " + selectedGame.title + " in " + selectedInstallation.source)

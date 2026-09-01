@@ -3,6 +3,7 @@
 #include "launch/SteamLauncher.h"
 
 #include <QDesktopServices>
+#include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -56,7 +57,13 @@ LaunchCommand GameLauncher::heroicCommand(const QString& id, const QString& runn
 }
 
 bool GameLauncher::launch(const QString& source, const QString& id, bool flatpak,
-                          const QString& runner) {
+                          const QString& runner, const QString& installPath) {
+  if (!installPath.isEmpty() && !QFileInfo::exists(installPath)) {
+    setError(QStringLiteral(
+                 "The installed files are missing. Rescan or repair this game in %1.")
+                 .arg(source));
+    return false;
+  }
   if (source.compare(QStringLiteral("Steam"), Qt::CaseInsensitive) == 0) {
     const QUrl url = SteamLauncher::launchUrl(id);
     if (!url.isValid() || url.isEmpty()) {
@@ -112,13 +119,25 @@ bool GameLauncher::launchLutris(const QString& id, bool flatpak, bool manageOnly
   } else {
     command = lutrisCommand(id, flatpak);
   }
-  if (!available || !command.isValid()) {
-    setError(validLutrisId(id) ? QStringLiteral("Lutris is not installed.")
-                               : QStringLiteral("This game has an invalid Lutris ID."));
+  if (!command.isValid()) {
+    setError(QStringLiteral("This game has an invalid Lutris ID."));
     return false;
   }
+  if (!available) {
+    setError(flatpak ? QStringLiteral("Flatpak is not installed.")
+                     : QStringLiteral("Lutris is not installed."));
+    return false;
+  }
+  if (flatpak) {
+    const QString error = flatpakError(QStringLiteral("net.lutris.Lutris"),
+                                       QStringLiteral("Lutris"));
+    if (!error.isEmpty()) {
+      setError(error);
+      return false;
+    }
+  }
   if (!QProcess::startDetached(command.program, command.arguments)) {
-    setError(QStringLiteral("Lutris could not be started."));
+    setError(QStringLiteral("Lutris could not be started. Open Lutris and try again."));
     return false;
   }
   setError({});
@@ -139,18 +158,46 @@ bool GameLauncher::launchHeroic(const QString& id, const QString& runner, bool f
   } else {
     command = heroicCommand(id, runner, flatpak);
   }
-  if (!available || !command.isValid()) {
-    setError(validHeroicTarget(id, runner)
-                 ? QStringLiteral("Heroic is not installed.")
-                 : QStringLiteral("This game has an invalid Heroic target."));
+  if (!command.isValid()) {
+    setError(QStringLiteral("This game has an invalid Heroic target."));
     return false;
   }
+  if (!available) {
+    setError(flatpak ? QStringLiteral("Flatpak is not installed.")
+                     : QStringLiteral("Heroic is not installed."));
+    return false;
+  }
+  if (flatpak) {
+    const QString error = flatpakError(QStringLiteral("com.heroicgameslauncher.hgl"),
+                                       QStringLiteral("Heroic"));
+    if (!error.isEmpty()) {
+      setError(error);
+      return false;
+    }
+  }
   if (!QProcess::startDetached(command.program, command.arguments)) {
-    setError(QStringLiteral("Heroic could not be started."));
+    setError(QStringLiteral("Heroic could not be started. Open Heroic and try again."));
     return false;
   }
   setError({});
   return true;
+}
+
+QString GameLauncher::flatpakError(const QString& appId, const QString& launcherName) const {
+  QProcess process;
+  process.start(QStringLiteral("flatpak"),
+                {QStringLiteral("info"), QStringLiteral("--show-ref"), appId});
+  if (!process.waitForStarted(1000)) {
+    return QStringLiteral("Flatpak could not be started.");
+  }
+  if (!process.waitForFinished(2500)) {
+    process.kill();
+    process.waitForFinished(1000);
+    return QStringLiteral("Flatpak did not respond while checking %1.").arg(launcherName);
+  }
+  return process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0
+             ? QString{}
+             : QStringLiteral("The %1 Flatpak is not installed.").arg(launcherName);
 }
 
 void GameLauncher::setError(const QString& error) {
