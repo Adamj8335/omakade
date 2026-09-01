@@ -6,11 +6,13 @@
 #include "launch/GameLauncher.h"
 #include "launch/SteamLauncher.h"
 #include "library/GameRoles.h"
+#include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
 #include "library/LutrisGameModel.h"
 #include "library/MockGameModel.h"
 #include "library/SteamGameModel.h"
 #include "library/UnifiedGameModel.h"
+#include "sources/heroic/HeroicScanner.h"
 #include "sources/lutris/LutrisScanner.h"
 #include "sources/steam/SteamScanner.h"
 #include "sources/steam/ValveKeyValues.h"
@@ -121,6 +123,29 @@ void createLutrisFixture(const QString& dataRoot) {
   QSqlDatabase::removeDatabase(connection);
   writeFile(dataRoot + QStringLiteral("/coverart/signal-hill.jpg"), "cover");
 }
+
+void createHeroicFixture(const QString& root) {
+  writeFile(
+      root + QStringLiteral("/legendaryConfig/legendary/installed.json"),
+      R"({"EpicApp":{"app_name":"EpicApp","title":"Epic Voyage","install_path":"/games/epic","is_dlc":false},"EpicDlc":{"app_name":"EpicDlc","title":"Epic DLC","install_path":"/games/dlc","is_dlc":true}})");
+  writeFile(
+      root + QStringLiteral("/store_cache/legendary_library.json"),
+      R"({"library":[{"app_name":"EpicApp","title":"Epic Voyage","art_square":"https://example.test/epic-cover.jpg","art_background":"https://example.test/epic-hero.jpg"}]})");
+  writeFile(root + QStringLiteral("/icons/EpicApp.jpg"), "cover");
+
+  writeFile(root + QStringLiteral("/gog_store/installed.json"),
+            R"({"installed":[{"appName":"12345","install_path":")" +
+                (root + QStringLiteral("/gog-game")).toUtf8() + R"(","is_dlc":false}]})");
+  writeFile(root + QStringLiteral("/gog-game/goggame-12345.info"), R"({"name":"GOG Quest"})");
+  writeFile(root + QStringLiteral("/store_cache/gog_library.json"),
+            R"({"games":[{"app_name":"12345","title":"GOG Quest","art_square":""}]})");
+
+  writeFile(root + QStringLiteral("/nile_config/nile/installed.json"),
+            R"([{"id":"amazon-game","version":"1","path":"/games/amazon"}])");
+  writeFile(
+      root + QStringLiteral("/nile_config/nile/library.json"),
+      R"([{"product":{"id":"amazon-game","title":"Amazon Trail","productDetail":{"iconUrl":"","details":{"backgroundUrl1":""}}}}])");
+}
 } // namespace
 
 class CoreTests final : public QObject {
@@ -132,6 +157,7 @@ private slots:
   void themeLoadsSemanticColors();
   void themeFallsBackWithoutOmarchy();
   void themeReloadsWhenActiveFileChanges();
+  void themeFollowsShellLauncherTransparency();
   void valveKeyValuesParsesNestedAndEscapedValues();
   void valveKeyValuesRejectsMalformedInput();
   void steamScannerImportsLibrariesAndCustomArtwork();
@@ -147,6 +173,10 @@ private slots:
   void malformedLutrisDataDoesNotReplaceCachedGames();
   void unifiedLibraryFiltersSourcesAndRoutesFavorites();
   void lutrisLauncherBuildsSafeCommands();
+  void heroicScannerImportsEpicGogAndAmazon();
+  void heroicModelIsRepeatableAndPreservesLocalState();
+  void malformedHeroicDataDoesNotReplaceCachedGames();
+  void heroicLauncherBuildsSafeCommands();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
   void secondInstanceRequestsActivation();
@@ -229,6 +259,22 @@ void CoreTests::themeReloadsWhenActiveFileChanges() {
 
   QTRY_COMPARE_WITH_TIMEOUT(theme.accent(), QColor(QStringLiteral("#ff0000")), 1500);
   QVERIFY(!changes.isEmpty());
+}
+
+void CoreTests::themeFollowsShellLauncherTransparency() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString stateHome = directory.path() + QStringLiteral("/state");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  const QString themeRoot = stateHome + QStringLiteral("/omarchy/current/theme");
+  writeFile(themeRoot + QStringLiteral("/colors.toml"), sampleTheme());
+  const QString shell = themeRoot + QStringLiteral("/shell.toml");
+  writeFile(shell, "[bar]\nbackground-alpha = 1.0\n[launcher]\nbackground-alpha = 0.63\n");
+
+  OmarchyTheme theme(stateHome, configHome);
+  QCOMPARE(theme.surfaceAlpha(), 0.63);
+  writeFile(shell, "[launcher]\nbackground-alpha = 0.91\n");
+  QTRY_COMPARE_WITH_TIMEOUT(theme.surfaceAlpha(), 0.91, 1500);
 }
 
 void CoreTests::valveKeyValuesParsesNestedAndEscapedValues() {
@@ -519,6 +565,71 @@ void CoreTests::lutrisLauncherBuildsSafeCommands() {
            QStringList({QStringLiteral("run"), QStringLiteral("net.lutris.Lutris"),
                         QStringLiteral("lutris:rungameid/42")}));
   QVERIFY(!GameLauncher::lutrisCommand(QStringLiteral("42;touch /tmp/nope"), false).isValid());
+}
+
+void CoreTests::heroicScannerImportsEpicGogAndAmazon() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/heroic");
+  createHeroicFixture(root);
+
+  const HeroicScanResult result = HeroicScanner::scan({root});
+  QVERIFY(!result.incomplete);
+  QCOMPARE(result.games.size(), 3);
+  QCOMPARE(result.games.at(0).runner, QStringLiteral("legendary"));
+  QCOMPARE(result.games.at(0).title, QStringLiteral("Epic Voyage"));
+  QVERIFY(result.games.at(0).coverPath.endsWith(QStringLiteral("EpicApp.jpg")));
+  QCOMPARE(result.games.at(1).runner, QStringLiteral("gog"));
+  QCOMPARE(result.games.at(1).title, QStringLiteral("GOG Quest"));
+  QCOMPARE(result.games.at(2).runner, QStringLiteral("nile"));
+  QCOMPARE(result.games.at(2).title, QStringLiteral("Amazon Trail"));
+}
+
+void CoreTests::heroicModelIsRepeatableAndPreservesLocalState() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/heroic");
+  createHeroicFixture(root);
+  HeroicGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  model.toggleFavorite(0);
+  model.toggleHidden(0);
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
+  QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
+}
+
+void CoreTests::malformedHeroicDataDoesNotReplaceCachedGames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/heroic");
+  createHeroicFixture(root);
+  HeroicGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  writeFile(root + QStringLiteral("/legendaryConfig/legendary/installed.json"), "not json");
+  model.refreshFromRoots({root});
+  QCOMPARE(model.rowCount(), 3);
+  QVERIFY(model.statusText().startsWith(QStringLiteral("Heroic scan interrupted")));
+}
+
+void CoreTests::heroicLauncherBuildsSafeCommands() {
+  const LaunchCommand native =
+      GameLauncher::heroicCommand(QStringLiteral("EpicApp"), QStringLiteral("legendary"), false);
+  QCOMPARE(native.program, QStringLiteral("heroic"));
+  QCOMPARE(native.arguments.constFirst(), QStringLiteral("--no-gui"));
+  QCOMPARE(native.arguments.constLast(),
+           QStringLiteral("heroic://launch?appName=EpicApp&runner=legendary&gui=false"));
+  const LaunchCommand flatpak =
+      GameLauncher::heroicCommand(QStringLiteral("12345"), QStringLiteral("gog"), true);
+  QCOMPARE(flatpak.program, QStringLiteral("flatpak"));
+  QCOMPARE(flatpak.arguments.at(1), QStringLiteral("com.heroicgameslauncher.hgl"));
+  QVERIFY(!GameLauncher::heroicCommand(QStringLiteral("bad;id"), QStringLiteral("gog"), false)
+               .isValid());
+  QVERIFY(!GameLauncher::heroicCommand(QStringLiteral("good"), QStringLiteral("unknown"), false)
+               .isValid());
 }
 
 void CoreTests::stressLibraryContainsOneThousandGames() {

@@ -6,11 +6,13 @@ system, or required online service.
 ## Local data
 
 Omakade reads Steam library manifests, artwork caches, playtime, recent-play
-state, and achievement caches. It never writes into Steam directories.
+state, and achievement caches. It also reads installed-game manifests and
+cached artwork from Lutris and Heroic. It never writes into Steam, Lutris, or
+Heroic directories.
 
 Omakade retains:
 
-- Library, favorites, hidden state, and achievements in
+- Library, source records, favorites, hidden state, and achievements in
   `$XDG_DATA_HOME/omakade/library.sqlite3`
 - Steam ID, cache limit, and reduced-motion preference in
   `$XDG_CONFIG_HOME/omakade/config.toml`

@@ -66,6 +66,7 @@ QHash<int, QByteArray> LutrisGameModel::roleNames() const {
           {GameRoles::LogoPath, "logoPath"},
           {GameRoles::InstallPath, "installPath"},
           {GameRoles::Source, "source"},
+          {GameRoles::Runner, "runner"},
           {GameRoles::Flatpak, "flatpak"},
           {GameRoles::Hidden, "hidden"}};
 }
@@ -257,6 +258,8 @@ QVariant LutrisGameModel::valueForRole(const Game& game, int role) const {
     return game.lutris.installPath;
   case GameRoles::Source:
     return QStringLiteral("Lutris");
+  case GameRoles::Runner:
+    return QString{};
   case GameRoles::Flatpak:
     return game.lutris.flatpak;
   case GameRoles::Hidden:

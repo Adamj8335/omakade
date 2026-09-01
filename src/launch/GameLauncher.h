@@ -18,14 +18,19 @@ public:
 
   [[nodiscard]] QString lastError() const;
   [[nodiscard]] static LaunchCommand lutrisCommand(const QString& id, bool flatpak);
-  Q_INVOKABLE bool launch(const QString& source, const QString& id, bool flatpak = false);
-  Q_INVOKABLE bool manage(const QString& source, const QString& id, bool flatpak = false);
+  [[nodiscard]] static LaunchCommand heroicCommand(const QString& id, const QString& runner,
+                                                   bool flatpak);
+  Q_INVOKABLE bool launch(const QString& source, const QString& id, bool flatpak = false,
+                          const QString& runner = {});
+  Q_INVOKABLE bool manage(const QString& source, const QString& id, bool flatpak = false,
+                          const QString& runner = {});
 
 signals:
   void lastErrorChanged();
 
 private:
   bool launchLutris(const QString& id, bool flatpak, bool manageOnly);
+  bool launchHeroic(const QString& id, const QString& runner, bool flatpak, bool manageOnly);
   void setError(const QString& error);
   QString m_lastError;
 };

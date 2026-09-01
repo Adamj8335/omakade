@@ -243,7 +243,9 @@ FocusScope {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.forceActiveFocus()
-        onDoubleClicked: root.activated()
+        onClicked: {
+            root.forceActiveFocus()
+            root.activated()
+        }
     }
 }

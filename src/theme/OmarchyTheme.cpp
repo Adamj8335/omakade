@@ -68,6 +68,7 @@ QString OmarchyTheme::mode() const { return m_mode; }
 QString OmarchyTheme::fontFamily() const { return m_fontFamily; }
 int OmarchyTheme::cornerRadius() const { return m_cornerRadius; }
 int OmarchyTheme::gapsOut() const { return m_gapsOut; }
+qreal OmarchyTheme::surfaceAlpha() const { return m_surfaceAlpha; }
 QColor OmarchyTheme::accent() const { return m_accent; }
 QColor OmarchyTheme::selection() const { return m_selection; }
 QColor OmarchyTheme::muted() const { return m_muted; }
@@ -95,6 +96,9 @@ void OmarchyTheme::reload() {
   m_omarchyAvailable = !values.isEmpty();
   if (m_omarchyAvailable) {
     applyValues(values);
+    m_surfaceAlpha =
+        readSectionAlpha(themeRoot() + QStringLiteral("/shell.toml"), QStringLiteral("launcher"),
+                         QStringLiteral("background-alpha"), m_surfaceAlpha);
 
     QFile nameFile(currentRoot() + QStringLiteral("/theme.name"));
     if (nameFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -146,6 +150,37 @@ OmarchyTheme::Values OmarchyTheme::readSimpleToml(const QString& path) {
   return values;
 }
 
+qreal OmarchyTheme::readSectionAlpha(const QString& path, const QString& section,
+                                     const QString& key, qreal fallback) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return fallback;
+  }
+  const QRegularExpression sectionPattern(QStringLiteral(R"(^\s*\[([^]]+)\]\s*(?:#.*)?$)"));
+  const QRegularExpression assignment(
+      QStringLiteral(R"(^\s*([A-Za-z0-9_-]+)\s*=\s*([0-9]*\.?[0-9]+)\s*(?:#.*)?$)"));
+  QString currentSection;
+  QTextStream stream(&file);
+  while (!stream.atEnd()) {
+    const QString line = stream.readLine();
+    const QRegularExpressionMatch sectionMatch = sectionPattern.match(line);
+    if (sectionMatch.hasMatch()) {
+      currentSection = sectionMatch.captured(1);
+      continue;
+    }
+    if (currentSection != section) {
+      continue;
+    }
+    const QRegularExpressionMatch valueMatch = assignment.match(line);
+    if (valueMatch.hasMatch() && valueMatch.captured(1) == key) {
+      bool okay = false;
+      const qreal value = valueMatch.captured(2).toDouble(&okay);
+      return okay ? std::clamp(value, 0.0, 1.0) : fallback;
+    }
+  }
+  return fallback;
+}
+
 QColor OmarchyTheme::parsedColor(const Values& values, const QString& key, const QColor& fallback) {
   const QColor candidate(values.value(key));
   return candidate.isValid() ? candidate : fallback;
@@ -172,6 +207,7 @@ void OmarchyTheme::applyFallback() {
   m_omarchyAvailable = false;
   m_themeName = QStringLiteral("Omakade Dark");
   m_mode = QStringLiteral("dark");
+  m_surfaceAlpha = 0.82;
   m_accent = QColor(QStringLiteral("#78a98f"));
   m_selection = QColor(QStringLiteral("#31453b"));
   m_muted = QColor(QStringLiteral("#53685b"));
@@ -245,6 +281,7 @@ void OmarchyTheme::refreshWatchPaths() {
       currentRoot(),
       themeRoot(),
       themeRoot() + QStringLiteral("/colors.toml"),
+      themeRoot() + QStringLiteral("/shell.toml"),
       currentRoot() + QStringLiteral("/theme.name"),
       m_configHome + QStringLiteral("/fontconfig"),
       m_configHome + QStringLiteral("/fontconfig/fonts.conf"),

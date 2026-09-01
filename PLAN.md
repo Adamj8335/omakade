@@ -1,7 +1,8 @@
 # Omakade product and delivery plan
 
 Implementation status: M0 through M3 are complete. M4 is in progress in the
-0.4 preview, with Lutris import, launch delegation, and source filters complete.
+0.4 preview, with Lutris and Heroic import, launch delegation, and source
+filters complete.
 
 ## Product statement
 
@@ -172,6 +173,8 @@ Rules:
 - Start with the Omarchy shell's 12 px base and proportional type scale.
 - Read useful spacing and font overrides from the active `shell.toml` only after
   the palette integration is stable.
+- Follow `[launcher].background-alpha` from the active `shell.toml` for the
+  primary window surface, with a readable built-in fallback outside Omarchy.
 - Respect display scaling and never assume 96 DPI.
 - Use tabular numerals for playtime and achievement percentages.
 
@@ -370,6 +373,17 @@ solid.
 
 Owned games and account-wide playtime can be added through documented APIs, but
 must not replace local installed-game discovery.
+
+### Optional game insights
+
+- Prefer IGDB as a single attributed provider for external critic aggregates
+  and rushed, normal, and completionist time estimates.
+- Store the user's Twitch application credentials in Secret Service and cache
+  results locally. Never ship a shared client secret.
+- Label values as IGDB data. Do not present them as OpenCritic, Metacritic, or
+  HowLongToBeat scores.
+- Never scrape critic or completion-time websites.
+- Keep insights optional so startup and the core library remain offline-first.
 
 ## Later source integrations
 
@@ -670,8 +684,9 @@ Gate:
 
 ### M4: Unified library
 
-Status: in progress. Lutris installed-game import and launch, the shared model,
-and source filters are complete in the 0.4 preview. Heroic is next.
+Status: in progress. Lutris and Heroic installed-game import and launch, the
+shared model, and source filters are complete in the 0.4 preview. Explicit
+duplicate linking is next.
 
 Deliver in this order:
 

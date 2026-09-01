@@ -217,7 +217,7 @@ Item {
                     }
 
                     GlassButton {
-                        visible: root.game.source === "Steam" || root.game.source === "Lutris"
+                        visible: root.game.source === "Steam" || root.game.source === "Lutris" || root.game.source === "Heroic"
                         text: "MANAGE IN " + (root.game.source || "LAUNCHER").toUpperCase()
                         onClicked: root.manageRequested()
                     }
@@ -236,11 +236,17 @@ Item {
                     rowSpacing: 10
 
                     Repeater {
-                        model: [
-                            { label: "PLAYTIME", value: (root.game.hours || 0) + " HOURS" },
-                            { label: "ACHIEVEMENTS", value: (Achievements.unlocked || root.game.achievementsUnlocked || 0) + " / " + (Achievements.total || root.game.achievementsTotal || 0) },
-                            { label: "COMPLETION", value: Achievements.total > 0 ? Math.round(Achievements.unlocked * 100 / Achievements.total) + "%" : (root.game.progress || 0) + "%" }
-                        ]
+                        model: root.game.source === "Steam"
+                               ? [
+                                   { label: "PLAYTIME", value: (root.game.hours || 0) + " HOURS" },
+                                   { label: "ACHIEVEMENTS", value: (Achievements.unlocked || root.game.achievementsUnlocked || 0) + " / " + (Achievements.total || root.game.achievementsTotal || 0) },
+                                   { label: "COMPLETION", value: Achievements.total > 0 ? Math.round(Achievements.unlocked * 100 / Achievements.total) + "%" : (root.game.progress || 0) + "%" }
+                               ]
+                               : [
+                                   { label: "PLAYTIME", value: (root.game.hours || 0) + " HOURS" },
+                                   { label: "SOURCE", value: (root.game.source || "LOCAL").toUpperCase() },
+                                   { label: "LAUNCHER", value: (root.game.subtitle || root.game.source || "LOCAL").toUpperCase() }
+                               ]
 
                         Rectangle {
                             required property var modelData
@@ -279,6 +285,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.topMargin: 12
                     spacing: 9
+                    visible: root.game.source === "Steam"
 
                     RowLayout {
                         Layout.fillWidth: true

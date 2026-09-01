@@ -13,6 +13,7 @@ class OmarchyTheme final : public QObject {
   Q_PROPERTY(QString fontFamily READ fontFamily NOTIFY themeChanged)
   Q_PROPERTY(int cornerRadius READ cornerRadius NOTIFY themeChanged)
   Q_PROPERTY(int gapsOut READ gapsOut NOTIFY themeChanged)
+  Q_PROPERTY(qreal surfaceAlpha READ surfaceAlpha NOTIFY themeChanged)
   Q_PROPERTY(QColor accent READ accent NOTIFY themeChanged)
   Q_PROPERTY(QColor selection READ selection NOTIFY themeChanged)
   Q_PROPERTY(QColor muted READ muted NOTIFY themeChanged)
@@ -42,6 +43,7 @@ public:
   [[nodiscard]] QString fontFamily() const;
   [[nodiscard]] int cornerRadius() const;
   [[nodiscard]] int gapsOut() const;
+  [[nodiscard]] qreal surfaceAlpha() const;
 
   [[nodiscard]] QColor accent() const;
   [[nodiscard]] QColor selection() const;
@@ -73,6 +75,8 @@ private:
   [[nodiscard]] QString currentRoot() const;
   [[nodiscard]] QString themeRoot() const;
   [[nodiscard]] static Values readSimpleToml(const QString& path);
+  [[nodiscard]] static qreal readSectionAlpha(const QString& path, const QString& section,
+                                              const QString& key, qreal fallback);
   [[nodiscard]] static QColor parsedColor(const Values& values, const QString& key,
                                           const QColor& fallback);
   [[nodiscard]] static QString resolvedMonospaceFamily();
@@ -94,6 +98,7 @@ private:
   QString m_fontFamily = QStringLiteral("monospace");
   int m_cornerRadius = 10;
   int m_gapsOut = 5;
+  qreal m_surfaceAlpha = 0.82;
 
   QColor m_accent;
   QColor m_selection;

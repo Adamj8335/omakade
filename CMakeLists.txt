@@ -31,6 +31,8 @@ add_library(omakade_core STATIC
   src/library/LibraryFilterModel.cpp
   src/library/LibraryFilterModel.h
   src/library/GameRoles.h
+  src/library/HeroicGameModel.cpp
+  src/library/HeroicGameModel.h
   src/library/LutrisGameModel.cpp
   src/library/LutrisGameModel.h
   src/library/MockGameModel.cpp
@@ -49,6 +51,8 @@ add_library(omakade_core STATIC
   src/sources/steam/ValveKeyValues.h
   src/sources/lutris/LutrisScanner.cpp
   src/sources/lutris/LutrisScanner.h
+  src/sources/heroic/HeroicScanner.cpp
+  src/sources/heroic/HeroicScanner.h
   src/theme/OmarchyTheme.cpp
   src/theme/OmarchyTheme.h
 )

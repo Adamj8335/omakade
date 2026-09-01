@@ -11,8 +11,8 @@
   <description>
     <p>
       Omakade is a local-first game library for Omarchy. It discovers installed
-      Steam and Lutris games, uses local artwork, follows the active Omarchy
-      theme, and delegates launching back to the owning platform.
+      Steam, Lutris, and Heroic games, uses local artwork, follows the active
+      Omarchy theme, and delegates launching back to the owning platform.
     </p>
   </description>
   <launchable type="desktop-id">io.github.omakade.Omakade.desktop</launchable>

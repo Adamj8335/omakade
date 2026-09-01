@@ -42,7 +42,8 @@ ApplicationWindow {
         if (DemoMode) {
             showToast("Demo games cannot be launched")
         } else if (Launcher.launch(selectedGame.source, selectedGame.appId,
-                                   selectedGame.flatpak || false)) {
+                                   selectedGame.flatpak || false,
+                                   selectedGame.runner || "")) {
             showToast("Opening " + selectedGame.title + " in " + selectedGame.source)
         } else {
             showToast(Launcher.lastError)
@@ -51,7 +52,8 @@ ApplicationWindow {
 
     function manageSelected() {
         if (Launcher.manage(selectedGame.source, selectedGame.appId,
-                            selectedGame.flatpak || false)) {
+                            selectedGame.flatpak || false,
+                            selectedGame.runner || "")) {
             showToast("Opening " + selectedGame.source)
         } else {
             showToast(Launcher.lastError)
@@ -131,9 +133,9 @@ ApplicationWindow {
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0.0; color: root.alpha(Theme.darkerBackground, 0.82) }
-            GradientStop { position: 0.48; color: root.alpha(Theme.darkerBackground, 0.68) }
-            GradientStop { position: 1.0; color: root.alpha(Theme.darkerBackground, 0.84) }
+            GradientStop { position: 0.0; color: root.alpha(Theme.darkerBackground, Theme.surfaceAlpha) }
+            GradientStop { position: 0.48; color: root.alpha(Theme.darkerBackground, Theme.surfaceAlpha * 0.88) }
+            GradientStop { position: 1.0; color: root.alpha(Theme.darkerBackground, Theme.surfaceAlpha) }
         }
     }
 
@@ -391,6 +393,15 @@ ApplicationWindow {
                             libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
                         }
                     }
+                    GlassButton {
+                        text: "HEROIC"
+                        compact: true
+                        selected: Library.sourceFilter === "Heroic"
+                        onClicked: {
+                            Library.sourceFilter = "Heroic"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
                 }
 
                 Text {
@@ -438,16 +449,20 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 libraryModel: Library
                 scanning: SteamLibrary ? SteamLibrary.scanning : false
-                emptyTitle: Library.sourceFilter === "Lutris" && LutrisLibrary && !LutrisLibrary.lutrisDetected
+                emptyTitle: Library.sourceFilter === "Heroic" && HeroicLibrary && !HeroicLibrary.heroicDetected
+                            ? "Heroic was not found"
+                            : Library.sourceFilter === "Lutris" && LutrisLibrary && !LutrisLibrary.lutrisDetected
                             ? "Lutris was not found"
                             : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
                               ? "Steam was not found"
                               : Library.mode === 3 ? "No hidden games" : "No installed games"
-                emptyMessage: Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
+                emptyMessage: Library.sourceFilter === "Heroic" && HeroicLibrary && HeroicLibrary.errorText.length > 0
+                              ? HeroicLibrary.errorText
+                              : Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
                               ? LutrisLibrary.errorText
                               : SteamLibrary && SteamLibrary.errorText.length > 0
                                 ? SteamLibrary.errorText
-                                : "Install a game in Steam or Lutris, then rescan your library."
+                                : "Install a game in Steam, Lutris, or Heroic, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
                 onRefreshRequested: {
@@ -456,6 +471,9 @@ ApplicationWindow {
                     }
                     if (LutrisLibrary) {
                         LutrisLibrary.refresh()
+                    }
+                    if (HeroicLibrary) {
+                        HeroicLibrary.refresh()
                     }
                 }
             }
@@ -570,6 +588,15 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     visible: LutrisLibrary !== null
                     text: LutrisLibrary ? LutrisLibrary.statusText : ""
+                    color: Theme.accent
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: HeroicLibrary !== null
+                    text: HeroicLibrary ? HeroicLibrary.statusText : ""
                     color: Theme.accent
                     font.family: Theme.fontFamily
                     font.pixelSize: 12

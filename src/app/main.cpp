@@ -4,6 +4,7 @@
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
+#include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
 #include "library/LutrisGameModel.h"
 #include "library/MockGameModel.h"
@@ -57,8 +58,10 @@ int main(int argc, char* argv[]) {
   ControllerInput controller;
   std::unique_ptr<QAbstractItemModel> games;
   std::unique_ptr<LutrisGameModel> lutrisGames;
+  std::unique_ptr<HeroicGameModel> heroicGames;
   SteamGameModel* steamLibrary = nullptr;
   LutrisGameModel* lutrisLibrary = nullptr;
+  HeroicGameModel* heroicLibrary = nullptr;
   if (demoMode || stressMode) {
     games = std::make_unique<MockGameModel>(nullptr, stressMode ? 1000 : 100);
   } else {
@@ -67,11 +70,16 @@ int main(int argc, char* argv[]) {
     games = std::move(steam);
     lutrisGames = std::make_unique<LutrisGameModel>(steamLibrary->databasePath());
     lutrisLibrary = lutrisGames.get();
+    heroicGames = std::make_unique<HeroicGameModel>(steamLibrary->databasePath());
+    heroicLibrary = heroicGames.get();
   }
   UnifiedGameModel unifiedGames;
   unifiedGames.addSourceModel(games.get());
   if (lutrisGames != nullptr) {
     unifiedGames.addSourceModel(lutrisGames.get());
+  }
+  if (heroicGames != nullptr) {
+    unifiedGames.addSourceModel(heroicGames.get());
   }
   LibraryFilterModel library;
   library.setSourceModel(&unifiedGames);
@@ -112,6 +120,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Library"), &library);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamLibrary"), steamLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("LutrisLibrary"), lutrisLibrary);
+  engine.rootContext()->setContextProperty(QStringLiteral("HeroicLibrary"), heroicLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("Launcher"), &launcher);
   engine.rootContext()->setContextProperty(QStringLiteral("Preferences"), &preferences);
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
@@ -159,6 +168,9 @@ int main(int argc, char* argv[]) {
   }
   if (lutrisLibrary != nullptr) {
     QTimer::singleShot(150, lutrisLibrary, &LutrisGameModel::refresh);
+  }
+  if (heroicLibrary != nullptr) {
+    QTimer::singleShot(300, heroicLibrary, &HeroicGameModel::refresh);
   }
 
   if (smokeTest) {
