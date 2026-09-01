@@ -45,8 +45,10 @@ with a deterministic fictional library.
 
 ## Install on Omarchy or Arch
 
-Download the package and `SHA256SUMS` from the
-[latest release](https://github.com/tsouth89/omakade/releases/latest), then run:
+### Install from the terminal
+
+These commands download Omakade and its checksum into the current directory,
+verify the package, and install it:
 
 ```bash
 curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.1/omakade-1.1.1-1-x86_64.pkg.tar.zst
@@ -54,6 +56,20 @@ curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.1.1/SHA256SUM
 sha256sum -c SHA256SUMS --ignore-missing
 sudo pacman -U ./omakade-1.1.1-1-x86_64.pkg.tar.zst
 ```
+
+### Download in a browser
+
+1. Open the [latest release](https://github.com/tsouth89/omakade/releases/latest).
+2. Under **Assets**, download `omakade-1.1.1-1-x86_64.pkg.tar.zst` and
+   `SHA256SUMS` into the same folder.
+3. Open a terminal in that folder and run:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+sudo pacman -U ./omakade-1.1.1-1-x86_64.pkg.tar.zst
+```
+
+Launch Omakade from the application launcher or run `omakade` in a terminal.
 
 Omakade keeps its local library and settings when the package is upgraded or
 removed. The owning launchers remain responsible for games, accounts, updates,
