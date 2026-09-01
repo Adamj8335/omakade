@@ -319,8 +319,9 @@ SteamScanResult SteamScanner::scan(const QStringList& steamRoots) {
     for (const QString& library : discoveredLibraries) {
       QDir steamapps(library + QStringLiteral("/steamapps"));
       if (!steamapps.exists()) {
-        result.warnings.append(QStringLiteral("Steam library is unavailable: %1").arg(library));
-        result.incomplete = true;
+        // Skip stale entries (e.g. moved partition left in libraryfolders.vdf) - warn but don't abort scan.
+        // Steam doesn't clean up libraryfolders.vdf when a drive is moved without removal.
+        result.warnings.append(QStringLiteral("Steam library is unavailable, skipping: %1").arg(library));
         continue;
       }
       const QStringList manifests =
