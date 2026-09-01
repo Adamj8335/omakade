@@ -34,6 +34,42 @@ Item {
         return Qt.rgba(color.r, color.g, color.b, value)
     }
 
+    function focusAdjacent(forward) {
+        const window = root.Window.window
+        let current = window ? window.activeFocusItem : null
+        let candidate = current ? current.nextItemInFocusChain(forward) : playButton
+        let attempts = 0
+        while (candidate && candidate !== current && attempts < 100) {
+            if (candidate.visible && candidate.enabled && candidate.activeFocusOnTab) {
+                candidate.forceActiveFocus(forward ? Qt.TabFocusReason
+                                                   : Qt.BacktabFocusReason)
+                Qt.callLater(function() { root.revealFocusedItem(candidate) })
+                return
+            }
+            candidate = candidate.nextItemInFocusChain(forward)
+            ++attempts
+        }
+        playButton.forceActiveFocus(Qt.TabFocusReason)
+        Qt.callLater(function() { root.revealFocusedItem(playButton) })
+    }
+
+    function revealFocusedItem(item) {
+        const flickable = detailsScroll.contentItem
+        if (!item || !flickable) {
+            return
+        }
+        const position = item.mapToItem(flickable, 0, 0)
+        const margin = 16
+        if (position.y < margin) {
+            flickable.contentY = Math.max(flickable.originY,
+                                          flickable.contentY + position.y - margin)
+        } else if (position.y + item.height > flickable.height - margin) {
+            flickable.contentY = Math.min(
+                        flickable.originY + Math.max(0, flickable.contentHeight - flickable.height),
+                        flickable.contentY + position.y + item.height - flickable.height + margin)
+        }
+    }
+
     Keys.onEscapePressed: function(event) {
         if (root.collectionEditorOpen) {
             root.collectionEditorOpen = false
@@ -42,6 +78,29 @@ Item {
             root.backRequested()
         }
         event.accepted = true
+    }
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_F) {
+            root.favoriteRequested()
+            event.accepted = true
+        }
+    }
+
+    Shortcut {
+        sequence: "Down"
+        onActivated: root.focusAdjacent(true)
+    }
+    Shortcut {
+        sequence: "Right"
+        onActivated: root.focusAdjacent(true)
+    }
+    Shortcut {
+        sequence: "Up"
+        onActivated: root.focusAdjacent(false)
+    }
+    Shortcut {
+        sequence: "Left"
+        onActivated: root.focusAdjacent(false)
     }
 
     Rectangle {
@@ -99,6 +158,7 @@ Item {
     }
 
     ScrollView {
+        id: detailsScroll
         anchors.fill: parent
         anchors.topMargin: 80
         anchors.leftMargin: Math.max(28, parent.width * 0.055)

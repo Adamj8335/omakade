@@ -125,6 +125,11 @@ void ControllerInput::openAvailableControllers() {
 void ControllerInput::closeController(SDL_JoystickID id) {
   if (SDL_Gamepad* controller = m_controllers.take(id)) {
     SDL_CloseGamepad(controller);
+    m_axisX = 0;
+    m_axisY = 0;
+    m_axisKey = 0;
+    m_repeatTimer.stop();
+    m_repeatTimer.setInterval(320);
     emit controllerChanged();
   }
 }

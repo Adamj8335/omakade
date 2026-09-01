@@ -1425,6 +1425,11 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   QTRY_VERIFY_WITH_TIMEOUT(!keys.isEmpty(), 1000);
   QCOMPARE(keys.first().at(0).toInt(), static_cast<int>(Qt::Key_Return));
 
+  keys.clear();
+  QVERIFY(SDL_SetJoystickVirtualAxis(joystick, SDL_GAMEPAD_AXIS_LEFTX, 20000));
+  SDL_UpdateJoysticks();
+  QTRY_VERIFY_WITH_TIMEOUT(!keys.isEmpty(), 1000);
+
   SDL_CloseJoystick(joystick);
   SDL_Event removed{};
   removed.type = SDL_EVENT_GAMEPAD_REMOVED;
@@ -1432,6 +1437,9 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   QVERIFY(SDL_PushEvent(&removed));
   QVERIFY(SDL_DetachVirtualJoystick(id));
   QTRY_COMPARE_WITH_TIMEOUT(controller.controllerCount(), connectedCount - 1, 1000);
+  keys.clear();
+  QTest::qWait(400);
+  QVERIFY(keys.isEmpty());
   SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
 }
 
