@@ -1,7 +1,7 @@
 # Omakade product and delivery plan
 
-Implementation status: M0, M1, and M2 are complete in the 0.2 preview. M3 is
-the next milestone and requires an explicit Steam Web API credential flow.
+Implementation status: M0 through M3 are complete in the 0.3 preview. M4 is
+the next milestone and begins the unified library with Lutris.
 
 ## Product statement
 
@@ -649,6 +649,10 @@ Gate:
 This is the first public preview.
 
 ### M3: Steam depth
+
+Status: complete in the 0.3 preview. Steam's local achievement cache is the
+zero-setup primary source. Secret Service and the documented Steam Web API are
+an optional enrichment path.
 
 Deliver:
 

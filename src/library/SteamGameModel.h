@@ -43,6 +43,7 @@ public:
   Q_INVOKABLE void toggleFavorite(int row);
   Q_INVOKABLE void toggleHidden(int row);
   Q_INVOKABLE void refresh();
+  Q_INVOKABLE void reloadAchievementSummary(const QString& appId);
   void refreshFromRoots(const QStringList& roots);
 
 signals:

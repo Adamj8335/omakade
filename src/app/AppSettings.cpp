@@ -34,6 +34,19 @@ void AppSettings::setArtworkCacheLimitMb(int value) {
   emit artworkCacheLimitMbChanged();
 }
 
+QString AppSettings::steamId() const { return m_steamId; }
+
+void AppSettings::setSteamId(const QString& value) {
+  static const QRegularExpression valid(QStringLiteral("^[0-9]{5,20}$"));
+  const QString normalized = value.trimmed();
+  if ((!normalized.isEmpty() && !valid.match(normalized).hasMatch()) || m_steamId == normalized) {
+    return;
+  }
+  m_steamId = normalized;
+  save();
+  emit steamIdChanged();
+}
+
 QString AppSettings::defaultPath() {
   return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
          QStringLiteral("/omakade/config.toml");
@@ -55,6 +68,11 @@ void AppSettings::load() {
   if (limitMatch.hasMatch()) {
     m_artworkCacheLimitMb = qBound(128, limitMatch.captured(1).toInt(), 8192);
   }
+  const QRegularExpression steamId(QStringLiteral("(?m)^steam_id\\s*=\\s*\"([0-9]{5,20})\"\\s*$"));
+  const QRegularExpressionMatch steamIdMatch = steamId.match(contents);
+  if (steamIdMatch.hasMatch()) {
+    m_steamId = steamIdMatch.captured(1);
+  }
 }
 
 void AppSettings::save() const {
@@ -63,9 +81,10 @@ void AppSettings::save() const {
   if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     return;
   }
-  file.write(QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\n")
+  file.write(QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\nsteam_id = \"%3\"\n")
                  .arg(m_reducedMotion ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_artworkCacheLimitMb)
+                 .arg(m_steamId)
                  .toUtf8());
   file.commit();
 }

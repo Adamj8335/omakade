@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Omakade VERSION 0.2.0 LANGUAGES CXX)
+project(Omakade VERSION 0.3.0 LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
+pkg_check_modules(LIBSECRET REQUIRED IMPORTED_TARGET libsecret-1)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,6 +18,10 @@ qt_standard_project_setup(REQUIRES 6.8)
 add_library(omakade_core STATIC
   src/achievements/AchievementModel.cpp
   src/achievements/AchievementModel.h
+  src/achievements/SteamAchievementApi.cpp
+  src/achievements/SteamAchievementApi.h
+  src/achievements/SteamAccountService.cpp
+  src/achievements/SteamAccountService.h
   src/app/AppSettings.cpp
   src/app/AppSettings.h
   src/app/SingleInstance.cpp
@@ -43,6 +48,7 @@ add_library(omakade_core STATIC
 target_include_directories(omakade_core PUBLIC src)
 target_link_libraries(omakade_core PUBLIC
   PkgConfig::SDL3
+  PkgConfig::LIBSECRET
   Qt6::Concurrent
   Qt6::Core
   Qt6::Gui

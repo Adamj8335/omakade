@@ -191,6 +191,30 @@ void SteamGameModel::toggleHidden(int row) {
 
 void SteamGameModel::refresh() { refreshFromRoots(SteamScanner::discoverSteamRoots()); }
 
+void SteamGameModel::reloadAchievementSummary(const QString& appId) {
+  if (!m_database.isOpen()) {
+    return;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral("SELECT unlocked, total FROM achievement_summary WHERE app_id = ?"));
+  query.addBindValue(appId);
+  if (!query.exec() || !query.next()) {
+    return;
+  }
+  for (int row = 0; row < m_games.size(); ++row) {
+    Game& game = m_games[row];
+    if (game.steam.appId != appId) {
+      continue;
+    }
+    game.achievementsUnlocked = query.value(0).toInt();
+    game.achievementsTotal = query.value(1).toInt();
+    emit dataChanged(
+        index(row), index(row),
+        {GameRoles::Progress, GameRoles::AchievementsUnlocked, GameRoles::AchievementsTotal});
+    return;
+  }
+}
+
 void SteamGameModel::refreshFromRoots(const QStringList& roots) {
   if (m_scanning) {
     return;

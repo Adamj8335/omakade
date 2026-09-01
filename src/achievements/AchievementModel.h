@@ -2,6 +2,8 @@
 
 #include <QAbstractListModel>
 #include <QNetworkAccessManager>
+#include <QQueue>
+#include <QSet>
 #include <QSqlDatabase>
 #include <QString>
 #include <QVector>
@@ -69,9 +71,15 @@ private:
     double maximumProgress = 0.0;
   };
 
+  struct IconRequest {
+    QString appId;
+    QString apiName;
+  };
+
   [[nodiscard]] QString cacheRoot() const;
   [[nodiscard]] QString pathForIcon(const QString& appId, const QString& url) const;
   void requestMissingIcons();
+  void startNextIconDownloads();
   void requestIcon(int row);
   void pruneCache();
   void updateCacheBytes();
@@ -86,4 +94,7 @@ private:
   QSqlDatabase m_database;
   QString m_connectionName;
   QNetworkAccessManager m_network;
+  QQueue<IconRequest> m_iconQueue;
+  QSet<QString> m_pendingIcons;
+  int m_activeIconDownloads = 0;
 };

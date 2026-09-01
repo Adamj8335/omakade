@@ -440,6 +440,7 @@ ApplicationWindow {
             }
             onPlayRequested: root.playSelected()
             onManageRequested: root.manageSelected()
+            onConnectRequested: root.diagnosticsOpen = true
             onHiddenRequested: {
                 Library.toggleHidden(root.selectedIndex)
                 root.closeDetails()
@@ -495,7 +496,7 @@ ApplicationWindow {
         Rectangle {
             anchors.centerIn: parent
             width: Math.min(610, parent.width - 48)
-            height: 390
+            height: Math.min(610, parent.height - 48)
             radius: Math.max(8, Theme.cornerRadius)
             color: root.alpha(Theme.background, 0.98)
             border.color: root.alpha(Theme.foreground, 0.2)
@@ -550,6 +551,93 @@ ApplicationWindow {
                         }
                     }
                 }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: root.alpha(Theme.foreground, 0.12)
+                }
+                Text {
+                    text: "OPTIONAL STEAM CONNECTION"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: SteamAccount
+                          ? SteamAccount.statusText
+                          : "Local Steam data is used in demo mode."
+                    color: SteamAccount && (SteamAccount.state === "invalid-key"
+                                            || SteamAccount.state === "private"
+                                            || SteamAccount.state === "rate-limited")
+                           ? Theme.yellow : Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: SteamAccount !== null
+                    TextField {
+                        id: steamIdField
+                        Layout.fillWidth: true
+                        placeholderText: "Steam ID"
+                        text: SteamAccount ? SteamAccount.steamId : ""
+                        color: Theme.foreground
+                        placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                        font.family: Theme.fontFamily
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        background: Rectangle {
+                            radius: Math.max(5, Theme.cornerRadius)
+                            color: root.alpha(Theme.foreground, 0.045)
+                            border.color: root.alpha(Theme.foreground, 0.15)
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "SAVE ID"
+                        onClicked: SteamAccount.setSteamId(steamIdField.text)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: SteamAccount !== null && !SteamAccount.busy
+                    TextField {
+                        id: apiKeyField
+                        Layout.fillWidth: true
+                        placeholderText: SteamAccount && SteamAccount.hasApiKey
+                                         ? "API key stored securely" : "Steam Web API key"
+                        color: Theme.foreground
+                        placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                        echoMode: TextInput.Password
+                        font.family: Theme.fontFamily
+                        background: Rectangle {
+                            radius: Math.max(5, Theme.cornerRadius)
+                            color: root.alpha(Theme.foreground, 0.045)
+                            border.color: root.alpha(Theme.foreground, 0.15)
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "SAVE KEY"
+                        onClicked: {
+                            SteamAccount.storeApiKey(apiKeyField.text)
+                            apiKeyField.clear()
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        visible: SteamAccount ? SteamAccount.hasApiKey : false
+                        text: "REMOVE"
+                        onClicked: SteamAccount.removeApiKey()
+                    }
+                }
+                GlassButton {
+                    compact: true
+                    text: "GET A KEY FROM STEAM"
+                    onClicked: Qt.openUrlExternally("https://steamcommunity.com/dev/apikey")
+                }
                 Item { Layout.fillHeight: true }
                 RowLayout {
                     spacing: 8
@@ -582,5 +670,15 @@ ApplicationWindow {
     Component.onCompleted: {
         smokeReady = true
         libraryView.focusGrid()
+    }
+
+    Connections {
+        target: SteamAccount
+        enabled: SteamAccount !== null
+        function onAchievementsUpdated(appId) {
+            if (root.detailOpen && root.selectedGame.appId === appId) {
+                root.selectedGame = Library.get(root.selectedIndex)
+            }
+        }
     }
 }

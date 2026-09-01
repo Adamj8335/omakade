@@ -20,6 +20,7 @@
 
 namespace {
 constexpr qint64 kMaximumIconBytes = 2 * 1024 * 1024;
+constexpr int kMaximumConcurrentIconDownloads = 4;
 
 bool trustedIconUrl(const QUrl& url) {
   const QString host = url.host().toLower();
@@ -113,6 +114,10 @@ QString AchievementModel::statusText() const { return m_statusText; }
 qint64 AchievementModel::cacheBytes() const { return m_cacheBytes; }
 
 void AchievementModel::load(const QString& appId) {
+  while (!m_iconQueue.isEmpty()) {
+    const IconRequest request = m_iconQueue.dequeue();
+    m_pendingIcons.remove(request.appId + QLatin1Char('/') + request.apiName);
+  }
   beginResetModel();
   m_appId = appId;
   m_achievements.clear();
@@ -214,6 +219,36 @@ void AchievementModel::requestMissingIcons() {
       emit dataChanged(index(row), index(row), {IconPathRole});
       continue;
     }
+    if (!trustedIconUrl(QUrl(achievement.iconUrl))) {
+      continue;
+    }
+    const QString key = m_appId + QLatin1Char('/') + achievement.apiName;
+    if (!m_pendingIcons.contains(key)) {
+      m_pendingIcons.insert(key);
+      m_iconQueue.enqueue({m_appId, achievement.apiName});
+    }
+  }
+  startNextIconDownloads();
+}
+
+void AchievementModel::startNextIconDownloads() {
+  while (m_activeIconDownloads < kMaximumConcurrentIconDownloads && !m_iconQueue.isEmpty()) {
+    const IconRequest request = m_iconQueue.dequeue();
+    if (request.appId != m_appId) {
+      m_pendingIcons.remove(request.appId + QLatin1Char('/') + request.apiName);
+      continue;
+    }
+    int row = -1;
+    for (int candidate = 0; candidate < m_achievements.size(); ++candidate) {
+      if (m_achievements.at(candidate).apiName == request.apiName) {
+        row = candidate;
+        break;
+      }
+    }
+    if (row < 0) {
+      m_pendingIcons.remove(request.appId + QLatin1Char('/') + request.apiName);
+      continue;
+    }
     requestIcon(row);
   }
 }
@@ -231,13 +266,23 @@ void AchievementModel::requestIcon(int row) {
   request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                        QNetworkRequest::ManualRedirectPolicy);
   QNetworkReply* reply = m_network.get(request);
-  reply->setProperty("achievementRow", row);
+  ++m_activeIconDownloads;
   reply->setProperty("achievementAppId", m_appId);
+  reply->setProperty("achievementApiName", m_achievements.at(row).apiName);
   connect(reply, &QNetworkReply::finished, this, [this, reply] {
-    const int row = reply->property("achievementRow").toInt();
     const QString appId = reply->property("achievementAppId").toString();
+    const QString apiName = reply->property("achievementApiName").toString();
     const QByteArray contents = reply->readAll();
-    const bool validRow = appId == m_appId && row >= 0 && row < m_achievements.size();
+    int row = -1;
+    if (appId == m_appId) {
+      for (int candidate = 0; candidate < m_achievements.size(); ++candidate) {
+        if (m_achievements.at(candidate).apiName == apiName) {
+          row = candidate;
+          break;
+        }
+      }
+    }
+    const bool validRow = row >= 0;
     if (reply->error() == QNetworkReply::NoError && validRow && !contents.isEmpty() &&
         contents.size() <= kMaximumIconBytes) {
       const QString path = pathForIcon(appId, m_achievements.at(row).iconUrl);
@@ -251,13 +296,16 @@ void AchievementModel::requestIcon(int row) {
             "UPDATE achievements SET icon_path = ? WHERE app_id = ? AND api_name = ?"));
         query.addBindValue(path);
         query.addBindValue(appId);
-        query.addBindValue(m_achievements.at(row).apiName);
+        query.addBindValue(apiName);
         query.exec();
         emit dataChanged(index(row), index(row), {IconPathRole});
       }
     }
     reply->deleteLater();
+    --m_activeIconDownloads;
+    m_pendingIcons.remove(appId + QLatin1Char('/') + apiName);
     pruneCache();
+    startNextIconDownloads();
   });
 }
 

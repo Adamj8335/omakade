@@ -16,6 +16,7 @@ Item {
     signal playRequested()
     signal manageRequested()
     signal hiddenRequested()
+    signal connectRequested()
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -238,8 +239,8 @@ Item {
                     Repeater {
                         model: [
                             { label: "PLAYTIME", value: (root.game.hours || 0) + " HOURS" },
-                            { label: "ACHIEVEMENTS", value: (root.game.achievementsUnlocked || 0) + " / " + (root.game.achievementsTotal || 0) },
-                            { label: "COMPLETION", value: (root.game.progress || 0) + "%" }
+                            { label: "ACHIEVEMENTS", value: (Achievements.unlocked || root.game.achievementsUnlocked || 0) + " / " + (Achievements.total || root.game.achievementsTotal || 0) },
+                            { label: "COMPLETION", value: Achievements.total > 0 ? Math.round(Achievements.unlocked * 100 / Achievements.total) + "%" : (root.game.progress || 0) + "%" }
                         ]
 
                         Rectangle {
@@ -291,7 +292,7 @@ Item {
                         }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: (root.game.progress || 0) + "%"
+                            text: Achievements.total > 0 ? Math.round(Achievements.unlocked * 100 / Achievements.total) + "%" : (root.game.progress || 0) + "%"
                             color: Theme.accent
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
@@ -306,7 +307,9 @@ Item {
                         color: root.alpha(Theme.foreground, 0.1)
 
                         Rectangle {
-                            width: parent.width * (root.game.progress || 0) / 100
+                            width: parent.width * (Achievements.total > 0
+                                                   ? Achievements.unlocked / Achievements.total
+                                                   : (root.game.progress || 0) / 100)
                             height: parent.height
                             radius: parent.radius
                             color: Theme.accent
@@ -318,7 +321,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.topMargin: 18
                     spacing: 10
-                    visible: root.game.source === "Steam" && Achievements.total > 0
+                    visible: root.game.source === "Steam"
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -331,6 +334,21 @@ Item {
                             font.letterSpacing: 0.7
                         }
                         Item { Layout.fillWidth: true }
+                        GlassButton {
+                            visible: SteamAccount !== null
+                            compact: true
+                            text: SteamAccount && SteamAccount.hasApiKey
+                                  ? (SteamAccount.busy ? "REFRESHING" : "REFRESH STEAM")
+                                  : "CONNECT STEAM"
+                            enabled: !SteamAccount || !SteamAccount.busy
+                            onClicked: {
+                                if (SteamAccount.hasApiKey) {
+                                    SteamAccount.refreshAchievements(root.game.appId)
+                                } else {
+                                    root.connectRequested()
+                                }
+                            }
+                        }
                         Text {
                             text: Achievements.unlocked + " / " + Achievements.total
                             color: Theme.accent
@@ -349,8 +367,22 @@ Item {
                         wrapMode: Text.Wrap
                     }
 
+                    Text {
+                        Layout.fillWidth: true
+                        visible: SteamAccount && SteamAccount.statusText.length > 0
+                        text: SteamAccount ? SteamAccount.statusText : ""
+                        color: SteamAccount && (SteamAccount.state === "invalid-key"
+                                                || SteamAccount.state === "private"
+                                                || SteamAccount.state === "rate-limited")
+                               ? Theme.yellow : Theme.mutedText
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                    }
+
                     GridLayout {
                         Layout.fillWidth: true
+                        visible: Achievements.total > 0
                         columns: root.width < 1160 ? 1 : 2
                         columnSpacing: 10
                         rowSpacing: 10
@@ -363,7 +395,9 @@ Item {
                                 required property string description
                                 required property string iconPath
                                 required property bool unlocked
+                                required property double unlockTime
                                 required property real rarity
+                                required property bool hidden
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 260
                                 Layout.preferredHeight: 82
@@ -407,7 +441,7 @@ Item {
                                         spacing: 3
                                         Text {
                                             Layout.fillWidth: true
-                                            text: title
+                                            text: hidden && !unlocked ? "Hidden achievement" : title
                                             color: unlocked ? Theme.brightForeground : Theme.foreground
                                             font.family: Theme.fontFamily
                                             font.pixelSize: 11
@@ -416,14 +450,17 @@ Item {
                                         }
                                         Text {
                                             Layout.fillWidth: true
-                                            text: description
+                                            text: hidden && !unlocked ? "Unlock to reveal details" : description
                                             color: Theme.mutedText
                                             font.family: Theme.fontFamily
                                             font.pixelSize: 9
                                             elide: Text.ElideRight
                                         }
                                         Text {
-                                            text: rarity > 0 ? rarity.toFixed(1) + "% OF PLAYERS" : "STEAM"
+                                            text: (unlocked && unlockTime > 0
+                                                   ? "UNLOCKED " + Qt.formatDateTime(new Date(unlockTime * 1000), "MMM d, yyyy").toUpperCase() + "  ·  "
+                                                   : "")
+                                                  + (rarity > 0 ? rarity.toFixed(1) + "% OF PLAYERS" : "STEAM")
                                             color: unlocked ? Theme.accent : root.alpha(Theme.foreground, 0.45)
                                             font.family: Theme.fontFamily
                                             font.pixelSize: 8

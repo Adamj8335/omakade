@@ -1,4 +1,5 @@
 #include "achievements/AchievementModel.h"
+#include "achievements/SteamAchievementApi.h"
 #include "app/AppSettings.h"
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
@@ -14,6 +15,8 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QSignalSpy>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QUuid>
@@ -101,7 +104,10 @@ private slots:
   void steamScannerImportsLibrariesAndCustomArtwork();
   void steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements();
   void steamModelPersistsFavoritesAndHiddenState();
+  void steamModelMigratesVersionOneDatabase();
   void achievementModelLoadsLocalSteamCache();
+  void steamAchievementApiParsesPlayerSchemaAndRarity();
+  void steamAchievementApiClassifiesFailures();
   void steamLauncherBuildsSafeUrls();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
@@ -274,6 +280,51 @@ void CoreTests::steamModelPersistsFavoritesAndHiddenState() {
   QVERIFY(reloaded.get(1).value(QStringLiteral("hidden")).toBool());
 }
 
+void CoreTests::steamModelMigratesVersionOneDatabase() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString database = directory.path() + QStringLiteral("/library.sqlite3");
+  const QString setupConnection = QStringLiteral("migration-setup");
+  {
+    QSqlDatabase setup = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), setupConnection);
+    setup.setDatabaseName(database);
+    QVERIFY(setup.open());
+    QSqlQuery query(setup);
+    QVERIFY(query.exec(QStringLiteral(
+        "CREATE TABLE games (app_id TEXT PRIMARY KEY, title TEXT NOT NULL, favorite INTEGER NOT "
+        "NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0)")));
+    QVERIFY(query.exec(QStringLiteral(
+        "CREATE TABLE installations (app_id TEXT PRIMARY KEY REFERENCES games(app_id), install_dir "
+        "TEXT NOT NULL, library_path TEXT NOT NULL, manifest_path TEXT NOT NULL, cover_path TEXT, "
+        "hero_path TEXT, logo_path TEXT, last_played INTEGER NOT NULL DEFAULT 0, playtime_minutes "
+        "INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)")));
+    QVERIFY(query.exec(QStringLiteral("CREATE TABLE source_state (source TEXT PRIMARY KEY, "
+                                      "last_scan INTEGER, last_error TEXT)")));
+    QVERIFY(query.exec(QStringLiteral("PRAGMA user_version = 1")));
+    setup.close();
+  }
+  QSqlDatabase::removeDatabase(setupConnection);
+
+  SteamGameModel model(database);
+  const QString verifyConnection = QStringLiteral("migration-verify");
+  {
+    QSqlDatabase verify = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), verifyConnection);
+    verify.setDatabaseName(database);
+    QVERIFY(verify.open());
+    QSqlQuery query(verify);
+    QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 2);
+    QVERIFY(query.exec(
+        QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
+                       "('achievement_summary', 'achievements')")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toInt(), 2);
+    verify.close();
+  }
+  QSqlDatabase::removeDatabase(verifyConnection);
+}
+
 void CoreTests::achievementModelLoadsLocalSteamCache() {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -296,6 +347,47 @@ void CoreTests::achievementModelLoadsLocalSteamCache() {
   QCOMPARE(achievements.rowCount(), 2);
   QCOMPARE(achievements.data(achievements.index(0), AchievementModel::TitleRole).toString(),
            QStringLiteral("First Win"));
+}
+
+void CoreTests::steamAchievementApiParsesPlayerSchemaAndRarity() {
+  const QByteArray player =
+      R"({"playerstats":{"success":true,"achievements":[{"apiname":"FIRST","achieved":1,"unlocktime":1700000000},{"apiname":"HIDDEN","achieved":0,"unlocktime":0}]}})";
+  const QByteArray schema =
+      R"({"game":{"availableGameStats":{"achievements":[{"name":"FIRST","displayName":"First Step","description":"Begin","icon":"https://shared.steamstatic.com/first.jpg","hidden":0},{"name":"HIDDEN","displayName":"Secret","description":"","icon":"https://shared.steamstatic.com/hidden.jpg","hidden":1}]}}})";
+  const QByteArray rarity =
+      R"({"achievementpercentages":{"achievements":[{"name":"FIRST","percent":42.5},{"name":"HIDDEN","percent":3.25}]}})";
+
+  SteamAchievementApiResult result;
+  QString error;
+  QCOMPARE(SteamAchievementApi::parse(player, schema, rarity, &result, &error),
+           SteamApiState::Ready);
+  QVERIFY(error.isEmpty());
+  QCOMPARE(result.unlocked, 1);
+  QCOMPARE(result.total, 2);
+  QCOMPARE(result.achievements.at(0).title, QStringLiteral("First Step"));
+  QCOMPARE(result.achievements.at(0).rarity, 42.5);
+  QVERIFY(result.achievements.at(1).hidden);
+}
+
+void CoreTests::steamAchievementApiClassifiesFailures() {
+  QCOMPARE(SteamAchievementApi::classifyHttpResponse(0, true), SteamApiState::Offline);
+  QCOMPARE(SteamAchievementApi::classifyHttpResponse(403, false), SteamApiState::InvalidKey);
+  QCOMPARE(SteamAchievementApi::classifyHttpResponse(429, false), SteamApiState::RateLimited);
+  QCOMPARE(SteamAchievementApi::classifyHttpResponse(429, true), SteamApiState::RateLimited);
+  QCOMPARE(SteamAchievementApi::classifyHttpResponse(500, true), SteamApiState::RemoteError);
+
+  SteamAchievementApiResult result;
+  QString error;
+  const QByteArray privatePlayer =
+      R"({"playerstats":{"success":false,"error":"Profile is private"}})";
+  QCOMPARE(SteamAchievementApi::parse(privatePlayer, R"({"game":{}})", R"({})", &result, &error),
+           SteamApiState::PrivateProfile);
+  QVERIFY(!error.isEmpty());
+  const QByteArray invalidKey = R"({"playerstats":{"success":false,"error":"Invalid API key"}})";
+  QCOMPARE(SteamAchievementApi::parse(invalidKey, R"({"game":{}})", R"({})", &result, &error),
+           SteamApiState::InvalidKey);
+  QCOMPARE(SteamAchievementApi::parse("not json", R"({"game":{}})", R"({})", &result, &error),
+           SteamApiState::RemoteError);
 }
 
 void CoreTests::steamLauncherBuildsSafeUrls() {
@@ -321,10 +413,12 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     AppSettings settings(path);
     settings.setReducedMotion(true);
     settings.setArtworkCacheLimitMb(512);
+    settings.setSteamId(QStringLiteral("76561198000000000"));
   }
   AppSettings reloaded(path);
   QVERIFY(reloaded.reducedMotion());
   QCOMPARE(reloaded.artworkCacheLimitMb(), 512);
+  QCOMPARE(reloaded.steamId(), QStringLiteral("76561198000000000"));
 }
 
 void CoreTests::secondInstanceRequestsActivation() {
