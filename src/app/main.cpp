@@ -84,6 +84,14 @@ int main(int argc, char* argv[]) {
   if (heroicGames != nullptr) {
     unifiedGames.addSourceModel(heroicGames.get());
   }
+  const auto applySourcePreferences = [&] {
+    unifiedGames.setSourceEnabled(QStringLiteral("Steam"), preferences.steamEnabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("Lutris"), preferences.lutrisEnabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("Heroic"), preferences.heroicEnabled());
+  };
+  applySourcePreferences();
+  QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
+                   applySourcePreferences);
   LibraryFilterModel library;
   library.setSourceModel(&unifiedGames);
   AchievementModel achievements(steamLibrary == nullptr ? QStringLiteral(":memory:")
@@ -170,13 +178,13 @@ int main(int argc, char* argv[]) {
                      }
                    });
 
-  if (steamLibrary != nullptr) {
+  if (steamLibrary != nullptr && preferences.steamEnabled()) {
     QTimer::singleShot(0, steamLibrary, &SteamGameModel::refresh);
   }
-  if (lutrisLibrary != nullptr) {
+  if (lutrisLibrary != nullptr && preferences.lutrisEnabled()) {
     QTimer::singleShot(150, lutrisLibrary, &LutrisGameModel::refresh);
   }
-  if (heroicLibrary != nullptr) {
+  if (heroicLibrary != nullptr && preferences.heroicEnabled()) {
     QTimer::singleShot(300, heroicLibrary, &HeroicGameModel::refresh);
   }
 

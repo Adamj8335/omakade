@@ -175,6 +175,7 @@ private slots:
   void lutrisModelIsRepeatableAndPreservesLocalState();
   void malformedLutrisDataDoesNotReplaceCachedGames();
   void unifiedLibraryFiltersSourcesAndRoutesFavorites();
+  void unifiedLibraryCanDisableSourcesAtRuntime();
   void customCoverPersistsAndResets();
   void explicitLinksPersistAndPreserveInstallations();
   void launchActivityPersistsAndSortsExactly();
@@ -409,7 +410,7 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QSqlQuery query(verify);
     QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
     QVERIFY(query.next());
-    QCOMPARE(query.value(0).toInt(), 6);
+  QCOMPARE(query.value(0).toInt(), 7);
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('achievement_summary', 'achievements')")));
@@ -534,12 +535,17 @@ void CoreTests::lutrisModelIsRepeatableAndPreservesLocalState() {
   const QString source = dataRoot + QStringLiteral("/pga.db");
   model.refreshFromDatabases({source});
   QCOMPARE(model.rowCount(), 1);
+  QCOMPARE(model.detectedPaths(), QStringList({source}));
+  QVERIFY(model.lastScan() > 0);
   model.toggleFavorite(0);
   model.toggleHidden(0);
   model.refreshFromDatabases({source});
   QCOMPARE(model.rowCount(), 1);
   QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
   QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
+  LutrisGameModel reloaded(database);
+  QCOMPARE(reloaded.detectedPaths(), QStringList({source}));
+  QCOMPARE(reloaded.lastScan(), model.lastScan());
 }
 
 void CoreTests::malformedLutrisDataDoesNotReplaceCachedGames() {
@@ -579,6 +585,24 @@ void CoreTests::unifiedLibraryFiltersSourcesAndRoutesFavorites() {
   QCOMPARE(library.get(0).value(QStringLiteral("title")).toString(), QStringLiteral("Signal Hill"));
   library.toggleFavorite(0);
   QVERIFY(lutris.data(lutris.index(0), GameRoles::Favorite).toBool());
+}
+
+void CoreTests::unifiedLibraryCanDisableSourcesAtRuntime() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString dataRoot = directory.path() + QStringLiteral("/lutris");
+  createLutrisFixture(dataRoot);
+  MockGameModel demo(nullptr, 2);
+  LutrisGameModel lutris(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  lutris.refreshFromDatabases({dataRoot + QStringLiteral("/pga.db")});
+  UnifiedGameModel games;
+  games.addSourceModel(&demo);
+  games.addSourceModel(&lutris);
+  QCOMPARE(games.rowCount(), 3);
+  games.setSourceEnabled(QStringLiteral("Lutris"), false);
+  QCOMPARE(games.rowCount(), 2);
+  games.setSourceEnabled(QStringLiteral("Lutris"), true);
+  QCOMPARE(games.rowCount(), 3);
 }
 
 void CoreTests::customCoverPersistsAndResets() {
@@ -645,6 +669,12 @@ void CoreTests::explicitLinksPersistAndPreserveInstallations() {
              QStringLiteral("Lutris"));
     QCOMPARE(installations.at(1).toMap().value(QStringLiteral("appId")).toString(),
              QStringLiteral("7"));
+    games.setSourceEnabled(QStringLiteral("Demo"), false);
+    QCOMPARE(games.rowCount(), 1);
+    QCOMPARE(games.data(games.index(0), GameRoles::Source).toString(), QStringLiteral("Lutris"));
+    QCOMPARE(games.installations(0).size(), 1);
+    games.setSourceEnabled(QStringLiteral("Demo"), true);
+    QCOMPARE(games.rowCount(), 2);
     QVERIFY(games.setCompletionStatus(0, QStringLiteral("completed")));
     QVERIFY(games.setTags(0, QStringLiteral("cross-platform")));
     QVERIFY(games.createCollection(QStringLiteral("Finished")));
@@ -834,12 +864,17 @@ void CoreTests::heroicModelIsRepeatableAndPreservesLocalState() {
   HeroicGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
   model.refreshFromRoots({root});
   QCOMPARE(model.rowCount(), 3);
+  QCOMPARE(model.detectedPaths(), QStringList({root}));
+  QVERIFY(model.lastScan() > 0);
   model.toggleFavorite(0);
   model.toggleHidden(0);
   model.refreshFromRoots({root});
   QCOMPARE(model.rowCount(), 3);
   QVERIFY(model.data(model.index(0), GameRoles::Favorite).toBool());
   QVERIFY(model.data(model.index(0), GameRoles::Hidden).toBool());
+  HeroicGameModel reloaded(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  QCOMPARE(reloaded.detectedPaths(), QStringList({root}));
+  QCOMPARE(reloaded.lastScan(), model.lastScan());
 }
 
 void CoreTests::malformedHeroicDataDoesNotReplaceCachedGames() {
@@ -960,12 +995,17 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     settings.setArtworkCacheLimitMb(512);
     settings.setSteamId(QStringLiteral("76561198000000000"));
     settings.setIgdbClientId(QStringLiteral("publicclient123"));
+    settings.setSteamEnabled(false);
+    settings.setLutrisEnabled(false);
   }
   AppSettings reloaded(path);
   QVERIFY(reloaded.reducedMotion());
   QCOMPARE(reloaded.artworkCacheLimitMb(), 512);
   QCOMPARE(reloaded.steamId(), QStringLiteral("76561198000000000"));
   QCOMPARE(reloaded.igdbClientId(), QStringLiteral("publicclient123"));
+  QVERIFY(!reloaded.steamEnabled());
+  QVERIFY(!reloaded.lutrisEnabled());
+  QVERIFY(reloaded.heroicEnabled());
 }
 
 void CoreTests::secondInstanceRequestsActivation() {

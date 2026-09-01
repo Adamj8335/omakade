@@ -21,6 +21,8 @@ class SteamGameModel final : public QAbstractListModel {
   Q_PROPERTY(QString statusText READ statusText NOTIFY statusChanged)
   Q_PROPERTY(QString errorText READ errorText NOTIFY statusChanged)
   Q_PROPERTY(int artworkCount READ artworkCount NOTIFY statusChanged)
+  Q_PROPERTY(QStringList detectedPaths READ detectedPaths NOTIFY statusChanged)
+  Q_PROPERTY(qint64 lastScan READ lastScan NOTIFY statusChanged)
   Q_PROPERTY(QString databasePath READ databasePath CONSTANT)
 
 public:
@@ -37,6 +39,8 @@ public:
   [[nodiscard]] QString statusText() const;
   [[nodiscard]] QString errorText() const;
   [[nodiscard]] int artworkCount() const;
+  [[nodiscard]] QStringList detectedPaths() const;
+  [[nodiscard]] qint64 lastScan() const;
   [[nodiscard]] QString databasePath() const;
 
   Q_INVOKABLE QVariantMap get(int row) const;
@@ -66,6 +70,7 @@ private:
   bool openDatabase(const QString& path);
   bool ensureSchema();
   void loadDatabase();
+  void loadSourceState();
   void applyScan(const SteamScanResult& result);
   void rebuildWatchPaths(const SteamScanResult& result);
   void setStatus(const QString& status, const QString& error = {});
@@ -91,6 +96,8 @@ private:
   bool m_steamDetected = false;
   QString m_statusText;
   QString m_errorText;
+  QStringList m_detectedPaths;
+  qint64 m_lastScan = 0;
   AppSettings* m_settings = nullptr;
   QNetworkAccessManager m_network;
   QQueue<CoverRequest> m_coverQueue;

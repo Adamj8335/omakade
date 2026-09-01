@@ -106,6 +106,17 @@ void UnifiedGameModel::addSourceModel(QAbstractItemModel* model) {
   });
 }
 
+void UnifiedGameModel::setSourceEnabled(const QString& source, bool enabled) {
+  const bool changed = enabled ? m_disabledSources.remove(source) > 0
+                               : !m_disabledSources.contains(source);
+  if (!enabled) {
+    m_disabledSources.insert(source);
+  }
+  if (changed) {
+    rebuildRows();
+  }
+}
+
 int UnifiedGameModel::rowCount(const QModelIndex& parent) const {
   if (parent.isValid()) {
     return 0;
@@ -678,12 +689,20 @@ UnifiedGameModel::SourceRow UnifiedGameModel::sourceForKey(const QString& key) c
   for (QAbstractItemModel* model : m_models) {
     for (int row = 0; row < model->rowCount(); ++row) {
       const SourceRow source{.model = model, .row = row};
-      if (gameKey(source) == key) {
+      if (sourceEnabled(source) && gameKey(source) == key) {
         return source;
       }
     }
   }
   return {};
+}
+
+bool UnifiedGameModel::sourceEnabled(const SourceRow& source) const {
+  if (source.model == nullptr) {
+    return false;
+  }
+  return !m_disabledSources.contains(
+      source.model->index(source.row, 0).data(GameRoles::Source).toString());
 }
 
 QVector<UnifiedGameModel::SourceRow> UnifiedGameModel::groupRows(const SourceRow& source) const {
@@ -699,7 +718,7 @@ QVector<UnifiedGameModel::SourceRow> UnifiedGameModel::groupRows(const SourceRow
   for (QAbstractItemModel* model : m_models) {
     for (int row = 0; row < model->rowCount(); ++row) {
       const SourceRow candidate{.model = model, .row = row};
-      if (gameKey(candidate) != gameKey(source) &&
+      if (sourceEnabled(candidate) && gameKey(candidate) != gameKey(source) &&
           m_groupForGame.value(gameKey(candidate)) == groupId) {
         rows.append(candidate);
       }
@@ -743,6 +762,9 @@ void UnifiedGameModel::rebuildRows() {
   for (QAbstractItemModel* model : m_models) {
     for (int row = 0; row < model->rowCount(); ++row) {
       const SourceRow source{.model = model, .row = row};
+      if (!sourceEnabled(source)) {
+        continue;
+      }
       const QString groupId = m_groupForGame.value(gameKey(source));
       if (groupId.isEmpty()) {
         m_rows.append(source);

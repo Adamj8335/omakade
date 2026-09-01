@@ -3,6 +3,7 @@
 #include "library/GameRoles.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QSqlError>
@@ -26,6 +27,7 @@ LutrisGameModel::LutrisGameModel(const QString& omakadeDatabasePath, QObject* pa
       m_connectionName(QStringLiteral("omakade-lutris-%1").arg(reinterpret_cast<quintptr>(this))) {
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
+    loadSourceState();
   }
 }
 
@@ -75,6 +77,8 @@ QHash<int, QByteArray> LutrisGameModel::roleNames() const {
 bool LutrisGameModel::lutrisDetected() const { return m_lutrisDetected; }
 QString LutrisGameModel::statusText() const { return m_statusText; }
 QString LutrisGameModel::errorText() const { return m_errorText; }
+QStringList LutrisGameModel::detectedPaths() const { return m_detectedPaths; }
+qint64 LutrisGameModel::lastScan() const { return m_lastScan; }
 
 void LutrisGameModel::toggleFavorite(int row) {
   if (row < 0 || row >= m_games.size() || !m_database.isOpen()) {
@@ -133,12 +137,27 @@ bool LutrisGameModel::openDatabase(const QString& path) {
 
 bool LutrisGameModel::ensureSchema() {
   QSqlQuery query(m_database);
-  return query.exec(QStringLiteral(
+  if (!query.exec(QStringLiteral(
       "CREATE TABLE IF NOT EXISTS lutris_games (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT "
       "NOT NULL, runner TEXT, directory TEXT, platform TEXT, year INTEGER NOT NULL DEFAULT 0, "
       "last_played INTEGER NOT NULL DEFAULT 0, playtime_minutes INTEGER NOT NULL DEFAULT 0, "
       "cover_path TEXT, flatpak INTEGER NOT NULL DEFAULT 0, favorite INTEGER NOT NULL DEFAULT 0, "
-      "hidden INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)"));
+      "hidden INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)"))) {
+    return false;
+  }
+  if (!query.exec(QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS source_state (source TEXT PRIMARY KEY, last_scan INTEGER, "
+          "last_error TEXT, paths TEXT NOT NULL DEFAULT '')"))) {
+    return false;
+  }
+  bool hasPaths = false;
+  if (query.exec(QStringLiteral("PRAGMA table_info(source_state)"))) {
+    while (query.next()) {
+      hasPaths = hasPaths || query.value(1).toString() == QStringLiteral("paths");
+    }
+  }
+  return hasPaths || query.exec(QStringLiteral(
+                         "ALTER TABLE source_state ADD COLUMN paths TEXT NOT NULL DEFAULT ''"));
 }
 
 void LutrisGameModel::loadDatabase() {
@@ -172,6 +191,22 @@ void LutrisGameModel::loadDatabase() {
   beginResetModel();
   m_games = loaded;
   endResetModel();
+}
+
+void LutrisGameModel::loadSourceState() {
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "SELECT last_scan, last_error, paths FROM source_state WHERE source = 'lutris'"));
+  if (!query.exec() || !query.next()) {
+    return;
+  }
+  m_lastScan = query.value(0).toLongLong();
+  m_errorText = query.value(1).toString();
+  m_detectedPaths = query.value(2).toString().split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+  m_lutrisDetected = !m_detectedPaths.isEmpty();
+  if (m_lastScan > 0) {
+    m_statusText = QStringLiteral("Loaded cached Lutris library");
+  }
 }
 
 void LutrisGameModel::applyScan(const LutrisScanResult& result) {
@@ -210,12 +245,21 @@ void LutrisGameModel::applyScan(const LutrisScanResult& result) {
     okay = okay && query.exec();
   }
   okay = okay && query.exec(QStringLiteral("DELETE FROM lutris_games WHERE observed_at = 0"));
+  query.prepare(QStringLiteral(
+      "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('lutris', "
+      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(result.warnings.join(QLatin1Char('\n')));
+  query.addBindValue(result.databasePaths.join(QLatin1Char('\n')));
+  okay = okay && query.exec();
   if (!okay || !m_database.commit()) {
     m_database.rollback();
     setStatus(QStringLiteral("Could not update Lutris games"), query.lastError().text());
     return;
   }
   loadDatabase();
+  m_detectedPaths = result.databasePaths;
+  m_lastScan = QDateTime::currentSecsSinceEpoch();
   setStatus(m_lutrisDetected ? QStringLiteral("Imported %1 Lutris game(s)").arg(result.games.size())
                              : QStringLiteral("Lutris was not found"),
             result.warnings.join(QLatin1Char('\n')));

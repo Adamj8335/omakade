@@ -11,6 +11,8 @@ class LutrisGameModel final : public QAbstractListModel {
   Q_PROPERTY(bool lutrisDetected READ lutrisDetected NOTIFY statusChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY statusChanged)
   Q_PROPERTY(QString errorText READ errorText NOTIFY statusChanged)
+  Q_PROPERTY(QStringList detectedPaths READ detectedPaths NOTIFY statusChanged)
+  Q_PROPERTY(qint64 lastScan READ lastScan NOTIFY statusChanged)
 
 public:
   explicit LutrisGameModel(const QString& omakadeDatabasePath, QObject* parent = nullptr);
@@ -22,6 +24,8 @@ public:
   [[nodiscard]] bool lutrisDetected() const;
   [[nodiscard]] QString statusText() const;
   [[nodiscard]] QString errorText() const;
+  [[nodiscard]] QStringList detectedPaths() const;
+  [[nodiscard]] qint64 lastScan() const;
 
   Q_INVOKABLE void toggleFavorite(int row);
   Q_INVOKABLE void toggleHidden(int row);
@@ -43,6 +47,7 @@ private:
   bool openDatabase(const QString& path);
   bool ensureSchema();
   void loadDatabase();
+  void loadSourceState();
   void applyScan(const LutrisScanResult& result);
   [[nodiscard]] QVariant valueForRole(const Game& game, int role) const;
   void setStatus(const QString& status, const QString& error = {});
@@ -53,4 +58,6 @@ private:
   bool m_lutrisDetected = false;
   QString m_statusText;
   QString m_errorText;
+  QStringList m_detectedPaths;
+  qint64 m_lastScan = 0;
 };

@@ -53,7 +53,7 @@ the local library database for offline use and refreshed after 30 days.
 
 ## Removal
 
-The diagnostics panel can clear downloaded achievement art and remove Steam or
+The settings panel can clear downloaded achievement art and remove Steam or
 IGDB credentials from Secret Service. Removing Omakade does not remove its XDG
 data by default, so users can preserve settings across reinstallations.
 Resetting a custom cover removes Omakade's private copy and restores the

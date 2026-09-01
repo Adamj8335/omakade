@@ -23,6 +23,7 @@ The 0.5 preview includes:
 - One-click details and delegated launching through the owning platform
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
+- Runtime source controls with scan status and detected locations
 - Collections, tags, completion states, and smart organization filters
 - Local Steam achievements plus optional Web API enrichment
 - Optional IGDB critic aggregates and game-length estimates
@@ -55,7 +56,7 @@ ctest --preset dev
 
 Use `Ctrl+F` to search, arrow keys to navigate, Enter to open details, Escape
 to return, and F11 to toggle fullscreen. `Ctrl+M` toggles reduced motion and
-`Ctrl+D` opens diagnostics.
+`Ctrl+D` opens settings and source diagnostics.
 
 ## Local data
 

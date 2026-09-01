@@ -4,6 +4,7 @@
 #include "library/GameRoles.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -76,6 +77,7 @@ SteamGameModel::SteamGameModel(const QString& databasePath, AppSettings* setting
   const QString path = databasePath.isEmpty() ? defaultDatabasePath() : databasePath;
   if (openDatabase(path) && ensureSchema()) {
     loadDatabase();
+    loadSourceState();
     QTimer::singleShot(800, this, &SteamGameModel::requestMissingCovers);
   }
 }
@@ -140,6 +142,10 @@ int SteamGameModel::artworkCount() const {
   return std::count_if(m_games.cbegin(), m_games.cend(),
                        [](const Game& game) { return !game.steam.coverPath.isEmpty(); });
 }
+
+QStringList SteamGameModel::detectedPaths() const { return m_detectedPaths; }
+
+qint64 SteamGameModel::lastScan() const { return m_lastScan; }
 
 QString SteamGameModel::databasePath() const { return m_databasePath; }
 
@@ -321,7 +327,8 @@ bool SteamGameModel::ensureSchema() {
                      "hero_path TEXT, logo_path TEXT, last_played INTEGER NOT NULL DEFAULT 0, "
                      "playtime_minutes INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)"),
       QStringLiteral("CREATE TABLE IF NOT EXISTS source_state ("
-                     "source TEXT PRIMARY KEY, last_scan INTEGER, last_error TEXT)"),
+                     "source TEXT PRIMARY KEY, last_scan INTEGER, last_error TEXT, paths TEXT NOT "
+                     "NULL DEFAULT '')"),
       QStringLiteral("CREATE TABLE IF NOT EXISTS achievement_summary ("
                      "app_id TEXT PRIMARY KEY REFERENCES games(app_id), unlocked INTEGER NOT NULL, "
                      "total INTEGER NOT NULL, source TEXT NOT NULL, updated_at INTEGER NOT NULL)"),
@@ -347,12 +354,40 @@ bool SteamGameModel::ensureSchema() {
       return false;
     }
   }
-  if (schemaVersion < 5 && !query.exec(QStringLiteral("PRAGMA user_version = 5"))) {
+  bool hasPaths = false;
+  if (query.exec(QStringLiteral("PRAGMA table_info(source_state)"))) {
+    while (query.next()) {
+      hasPaths = hasPaths || query.value(1).toString() == QStringLiteral("paths");
+    }
+  }
+  if (!hasPaths &&
+      !query.exec(QStringLiteral("ALTER TABLE source_state ADD COLUMN paths TEXT NOT NULL DEFAULT "
+                                 "''"))) {
+    setStatus(QStringLiteral("Could not update source diagnostics"), query.lastError().text());
+    return false;
+  }
+  if (schemaVersion < 7 && !query.exec(QStringLiteral("PRAGMA user_version = 7"))) {
     setStatus(QStringLiteral("Could not update the library database version"),
               query.lastError().text());
     return false;
   }
   return true;
+}
+
+void SteamGameModel::loadSourceState() {
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "SELECT last_scan, last_error, paths FROM source_state WHERE source = 'steam'"));
+  if (!query.exec() || !query.next()) {
+    return;
+  }
+  m_lastScan = query.value(0).toLongLong();
+  m_errorText = query.value(1).toString();
+  m_detectedPaths = query.value(2).toString().split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+  m_steamDetected = !m_detectedPaths.isEmpty();
+  if (m_lastScan > 0) {
+    m_statusText = QStringLiteral("Loaded cached Steam library");
+  }
 }
 
 void SteamGameModel::loadDatabase() {
@@ -492,11 +527,18 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
       okay = okay && query.exec();
     }
   }
+  QStringList detectedPaths = result.steamRoots;
+  for (const QString& path : result.libraryPaths) {
+    if (!detectedPaths.contains(path)) {
+      detectedPaths.append(path);
+    }
+  }
   query.prepare(QStringLiteral(
-      "INSERT INTO source_state(source, last_scan, last_error) VALUES('steam', strftime('%s', "
-      "'now'), ?) ON CONFLICT(source) DO UPDATE SET last_scan = excluded.last_scan, last_error = "
-      "excluded.last_error"));
+      "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('steam', "
+      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
+  query.addBindValue(detectedPaths.join(QLatin1Char('\n')));
   okay = okay && query.exec();
 
   if (!okay || !m_database.commit()) {
@@ -506,6 +548,8 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
   }
 
   loadDatabase();
+  m_detectedPaths = detectedPaths;
+  m_lastScan = QDateTime::currentSecsSinceEpoch();
   requestMissingCovers();
   rebuildWatchPaths(result);
   if (!result.warnings.isEmpty()) {

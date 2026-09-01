@@ -3,6 +3,7 @@
 #include "library/GameRoles.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QSqlError>
@@ -39,6 +40,7 @@ HeroicGameModel::HeroicGameModel(const QString& omakadeDatabasePath, QObject* pa
       m_connectionName(QStringLiteral("omakade-heroic-%1").arg(reinterpret_cast<quintptr>(this))) {
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
+    loadSourceState();
   }
 }
 
@@ -88,6 +90,8 @@ QHash<int, QByteArray> HeroicGameModel::roleNames() const {
 bool HeroicGameModel::heroicDetected() const { return m_heroicDetected; }
 QString HeroicGameModel::statusText() const { return m_statusText; }
 QString HeroicGameModel::errorText() const { return m_errorText; }
+QStringList HeroicGameModel::detectedPaths() const { return m_detectedPaths; }
+qint64 HeroicGameModel::lastScan() const { return m_lastScan; }
 
 void HeroicGameModel::toggleFavorite(int row) {
   if (row < 0 || row >= m_games.size() || !m_database.isOpen()) {
@@ -145,11 +149,26 @@ bool HeroicGameModel::openDatabase(const QString& path) {
 
 bool HeroicGameModel::ensureSchema() {
   QSqlQuery query(m_database);
-  return query.exec(QStringLiteral(
+  if (!query.exec(QStringLiteral(
       "CREATE TABLE IF NOT EXISTS heroic_games (game_key TEXT PRIMARY KEY, app_id TEXT NOT NULL, "
       "runner TEXT NOT NULL, name TEXT NOT NULL, directory TEXT, cover_path TEXT, hero_path TEXT, "
       "flatpak INTEGER NOT NULL DEFAULT 0, favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT "
-      "NULL DEFAULT 0, observed_at INTEGER NOT NULL)"));
+      "NULL DEFAULT 0, observed_at INTEGER NOT NULL)"))) {
+    return false;
+  }
+  if (!query.exec(QStringLiteral(
+          "CREATE TABLE IF NOT EXISTS source_state (source TEXT PRIMARY KEY, last_scan INTEGER, "
+          "last_error TEXT, paths TEXT NOT NULL DEFAULT '')"))) {
+    return false;
+  }
+  bool hasPaths = false;
+  if (query.exec(QStringLiteral("PRAGMA table_info(source_state)"))) {
+    while (query.next()) {
+      hasPaths = hasPaths || query.value(1).toString() == QStringLiteral("paths");
+    }
+  }
+  return hasPaths || query.exec(QStringLiteral(
+                         "ALTER TABLE source_state ADD COLUMN paths TEXT NOT NULL DEFAULT ''"));
 }
 
 void HeroicGameModel::loadDatabase() {
@@ -179,6 +198,22 @@ void HeroicGameModel::loadDatabase() {
   beginResetModel();
   m_games = loaded;
   endResetModel();
+}
+
+void HeroicGameModel::loadSourceState() {
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "SELECT last_scan, last_error, paths FROM source_state WHERE source = 'heroic'"));
+  if (!query.exec() || !query.next()) {
+    return;
+  }
+  m_lastScan = query.value(0).toLongLong();
+  m_errorText = query.value(1).toString();
+  m_detectedPaths = query.value(2).toString().split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+  m_heroicDetected = !m_detectedPaths.isEmpty();
+  if (m_lastScan > 0) {
+    m_statusText = QStringLiteral("Loaded cached Heroic library");
+  }
 }
 
 void HeroicGameModel::applyScan(const HeroicScanResult& result) {
@@ -214,12 +249,21 @@ void HeroicGameModel::applyScan(const HeroicScanResult& result) {
     okay = okay && query.exec();
   }
   okay = okay && query.exec(QStringLiteral("DELETE FROM heroic_games WHERE observed_at = 0"));
+  query.prepare(QStringLiteral(
+      "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('heroic', "
+      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(result.warnings.join(QLatin1Char('\n')));
+  query.addBindValue(result.roots.join(QLatin1Char('\n')));
+  okay = okay && query.exec();
   if (!okay || !m_database.commit()) {
     m_database.rollback();
     setStatus(QStringLiteral("Could not update Heroic games"), query.lastError().text());
     return;
   }
   loadDatabase();
+  m_detectedPaths = result.roots;
+  m_lastScan = QDateTime::currentSecsSinceEpoch();
   setStatus(m_heroicDetected ? QStringLiteral("Imported %1 Heroic game(s)").arg(result.games.size())
                              : QStringLiteral("Heroic was not found"),
             result.warnings.join(QLatin1Char('\n')));

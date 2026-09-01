@@ -12,6 +12,9 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QString steamId READ steamId WRITE setSteamId NOTIFY steamIdChanged)
   Q_PROPERTY(
       QString igdbClientId READ igdbClientId WRITE setIgdbClientId NOTIFY igdbClientIdChanged)
+  Q_PROPERTY(bool steamEnabled READ steamEnabled WRITE setSteamEnabled NOTIFY sourcesChanged)
+  Q_PROPERTY(bool lutrisEnabled READ lutrisEnabled WRITE setLutrisEnabled NOTIFY sourcesChanged)
+  Q_PROPERTY(bool heroicEnabled READ heroicEnabled WRITE setHeroicEnabled NOTIFY sourcesChanged)
 
 public:
   explicit AppSettings(const QString& path = {}, QObject* parent = nullptr);
@@ -24,12 +27,19 @@ public:
   void setSteamId(const QString& value);
   [[nodiscard]] QString igdbClientId() const;
   void setIgdbClientId(const QString& value);
+  [[nodiscard]] bool steamEnabled() const;
+  void setSteamEnabled(bool value);
+  [[nodiscard]] bool lutrisEnabled() const;
+  void setLutrisEnabled(bool value);
+  [[nodiscard]] bool heroicEnabled() const;
+  void setHeroicEnabled(bool value);
 
 signals:
   void reducedMotionChanged();
   void artworkCacheLimitMbChanged();
   void steamIdChanged();
   void igdbClientIdChanged();
+  void sourcesChanged();
 
 private:
   [[nodiscard]] static QString defaultPath();
@@ -41,4 +51,7 @@ private:
   int m_artworkCacheLimitMb = 1024;
   QString m_steamId;
   QString m_igdbClientId;
+  bool m_steamEnabled = true;
+  bool m_lutrisEnabled = true;
+  bool m_heroicEnabled = true;
 };

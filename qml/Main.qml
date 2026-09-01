@@ -24,6 +24,13 @@ ApplicationWindow {
         return Qt.rgba(color.r, color.g, color.b, value)
     }
 
+    function scanTime(seconds) {
+        if (!seconds) {
+            return "Not scanned yet"
+        }
+        return new Date(seconds * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat)
+    }
+
     function openGame(index) {
         selectedIndex = index
         selectedGame = Library.get(index)
@@ -499,6 +506,7 @@ ApplicationWindow {
                     GlassButton {
                         text: "STEAM"
                         compact: true
+                        visible: Preferences.steamEnabled
                         selected: Library.sourceFilter === "Steam"
                         onClicked: {
                             Library.sourceFilter = "Steam"
@@ -508,6 +516,7 @@ ApplicationWindow {
                     GlassButton {
                         text: "LUTRIS"
                         compact: true
+                        visible: Preferences.lutrisEnabled
                         selected: Library.sourceFilter === "Lutris"
                         onClicked: {
                             Library.sourceFilter = "Lutris"
@@ -517,6 +526,7 @@ ApplicationWindow {
                     GlassButton {
                         text: "HEROIC"
                         compact: true
+                        visible: Preferences.heroicEnabled
                         selected: Library.sourceFilter === "Heroic"
                         onClicked: {
                             Library.sourceFilter = "Heroic"
@@ -646,13 +656,13 @@ ApplicationWindow {
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
                 onRefreshRequested: {
-                    if (SteamLibrary) {
+                    if (SteamLibrary && Preferences.steamEnabled) {
                         SteamLibrary.refresh()
                     }
-                    if (LutrisLibrary) {
+                    if (LutrisLibrary && Preferences.lutrisEnabled) {
                         LutrisLibrary.refresh()
                     }
-                    if (HeroicLibrary) {
+                    if (HeroicLibrary && Preferences.heroicEnabled) {
                         HeroicLibrary.refresh()
                     }
                 }
@@ -939,37 +949,121 @@ ApplicationWindow {
                 spacing: 14
 
                 Text {
-                    text: "DIAGNOSTICS"
+                    text: "SETTINGS & SOURCES"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: 20
                     font.weight: Font.Bold
                 }
                 Text {
-                    Layout.fillWidth: true
-                    text: SteamLibrary ? SteamLibrary.statusText : "Demo library"
-                    color: Theme.accent
+                    text: "GAME SOURCES"
+                    color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 12
-                    wrapMode: Text.Wrap
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Repeater {
+                    model: DemoMode ? [] : [
+                        { name: "STEAM", enabled: Preferences.steamEnabled,
+                          status: SteamLibrary ? SteamLibrary.statusText : "Unavailable",
+                          error: SteamLibrary ? SteamLibrary.errorText : "",
+                          paths: SteamLibrary ? SteamLibrary.detectedPaths : [],
+                          lastScan: SteamLibrary ? SteamLibrary.lastScan : 0 },
+                        { name: "LUTRIS", enabled: Preferences.lutrisEnabled,
+                          status: LutrisLibrary ? LutrisLibrary.statusText : "Unavailable",
+                          error: LutrisLibrary ? LutrisLibrary.errorText : "",
+                          paths: LutrisLibrary ? LutrisLibrary.detectedPaths : [],
+                          lastScan: LutrisLibrary ? LutrisLibrary.lastScan : 0 },
+                        { name: "HEROIC", enabled: Preferences.heroicEnabled,
+                          status: HeroicLibrary ? HeroicLibrary.statusText : "Unavailable",
+                          error: HeroicLibrary ? HeroicLibrary.errorText : "",
+                          paths: HeroicLibrary ? HeroicLibrary.detectedPaths : [],
+                          lastScan: HeroicLibrary ? HeroicLibrary.lastScan : 0 }
+                    ]
+                    ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 5
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.name
+                                color: modelData.enabled ? Theme.accent : Theme.mutedText
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 11
+                                font.weight: Font.Bold
+                            }
+                            GlassButton {
+                                compact: true
+                                text: modelData.enabled ? "ENABLED" : "DISABLED"
+                                selected: modelData.enabled
+                                onClicked: {
+                                    let nowEnabled = false
+                                    if (modelData.name === "STEAM") {
+                                        Preferences.steamEnabled = !Preferences.steamEnabled
+                                        nowEnabled = Preferences.steamEnabled
+                                        if (Preferences.steamEnabled) SteamLibrary.refresh()
+                                    } else if (modelData.name === "LUTRIS") {
+                                        Preferences.lutrisEnabled = !Preferences.lutrisEnabled
+                                        nowEnabled = Preferences.lutrisEnabled
+                                        if (Preferences.lutrisEnabled) LutrisLibrary.refresh()
+                                    } else {
+                                        Preferences.heroicEnabled = !Preferences.heroicEnabled
+                                        nowEnabled = Preferences.heroicEnabled
+                                        if (Preferences.heroicEnabled) HeroicLibrary.refresh()
+                                    }
+                                    if (!nowEnabled && Library.sourceFilter === modelData.name[0]
+                                            + modelData.name.slice(1).toLowerCase()) {
+                                        Library.sourceFilter = ""
+                                    }
+                                }
+                            }
+                            GlassButton {
+                                compact: true
+                                text: "RESCAN"
+                                enabled: modelData.enabled
+                                onClicked: {
+                                    if (modelData.name === "STEAM") SteamLibrary.refresh()
+                                    else if (modelData.name === "LUTRIS") LutrisLibrary.refresh()
+                                    else HeroicLibrary.refresh()
+                                }
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: modelData.status + " · " + root.scanTime(modelData.lastScan)
+                            color: Theme.foreground
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 10
+                            wrapMode: Text.Wrap
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: modelData.paths.length > 0
+                            text: modelData.paths.join("\n")
+                            color: Theme.mutedText
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            wrapMode: Text.WrapAnywhere
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: modelData.error.length > 0
+                            text: modelData.error
+                            color: Theme.yellow
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 9
+                            wrapMode: Text.Wrap
+                        }
+                    }
                 }
                 Text {
-                    Layout.fillWidth: true
-                    visible: LutrisLibrary !== null
-                    text: LutrisLibrary ? LutrisLibrary.statusText : ""
+                    visible: DemoMode
+                    text: "Demo library"
                     color: Theme.accent
                     font.family: Theme.fontFamily
                     font.pixelSize: 12
-                    wrapMode: Text.Wrap
-                }
-                Text {
-                    Layout.fillWidth: true
-                    visible: HeroicLibrary !== null
-                    text: HeroicLibrary ? HeroicLibrary.statusText : ""
-                    color: Theme.accent
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 12
-                    wrapMode: Text.Wrap
                 }
                 Repeater {
                     model: [
@@ -1212,6 +1306,12 @@ ApplicationWindow {
                 RowLayout {
                     Layout.topMargin: 8
                     spacing: 8
+                    GlassButton {
+                        compact: true
+                        text: Preferences.reducedMotion ? "MOTION OFF" : "MOTION ON"
+                        selected: Preferences.reducedMotion
+                        onClicked: Preferences.reducedMotion = !Preferences.reducedMotion
+                    }
                     GlassButton {
                         compact: true
                         text: "CACHE -"

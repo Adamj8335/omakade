@@ -8,6 +8,8 @@
   offline cache and Secret Service credential storage.
 - Added custom collections, tags, completion states, card badges, and smart
   organization filters.
+- Added runtime source controls with persisted scan times, detected locations,
+  and per-source errors.
 
 ## 0.5.0
 

@@ -61,6 +61,39 @@ void AppSettings::setIgdbClientId(const QString& value) {
   emit igdbClientIdChanged();
 }
 
+bool AppSettings::steamEnabled() const { return m_steamEnabled; }
+
+void AppSettings::setSteamEnabled(bool value) {
+  if (m_steamEnabled == value) {
+    return;
+  }
+  m_steamEnabled = value;
+  save();
+  emit sourcesChanged();
+}
+
+bool AppSettings::lutrisEnabled() const { return m_lutrisEnabled; }
+
+void AppSettings::setLutrisEnabled(bool value) {
+  if (m_lutrisEnabled == value) {
+    return;
+  }
+  m_lutrisEnabled = value;
+  save();
+  emit sourcesChanged();
+}
+
+bool AppSettings::heroicEnabled() const { return m_heroicEnabled; }
+
+void AppSettings::setHeroicEnabled(bool value) {
+  if (m_heroicEnabled == value) {
+    return;
+  }
+  m_heroicEnabled = value;
+  save();
+  emit sourcesChanged();
+}
+
 QString AppSettings::defaultPath() {
   return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
          QStringLiteral("/omakade/config.toml");
@@ -93,6 +126,15 @@ void AppSettings::load() {
   if (igdbClientIdMatch.hasMatch()) {
     m_igdbClientId = igdbClientIdMatch.captured(1);
   }
+  const auto readEnabled = [&contents](const QString& key, bool fallback) {
+    const QRegularExpression expression(
+        QStringLiteral("(?m)^%1\\s*=\\s*(true|false)\\s*$").arg(key));
+    const QRegularExpressionMatch match = expression.match(contents);
+    return match.hasMatch() ? match.captured(1) == QStringLiteral("true") : fallback;
+  };
+  m_steamEnabled = readEnabled(QStringLiteral("steam_enabled"), true);
+  m_lutrisEnabled = readEnabled(QStringLiteral("lutris_enabled"), true);
+  m_heroicEnabled = readEnabled(QStringLiteral("heroic_enabled"), true);
 }
 
 void AppSettings::save() const {
@@ -102,11 +144,15 @@ void AppSettings::save() const {
     return;
   }
   file.write(QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\nsteam_id = "
-                            "\"%3\"\nigdb_client_id = \"%4\"\n")
+                            "\"%3\"\nigdb_client_id = \"%4\"\nsteam_enabled = %5\n"
+                            "lutris_enabled = %6\nheroic_enabled = %7\n")
                  .arg(m_reducedMotion ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_artworkCacheLimitMb)
                  .arg(m_steamId)
                  .arg(m_igdbClientId)
+                 .arg(m_steamEnabled ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(m_lutrisEnabled ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(m_heroicEnabled ? QStringLiteral("true") : QStringLiteral("false"))
                  .toUtf8());
   file.commit();
 }

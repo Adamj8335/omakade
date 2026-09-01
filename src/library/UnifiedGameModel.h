@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QSqlDatabase>
+#include <QSet>
 #include <QStringList>
 #include <QUrl>
 #include <QVector>
@@ -16,6 +17,7 @@ public:
   ~UnifiedGameModel() override;
 
   void addSourceModel(QAbstractItemModel* model);
+  void setSourceEnabled(const QString& source, bool enabled);
   [[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override;
   [[nodiscard]] QVariant data(const QModelIndex& index, int role) const override;
   [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
@@ -50,6 +52,7 @@ private:
   [[nodiscard]] SourceRow mapRow(int row) const;
   [[nodiscard]] QString gameKey(const SourceRow& source) const;
   [[nodiscard]] SourceRow sourceForKey(const QString& key) const;
+  [[nodiscard]] bool sourceEnabled(const SourceRow& source) const;
   [[nodiscard]] QVector<SourceRow> groupRows(const SourceRow& source) const;
   [[nodiscard]] QVariantMap gameMap(const SourceRow& source) const;
   void rebuildRows();
@@ -66,6 +69,7 @@ private:
   };
 
   QVector<QAbstractItemModel*> m_models;
+  QSet<QString> m_disabledSources;
   QVector<SourceRow> m_rows;
   QSqlDatabase m_database;
   QString m_connectionName;
