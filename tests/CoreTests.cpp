@@ -397,7 +397,14 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
         "INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)")));
     QVERIFY(query.exec(QStringLiteral("CREATE TABLE source_state (source TEXT PRIMARY KEY, "
                                       "last_scan INTEGER, last_error TEXT)")));
-    QVERIFY(query.exec(QStringLiteral("PRAGMA user_version = 1")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO games VALUES('440', 'Team Fortress 2', 1, 1)")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO installations VALUES('440', 'Team Fortress 2', '/games', '/manifests/440', "
+        "'', '', '', 1700000000, 600, 1700000000)")));
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO source_state VALUES('steam', 1700000000, '')")));
+    QVERIFY(query.exec(QStringLiteral("PRAGMA user_version = 5")));
     setup.close();
   }
   QSqlDatabase::removeDatabase(setupConnection);
@@ -405,6 +412,10 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
   SteamGameModel model(database);
   UnifiedGameModel unified(database);
   SteamGameModel reopened(database);
+  QCOMPARE(reopened.rowCount(), 1);
+  QCOMPARE(reopened.get(0).value(QStringLiteral("appId")).toString(), QStringLiteral("440"));
+  QVERIFY(reopened.get(0).value(QStringLiteral("favorite")).toBool());
+  QVERIFY(reopened.get(0).value(QStringLiteral("hidden")).toBool());
   const QString verifyConnection = QStringLiteral("migration-verify");
   {
     QSqlDatabase verify = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), verifyConnection);
@@ -413,7 +424,11 @@ void CoreTests::steamModelMigratesVersionOneDatabase() {
     QSqlQuery query(verify);
     QVERIFY(query.exec(QStringLiteral("PRAGMA user_version")));
     QVERIFY(query.next());
-  QCOMPARE(query.value(0).toInt(), 7);
+    QCOMPARE(query.value(0).toInt(), 7);
+    QVERIFY(query.exec(QStringLiteral(
+        "SELECT paths FROM source_state WHERE source = 'steam'")));
+    QVERIFY(query.next());
+    QCOMPARE(query.value(0).toString(), QString{});
     QVERIFY(query.exec(
         QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN "
                        "('achievement_summary', 'achievements')")));
