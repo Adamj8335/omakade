@@ -164,6 +164,26 @@ QVariantMap LibraryFilterModel::get(int row) const {
   return result;
 }
 
+int LibraryFilterModel::indexOf(const QString& source, const QString& runner,
+                                const QString& appId) const {
+  if (source.isEmpty() || appId.isEmpty()) {
+    return -1;
+  }
+  const QString normalizedRunner = runner.isNull() ? QStringLiteral("") : runner;
+  for (int row = 0; row < rowCount(); ++row) {
+    const QModelIndex game = index(row, 0);
+    if (game.data(GameRoles::AppId).toString() != appId ||
+        game.data(GameRoles::Source).toString() != source) {
+      continue;
+    }
+    const QString gameRunner = game.data(GameRoles::Runner).toString();
+    if ((gameRunner.isNull() ? QStringLiteral("") : gameRunner) == normalizedRunner) {
+      return row;
+    }
+  }
+  return -1;
+}
+
 void LibraryFilterModel::toggleFavorite(int row) {
   if (row < 0 || row >= rowCount()) {
     return;
@@ -350,7 +370,11 @@ bool LibraryFilterModel::lessThan(const QModelIndex& left, const QModelIndex& ri
     }
   }
   if (m_sortMode == SortMode::Playtime) {
-    return left.data(GameRoles::Hours).toInt() > right.data(GameRoles::Hours).toInt();
+    const int leftHours = left.data(GameRoles::Hours).toInt();
+    const int rightHours = right.data(GameRoles::Hours).toInt();
+    if (leftHours != rightHours) {
+      return leftHours > rightHours;
+    }
   }
   return left.data(GameRoles::Title)
              .toString()

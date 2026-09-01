@@ -72,6 +72,10 @@ SteamGameModel::SteamGameModel(const QString& databasePath, AppSettings* setting
     applyScan(m_scanWatcher.result());
     m_scanning = false;
     emit scanningChanged();
+    if (m_rescanPending) {
+      m_rescanPending = false;
+      refresh();
+    }
   });
 
   const QString path = databasePath.isEmpty() ? defaultDatabasePath() : databasePath;
@@ -258,6 +262,7 @@ void SteamGameModel::requestCover(const QString& appId) {
 
 void SteamGameModel::refreshFromRoots(const QStringList& roots) {
   if (m_scanning) {
+    m_rescanPending = true;
     return;
   }
   m_scanning = true;
@@ -531,7 +536,23 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
     return;
   }
   QSqlQuery query(m_database);
-  bool okay = query.exec(QStringLiteral("DELETE FROM installations"));
+  bool okay = true;
+  if (result.unreadableManifests.isEmpty()) {
+    okay = query.exec(QStringLiteral("DELETE FROM installations"));
+  } else {
+    // Keep the cached rows for manifests Steam is still writing or that are corrupt so a
+    // transient read failure never drops an installed game.
+    QStringList placeholders;
+    for (int index = 0; index < result.unreadableManifests.size(); ++index) {
+      placeholders.append(QStringLiteral("?"));
+    }
+    query.prepare(QStringLiteral("DELETE FROM installations WHERE manifest_path NOT IN (%1)")
+                      .arg(placeholders.join(QStringLiteral(", "))));
+    for (const QString& manifest : result.unreadableManifests) {
+      query.addBindValue(manifest);
+    }
+    okay = query.exec();
+  }
   for (const SteamGameRecord& game : result.games) {
     query.prepare(QStringLiteral(
         "INSERT INTO games(app_id, title) VALUES(?, ?) ON CONFLICT(app_id) DO UPDATE SET "
@@ -543,7 +564,12 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
     query.prepare(QStringLiteral(
         "INSERT INTO installations(app_id, install_dir, library_path, manifest_path, cover_path, "
         "hero_path, logo_path, last_played, playtime_minutes, observed_at) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))"));
+        "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now')) ON CONFLICT(app_id) DO UPDATE "
+        "SET "
+        "install_dir = excluded.install_dir, library_path = excluded.library_path, manifest_path = "
+        "excluded.manifest_path, cover_path = excluded.cover_path, hero_path = excluded.hero_path, "
+        "logo_path = excluded.logo_path, last_played = excluded.last_played, playtime_minutes = "
+        "excluded.playtime_minutes, observed_at = excluded.observed_at"));
     query.addBindValue(game.appId);
     query.addBindValue(game.installDirectory);
     query.addBindValue(game.libraryPath);
@@ -653,7 +679,6 @@ void SteamGameModel::rebuildWatchPaths(const SteamScanResult& result) {
         files.append(folders);
       }
     }
-    directories.append(root + QStringLiteral("/appcache/librarycache"));
     QDir userdata(root + QStringLiteral("/userdata"));
     for (const QString& user : userdata.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
       const QString userConfig = userdata.absoluteFilePath(user + QStringLiteral("/config"));
@@ -695,7 +720,8 @@ void SteamGameModel::requestMissingCovers() {
 }
 
 void SteamGameModel::requestCoverForGame(const Game& game) {
-  if (!game.steam.coverPath.isEmpty() || m_pendingCovers.contains(game.steam.appId)) {
+  if (!game.steam.coverPath.isEmpty() || m_pendingCovers.contains(game.steam.appId) ||
+      m_failedCovers.contains(game.steam.appId)) {
     return;
   }
   bool numeric = false;
@@ -762,9 +788,14 @@ void SteamGameModel::downloadCover(const QString& appId, int attempt) {
       m_coverQueue.enqueue({appId, 1});
     } else {
       m_pendingCovers.remove(appId);
+      if (!saved) {
+        m_failedCovers.insert(appId);
+      }
     }
-    pruneCoverCache();
     startNextCoverDownloads();
+    if (m_activeCoverDownloads == 0 && m_coverQueue.isEmpty()) {
+      pruneCoverCache();
+    }
   });
 }
 

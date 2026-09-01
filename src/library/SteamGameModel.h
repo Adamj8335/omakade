@@ -99,6 +99,7 @@ private:
   QFileSystemWatcher m_fileWatcher;
   QTimer m_rescanTimer;
   bool m_scanning = false;
+  bool m_rescanPending = false;
   bool m_steamDetected = false;
   QString m_statusText;
   QString m_errorText;
@@ -109,5 +110,6 @@ private:
   QHash<QNetworkReply*, QByteArray> m_coverBuffers;
   QQueue<CoverRequest> m_coverQueue;
   QSet<QString> m_pendingCovers;
+  QSet<QString> m_failedCovers;
   int m_activeCoverDownloads = 0;
 };

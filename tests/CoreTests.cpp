@@ -215,6 +215,7 @@ private slots:
   void valveKeyValuesRejectsExcessiveNesting();
   void steamScannerImportsLibrariesAndCustomArtwork();
   void steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements();
+  void steamScannerSurvivesMissingLibrariesAndBrokenManifests();
   void steamModelPersistsFavoritesAndHiddenState();
   void steamModelMigratesVersionOneDatabase();
   void steamModelMigratesUnscopedOwnedGamesCache();
@@ -432,6 +433,47 @@ void CoreTests::steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements(
   QVERIFY(result.games.at(1).heroPath.endsWith(QStringLiteral("library_hero.jpg")));
 }
 
+void CoreTests::steamScannerSurvivesMissingLibrariesAndBrokenManifests() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/Steam");
+  const QString second = directory.path() + QStringLiteral("/Second Library");
+  const QString missing = directory.path() + QStringLiteral("/Unmounted Drive/SteamLibrary");
+  createSteamFixture(root, second);
+  writeFile(root + QStringLiteral("/config/libraryfolders.vdf"),
+            QStringLiteral("\"libraryfolders\"\n{\n\"0\" { \"path\" \"%1\" }\n\"1\" { \"path\" "
+                           "\"%2\" }\n\"2\" { \"path\" \"%3\" }\n}\n")
+                .arg(root, second, missing)
+                .toUtf8());
+  writeFile(root + QStringLiteral("/steamapps/appmanifest_30.acf"), "\"AppState\" {");
+  writeFile(root + QStringLiteral("/steamapps/appmanifest_40.acf"), "\"Other\" { }");
+
+  // A stale library path or a manifest Steam is still writing must not empty the library.
+  const SteamScanResult result = SteamScanner::scan({root});
+  QVERIFY(!result.incomplete);
+  QCOMPARE(result.games.size(), 2);
+  QCOMPARE(result.unreadableManifests.size(), 2);
+  QCOMPARE(result.warnings.size(), 3);
+  QVERIFY(result.warnings.join(QLatin1Char('\n')).contains(QStringLiteral("Unmounted Drive")));
+  QVERIFY(SteamScanner::isToolTitle(QStringLiteral("Proton 9.0 (Beta)")));
+  QVERIFY(SteamScanner::isToolTitle(QStringLiteral("Steam Linux Runtime 3.0 (sniper)")));
+  QVERIFY(!SteamScanner::isToolTitle(QStringLiteral("Protonic Blast")));
+
+  const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
+  SteamGameModel model(database);
+  model.refreshFromRoots({root});
+  QTRY_VERIFY_WITH_TIMEOUT(!model.scanning(), 3000);
+  QCOMPARE(model.rowCount(), 2);
+  QVERIFY(model.statusText().startsWith(QStringLiteral("Imported 2")));
+  QVERIFY(model.errorText().contains(QStringLiteral("appmanifest_30.acf")));
+
+  LibraryFilterModel library;
+  library.setSourceModel(&model);
+  QCOMPARE(library.indexOf(QStringLiteral("Steam"), QString{}, QStringLiteral("20")), 1);
+  QCOMPARE(library.indexOf(QStringLiteral("Steam"), QString{}, QStringLiteral("999")), -1);
+  QCOMPARE(library.indexOf(QStringLiteral("Lutris"), QString{}, QStringLiteral("20")), -1);
+}
+
 void CoreTests::steamModelPersistsFavoritesAndHiddenState() {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -455,8 +497,10 @@ void CoreTests::steamModelPersistsFavoritesAndHiddenState() {
     writeFile(second + QStringLiteral("/steamapps/appmanifest_20.acf"), "\"AppState\" {");
     model.refreshFromRoots({root});
     QTRY_VERIFY_WITH_TIMEOUT(!model.scanning(), 3000);
+    // The unreadable manifest keeps its cached installation instead of freezing the scan.
     QCOMPARE(model.rowCount(), 2);
-    QVERIFY(model.statusText().startsWith(QStringLiteral("Scan interrupted")));
+    QVERIFY(model.statusText().startsWith(QStringLiteral("Imported 1")));
+    QVERIFY(model.errorText().contains(QStringLiteral("appmanifest_20.acf")));
   }
 
   SteamGameModel reloaded(database);
@@ -691,6 +735,11 @@ void CoreTests::steamAchievementApiClassifiesFailures() {
            SteamApiState::InvalidKey);
   QCOMPARE(SteamAchievementApi::parse("not json", R"({"game":{}})", R"({})", &result, &error),
            SteamApiState::RemoteError);
+  QVERIFY(SteamAchievementApi::isNoStatsResponse(
+      R"({"playerstats":{"error":"Requested app has no stats","success":false}})"));
+  QVERIFY(!SteamAchievementApi::isNoStatsResponse(privatePlayer));
+  QVERIFY(!SteamAchievementApi::isNoStatsResponse("not json"));
+  QVERIFY(!SteamAchievementApi::isNoStatsResponse(R"({"playerstats":{"success":true}})"));
 }
 
 void CoreTests::steamOwnedGamesApiParsesLibraryAndPrivacy() {
@@ -715,15 +764,20 @@ void CoreTests::steamOwnedGamesApiParsesLibraryAndPrivacy() {
   QVERIFY(games.isEmpty());
   QCOMPARE(SteamOwnedGamesApi::parse(R"({"response":{"game_count":2}})", &games, &error),
            SteamApiState::RemoteError);
+  // Steam's game_count is not reliable for large accounts; the array is the truth.
   QCOMPARE(SteamOwnedGamesApi::parse(
                R"({"response":{"game_count":2,"games":[{"appid":10,"name":"Counter-Strike"}]}})",
                &games, &error),
-           SteamApiState::RemoteError);
+           SteamApiState::Ready);
+  QCOMPARE(games.size(), 1);
+  // Duplicates, nameless entries, and Steam tools are skipped instead of failing the sync.
   QCOMPARE(
       SteamOwnedGamesApi::parse(
-          R"({"response":{"game_count":2,"games":[{"appid":10,"name":"Counter-Strike"},{"appid":10,"name":"Duplicate"}]}})",
+          R"({"response":{"game_count":5,"games":[{"appid":10,"name":"Counter-Strike"},{"appid":10,"name":"Duplicate"},{"appid":11,"name":""},{"appid":1493710,"name":"Proton Experimental"},{"appid":1628350,"name":"Steam Linux Runtime 3.0 sniper"},{"appid":30,"name":"Portal"}]}})",
           &games, &error),
-      SteamApiState::RemoteError);
+      SteamApiState::Ready);
+  QCOMPARE(games.size(), 2);
+  QCOMPARE(games.at(1).appId, QStringLiteral("30"));
   QCOMPARE(SteamOwnedGamesApi::parse("not json", &games, &error), SteamApiState::RemoteError);
   QVERIFY(SteamOwnedGamesApi::messageForState(SteamApiState::Offline)
               .contains(QStringLiteral("owned games")));
@@ -739,6 +793,9 @@ void CoreTests::steamOwnedGamesRemainOptionalAndFilterByInstallation() {
   const QString database = directory.path() + QStringLiteral("/library.sqlite3");
   AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
   settings.setSteamId(QStringLiteral("76561198000000000"));
+  settings.setSteamId(QStringLiteral("12345678"));
+  settings.setSteamId(QStringLiteral("tsouth89"));
+  QCOMPARE(settings.steamId(), QStringLiteral("76561198000000000"));
   {
     SteamGameModel schema(database, &settings);
   }

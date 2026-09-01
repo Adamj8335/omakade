@@ -13,6 +13,14 @@
 - Loads owned-game covers as they enter the visible library instead of fetching
   an entire account at once.
 - Fixed narrow game-details layouts and prerelease owned-library cache upgrades.
+- Kept the Steam library when a configured library path is missing or a manifest is
+  unreadable instead of showing an empty or frozen library.
+- Skipped unusable entries and Steam tools during owned-library sync instead of failing
+  the whole sync.
+- Remembered games without Steam achievements instead of re-requesting them on every
+  visit, and reported that state plainly.
+- Required a 17-digit Steam ID, reported when Steam is still busy, and stopped
+  re-requesting covers Steam does not have.
 - Prevented space-separated screenshot options from creating an invisible main instance.
 - Pinned third-party workflow actions and enabled monthly dependency updates.
 - Added end-to-end navigation coverage and owned-library regression tests.

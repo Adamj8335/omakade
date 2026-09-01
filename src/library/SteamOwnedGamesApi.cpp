@@ -1,5 +1,7 @@
 #include "library/SteamOwnedGamesApi.h"
 
+#include "sources/steam/SteamScanner.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -58,14 +60,11 @@ SteamApiState SteamOwnedGamesApi::parse(const QByteArray& contents,
     return SteamApiState::RemoteError;
   }
 
+  // Steam's game_count does not always match the array length, and large libraries
+  // occasionally include nameless or duplicated entries. Import what is usable instead of
+  // rejecting the whole response.
   QVector<SteamOwnedGameRecord> parsed;
   const QJsonArray entries = gamesValue.toArray();
-  if (entries.size() != gameCount) {
-    if (error != nullptr) {
-      *error = QStringLiteral("Steam returned an incomplete owned-game list");
-    }
-    return SteamApiState::RemoteError;
-  }
   parsed.reserve(entries.size());
   QSet<QString> appIds;
   for (const QJsonValue& value : entries) {
@@ -73,11 +72,9 @@ SteamApiState SteamOwnedGamesApi::parse(const QByteArray& contents,
     const qint64 appId = game.value(QStringLiteral("appid")).toInteger();
     const QString title = game.value(QStringLiteral("name")).toString().trimmed();
     const QString normalizedAppId = QString::number(appId);
-    if (appId <= 0 || title.isEmpty() || appIds.contains(normalizedAppId)) {
-      if (error != nullptr) {
-        *error = QStringLiteral("Steam returned invalid owned-game entries");
-      }
-      return SteamApiState::RemoteError;
+    if (appId <= 0 || title.isEmpty() || appIds.contains(normalizedAppId) ||
+        SteamScanner::isToolTitle(title)) {
+      continue;
     }
     appIds.insert(normalizedAppId);
     parsed.append(

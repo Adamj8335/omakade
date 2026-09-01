@@ -183,13 +183,13 @@ int main(int argc, char* argv[]) {
         }
       };
       execute(QStringLiteral("CREATE TABLE achievement_summary (app_id TEXT PRIMARY KEY, "
-                             "unlocked INTEGER, total INTEGER)"));
+                             "unlocked INTEGER, total INTEGER, source TEXT)"));
       execute(QStringLiteral(
           "CREATE TABLE achievements (app_id TEXT, api_name TEXT, title TEXT, description TEXT, "
           "icon_url TEXT, icon_path TEXT, unlocked INTEGER, unlock_time INTEGER, rarity REAL, "
           "hidden INTEGER, current_progress REAL, maximum_progress REAL)"));
-      if (!query.exec(
-              QStringLiteral("INSERT INTO achievement_summary VALUES ('demo-0', 6, 12)"))) {
+      if (!query.exec(QStringLiteral(
+              "INSERT INTO achievement_summary VALUES ('demo-0', 6, 12, 'steam-local')"))) {
         qFatal("Could not add controller achievement summary: %s",
                qPrintable(query.lastError().text()));
       }

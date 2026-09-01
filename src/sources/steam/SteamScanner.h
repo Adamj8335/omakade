@@ -41,11 +41,13 @@ struct SteamScanResult {
   QStringList steamRoots;
   QStringList libraryPaths;
   QStringList warnings;
+  QStringList unreadableManifests;
   bool incomplete = false;
 };
 
 class SteamScanner final {
 public:
   [[nodiscard]] static QStringList discoverSteamRoots();
+  [[nodiscard]] static bool isToolTitle(const QString& name);
   [[nodiscard]] static SteamScanResult scan(const QStringList& steamRoots);
 };

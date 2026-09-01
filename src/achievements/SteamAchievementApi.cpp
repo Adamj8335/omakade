@@ -50,6 +50,19 @@ SteamApiState SteamAchievementApi::classifyHttpResponse(int statusCode, bool net
   return SteamApiState::RemoteError;
 }
 
+bool SteamAchievementApi::isNoStatsResponse(const QByteArray& playerResponse) {
+  bool okay = false;
+  const QJsonObject root = parseObject(playerResponse, &okay);
+  if (!okay) {
+    return false;
+  }
+  const QJsonObject playerStats = root.value(QStringLiteral("playerstats")).toObject();
+  return !playerStats.value(QStringLiteral("success")).toBool() &&
+         playerStats.value(QStringLiteral("error"))
+             .toString()
+             .contains(QStringLiteral("no stats"), Qt::CaseInsensitive);
+}
+
 SteamApiState SteamAchievementApi::parse(const QByteArray& playerResponse,
                                          const QByteArray& schemaResponse,
                                          const QByteArray& rarityResponse,

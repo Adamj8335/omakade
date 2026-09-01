@@ -33,14 +33,6 @@ QString cleanPath(const QString& path) {
   return QDir::cleanPath(QFileInfo(path).absoluteFilePath());
 }
 
-bool isTool(const QString& name) {
-  const QString normalized = name.trimmed().toLower();
-  return normalized.startsWith(QStringLiteral("proton ")) ||
-         normalized.startsWith(QStringLiteral("steam linux runtime")) ||
-         normalized.startsWith(QStringLiteral("steamworks common redistributables")) ||
-         normalized.startsWith(QStringLiteral("steam runtime"));
-}
-
 QString firstMatchingFile(const QString& directory, const QStringList& filters) {
   const QDir dir(directory);
   for (const QString& filter : filters) {
@@ -287,6 +279,14 @@ void resolveArtwork(SteamGameRecord* game, const QStringList& steamRoots) {
 }
 } // namespace
 
+bool SteamScanner::isToolTitle(const QString& name) {
+  const QString normalized = name.trimmed().toLower();
+  return normalized.startsWith(QStringLiteral("proton ")) ||
+         normalized.startsWith(QStringLiteral("steam linux runtime")) ||
+         normalized.startsWith(QStringLiteral("steamworks common redistributables")) ||
+         normalized.startsWith(QStringLiteral("steam runtime"));
+}
+
 QStringList SteamScanner::discoverSteamRoots() {
   const QString home = QDir::homePath();
   QStringList candidates = {
@@ -332,19 +332,19 @@ SteamScanResult SteamScanner::scan(const QStringList& steamRoots) {
         const QString manifest = steamapps.absoluteFilePath(filename);
         if (!ValveKeyValuesParser::parseFile(manifest, &parsed, &error)) {
           result.warnings.append(QStringLiteral("Could not read %1: %2").arg(manifest, error));
-          result.incomplete = true;
+          result.unreadableManifests.append(manifest);
           continue;
         }
         const ValveKeyValues* app = parsed.object(QStringLiteral("AppState"));
         if (app == nullptr) {
           result.warnings.append(QStringLiteral("Missing AppState in %1").arg(manifest));
-          result.incomplete = true;
+          result.unreadableManifests.append(manifest);
           continue;
         }
         const QString appId = app->value(QStringLiteral("appid"));
         const QString name = app->value(QStringLiteral("name")).trimmed();
         const int stateFlags = app->value(QStringLiteral("StateFlags")).toInt();
-        if (appId.isEmpty() || name.isEmpty() || (stateFlags & 4) == 0 || isTool(name) ||
+        if (appId.isEmpty() || name.isEmpty() || (stateFlags & 4) == 0 || isToolTitle(name) ||
             importedIds.contains(appId)) {
           continue;
         }

@@ -139,15 +139,17 @@ void AchievementModel::load(const QString& appId) {
   m_achievements.clear();
   m_unlocked = 0;
   m_total = 0;
+  bool confirmedEmpty = false;
 
   if (m_database.isOpen()) {
     QSqlQuery summary(m_database);
     summary.prepare(
-        QStringLiteral("SELECT unlocked, total FROM achievement_summary WHERE app_id = ?"));
+        QStringLiteral("SELECT unlocked, total, source FROM achievement_summary WHERE app_id = ?"));
     summary.addBindValue(appId);
     if (summary.exec() && summary.next()) {
       m_unlocked = summary.value(0).toInt();
       m_total = summary.value(1).toInt();
+      confirmedEmpty = m_total == 0 && summary.value(2).toString() == QStringLiteral("steam-web");
     }
 
     QSqlQuery query(m_database);
@@ -176,7 +178,9 @@ void AchievementModel::load(const QString& appId) {
   }
   sortAchievements();
 
-  if (m_total == 0) {
+  if (confirmedEmpty) {
+    m_statusText = QStringLiteral("This game has no Steam achievements.");
+  } else if (m_total == 0) {
     m_statusText = QStringLiteral(
         "No achievement data is cached yet. Open this game in Steam to refresh its local data.");
   } else if (m_achievements.size() < m_total) {
@@ -336,8 +340,10 @@ void AchievementModel::requestIcon(int row) {
     reply->deleteLater();
     --m_activeIconDownloads;
     m_pendingIcons.remove(appId + QLatin1Char('/') + apiName);
-    pruneCache();
     startNextIconDownloads();
+    if (m_activeIconDownloads == 0 && m_iconQueue.isEmpty()) {
+      pruneCache();
+    }
   });
 }
 

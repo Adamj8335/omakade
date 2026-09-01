@@ -37,7 +37,7 @@ void AppSettings::setArtworkCacheLimitMb(int value) {
 QString AppSettings::steamId() const { return m_steamId; }
 
 void AppSettings::setSteamId(const QString& value) {
-  static const QRegularExpression valid(QStringLiteral("^[0-9]{5,20}$"));
+  static const QRegularExpression valid(QStringLiteral("^7656119[0-9]{10}$"));
   const QString normalized = value.trimmed();
   if ((!normalized.isEmpty() && !valid.match(normalized).hasMatch()) || m_steamId == normalized) {
     return;
@@ -148,7 +148,8 @@ void AppSettings::load() {
   if (limitMatch.hasMatch()) {
     m_artworkCacheLimitMb = qBound(128, limitMatch.captured(1).toInt(), 8192);
   }
-  const QRegularExpression steamId(QStringLiteral("(?m)^steam_id\\s*=\\s*\"([0-9]{5,20})\"\\s*$"));
+  const QRegularExpression steamId(
+      QStringLiteral("(?m)^steam_id\\s*=\\s*\"(7656119[0-9]{10})\"\\s*$"));
   const QRegularExpressionMatch steamIdMatch = steamId.match(contents);
   if (steamIdMatch.hasMatch()) {
     m_steamId = steamIdMatch.captured(1);

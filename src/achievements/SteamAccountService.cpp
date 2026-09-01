@@ -158,12 +158,25 @@ void SteamAccountService::setSteamId(const QString& steamId) {
     emit ownedGamesUpdated();
     setStatus(QStringLiteral("local"), QStringLiteral("Steam ID saved"));
   } else if (steamId.trimmed() != before) {
-    setStatus(QStringLiteral("error"), QStringLiteral("Enter a numeric Steam ID"));
+    setStatus(QStringLiteral("error"),
+              QStringLiteral("Enter your 17-digit Steam ID. It starts with 7656119."));
   }
+}
+
+bool SteamAccountService::reportBusy() {
+  if (!m_busy && !m_secretWatcher.isRunning()) {
+    return false;
+  }
+  setStatus(m_state, QStringLiteral("Steam is still busy. Try again in a moment."));
+  return true;
 }
 
 void SteamAccountService::storeApiKey(QString apiKey) {
   static const QRegularExpression valid(QStringLiteral("^[A-Fa-f0-9]{32}$"));
+  if (reportBusy()) {
+    apiKey.fill(QChar::Null);
+    return;
+  }
   QString normalized = apiKey.trimmed();
   if (!valid.match(normalized).hasMatch()) {
     apiKey.fill(QChar::Null);
@@ -179,7 +192,12 @@ void SteamAccountService::storeApiKey(QString apiKey) {
   secret.fill('\0');
 }
 
-void SteamAccountService::removeApiKey() { beginSecretOperation(SecretAction::Remove); }
+void SteamAccountService::removeApiKey() {
+  if (reportBusy()) {
+    return;
+  }
+  beginSecretOperation(SecretAction::Remove);
+}
 
 void SteamAccountService::refreshAchievements(const QString& appId) {
   bool numericAppId = false;
@@ -226,7 +244,7 @@ void SteamAccountService::refreshAchievementsIfStale(const QString& appId) {
 }
 
 void SteamAccountService::refreshOwnedGames() {
-  if (m_busy) {
+  if (reportBusy()) {
     return;
   }
   if (steamId().isEmpty()) {
@@ -518,8 +536,13 @@ void SteamAccountService::handleApiReply(QNetworkReply* reply) {
   } else {
     m_api.rarity = contents;
   }
-  if (kind != QStringLiteral("rarity") && responseState != SteamApiState::Ready &&
-      m_api.failure == SteamApiState::Ready) {
+  if (kind == QStringLiteral("player") && responseState != SteamApiState::Ready && !tooLarge &&
+      SteamAchievementApi::isNoStatsResponse(contents)) {
+    // Steam answers HTTP 400 for games without achievements. That is a normal state, not a
+    // failure, and it must be cached so details pages stop re-requesting it.
+    m_api.noStats = true;
+  } else if (kind != QStringLiteral("rarity") && responseState != SteamApiState::Ready &&
+             m_api.failure == SteamApiState::Ready) {
     m_api.failure = responseState;
     m_api.error =
         tooLarge ? QStringLiteral("Steam returned an unexpectedly large response") : QString{};
@@ -535,6 +558,17 @@ void SteamAccountService::finishApiRequests() {
   if (m_api.failure != SteamApiState::Ready) {
     setBusy(false);
     setStatus(apiStateName(m_api.failure), messageForState(m_api.failure, m_api.error));
+    return;
+  }
+  if (m_api.noStats) {
+    const bool cached = persistAchievements({});
+    setBusy(false);
+    setStatus(QStringLiteral("connected"),
+              cached ? QStringLiteral("This game has no Steam achievements")
+                     : QStringLiteral("Could not cache Steam achievements"));
+    if (cached) {
+      emit achievementsUpdated(m_refreshAppId);
+    }
     return;
   }
   SteamAchievementApiResult result;

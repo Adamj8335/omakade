@@ -62,6 +62,7 @@ private:
     QByteArray rarity;
     SteamApiState failure = SteamApiState::Ready;
     QString error;
+    bool noStats = false;
     int pending = 0;
   };
 
@@ -76,6 +77,7 @@ private:
   bool persistAchievements(const SteamAchievementApiResult& result);
   bool persistOwnedGames(const QString& steamId, const QVector<SteamOwnedGameRecord>& games);
   void loadOwnedGameCount();
+  bool reportBusy();
   void setBusy(bool busy);
   void setStatus(const QString& state, const QString& text);
 

@@ -55,6 +55,7 @@ public:
   [[nodiscard]] QStringList tagNames() const;
 
   Q_INVOKABLE QVariantMap get(int row) const;
+  Q_INVOKABLE int indexOf(const QString& source, const QString& runner, const QString& appId) const;
   Q_INVOKABLE void toggleFavorite(int row);
   Q_INVOKABLE void toggleHidden(int row);
   Q_INVOKABLE bool setCustomCover(int row, const QUrl& sourceUrl);
