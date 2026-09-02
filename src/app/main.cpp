@@ -509,58 +509,54 @@ int main(int argc, char* argv[]) {
                           fail(QStringLiteral("Game details did not focus Play"));
                           return;
                         }
-                        const QPointF initial =
-                            play->mapToScene(QPointF(play->width() / 2, play->height() / 2));
-                        controller.focusDirectionRequested(Qt::Key_Up);
+                        controller.keyRequested(Qt::Key_Up, Qt::NoModifier);
                         QTimer::singleShot(
                             50, quickWindow,
-                            [quickWindow, &application, &controller, initial, fail] {
+                            [quickWindow, &application, &controller, play, fail] {
                               QQuickItem* movedUp = quickWindow->activeFocusItem();
                               if (movedUp == nullptr) {
-                                fail(QStringLiteral("Controller Up cleared detail focus"));
+                                fail(QStringLiteral("Keyboard Up cleared detail focus"));
                                 return;
                               }
-                              const QPointF up = movedUp->mapToScene(
-                                  QPointF(movedUp->width() / 2, movedUp->height() / 2));
-                              if (up.y() >= initial.y() - 3) {
+                              if (movedUp == play) {
                                 fail(QStringLiteral(
-                                    "Controller Up did not move up on game details"));
+                                    "Keyboard Up did not move focus on game details"));
                                 return;
                               }
-                              controller.focusDirectionRequested(Qt::Key_Down);
+                              controller.keyRequested(Qt::Key_Down, Qt::NoModifier);
                               QTimer::singleShot(
                                   50, quickWindow,
-                                  [quickWindow, &application, &controller, up, fail] {
+                                  [quickWindow, &application, &controller, movedUp, fail] {
                                     QQuickItem* movedDown = quickWindow->activeFocusItem();
                                     if (movedDown == nullptr) {
-                                      fail(QStringLiteral("Controller Down cleared detail focus"));
+                                      fail(QStringLiteral("Keyboard Down cleared detail focus"));
                                       return;
                                     }
                                     const QPointF down = movedDown->mapToScene(
                                         QPointF(movedDown->width() / 2, movedDown->height() / 2));
-                                    if (down.y() <= up.y() + 3) {
+                                    if (movedDown == movedUp) {
                                       fail(QStringLiteral(
-                                          "Controller Down did not move down on game details"));
+                                          "Keyboard Down did not move focus on game details"));
                                       return;
                                     }
-                                    controller.focusDirectionRequested(Qt::Key_Right);
+                                    controller.keyRequested(Qt::Key_Right, Qt::NoModifier);
                                     QTimer::singleShot(
                                         50, quickWindow,
                                         [quickWindow, &application, &controller, down, fail] {
                                           QQuickItem* movedRight = quickWindow->activeFocusItem();
                                           if (movedRight == nullptr) {
                                             fail(QStringLiteral(
-                                                "Controller Right cleared detail focus"));
+                                                "Keyboard Right cleared detail focus"));
                                             return;
                                           }
                                           const QPointF right = movedRight->mapToScene(QPointF(
                                               movedRight->width() / 2, movedRight->height() / 2));
                                           if (right.x() <= down.x() + 3) {
-                                            fail(QStringLiteral("Controller Right did not move "
+                                            fail(QStringLiteral("Keyboard Right did not move "
                                                                 "right on game details"));
                                             return;
                                           }
-                                          controller.focusDirectionRequested(Qt::Key_Left);
+                                          controller.keyRequested(Qt::Key_Left, Qt::NoModifier);
                                           QTimer::singleShot(
                                               50, quickWindow,
                                               [quickWindow, &application, &controller, right,
@@ -569,7 +565,7 @@ int main(int argc, char* argv[]) {
                                                     quickWindow->activeFocusItem();
                                                 if (movedLeft == nullptr) {
                                                   fail(QStringLiteral(
-                                                      "Controller Left cleared detail focus"));
+                                                      "Keyboard Left cleared detail focus"));
                                                   return;
                                                 }
                                                 const QPointF left = movedLeft->mapToScene(
@@ -577,8 +573,8 @@ int main(int argc, char* argv[]) {
                                                             movedLeft->height() / 2));
                                                 if (left.x() >= right.x() - 3) {
                                                   fail(QStringLiteral(
-                                                      "Controller Left did not move left on "
-                                                      "game details"));
+                                                      "Keyboard Left did not move left on game "
+                                                      "details"));
                                                   return;
                                                 }
                                                 auto* newCollection =

@@ -50,6 +50,12 @@ ApplicationWindow {
         return null
     }
 
+    function arrowNavigationEnabled() {
+        const current = root.activeFocusItem
+        return root.navigationContainer() !== null
+                && (!current || current.controllerNavigation !== false)
+    }
+
     function focusWithin(container, forward, preferred) {
         if (!container) {
             return
@@ -75,8 +81,7 @@ ApplicationWindow {
         }
     }
 
-    // Arrow keys from a keyboard take the same spatial path controller directions do. Text
-    // inputs accept Left and Right themselves, so only keys they let through arrive here.
+    // Fallback for arrow keys that reach an overlay loader directly.
     function handleArrowKey(container, event) {
         if (event.key !== Qt.Key_Up && event.key !== Qt.Key_Down
                 && event.key !== Qt.Key_Left && event.key !== Qt.Key_Right) {
@@ -481,6 +486,26 @@ ApplicationWindow {
         sequence: "Shift+Tab"
         enabled: root.navigationContainer() !== null
         onActivated: root.focusWithin(root.navigationContainer(), false)
+    }
+    Shortcut {
+        sequence: "Up"
+        enabled: root.arrowNavigationEnabled()
+        onActivated: root.focusSpatial(root.navigationContainer(), Qt.Key_Up)
+    }
+    Shortcut {
+        sequence: "Down"
+        enabled: root.arrowNavigationEnabled()
+        onActivated: root.focusSpatial(root.navigationContainer(), Qt.Key_Down)
+    }
+    Shortcut {
+        sequence: "Left"
+        enabled: root.arrowNavigationEnabled()
+        onActivated: root.focusSpatial(root.navigationContainer(), Qt.Key_Left)
+    }
+    Shortcut {
+        sequence: "Right"
+        enabled: root.arrowNavigationEnabled()
+        onActivated: root.focusSpatial(root.navigationContainer(), Qt.Key_Right)
     }
     Shortcut {
         sequence: "Escape"
@@ -1285,6 +1310,7 @@ ApplicationWindow {
             }
             TextField {
                 id: linkSearch
+                property bool controllerNavigation: false
                 Layout.fillWidth: true
                 placeholderText: "Search installed games"
                 color: Theme.foreground

@@ -437,6 +437,7 @@ Item {
                         }
                         TextField {
                             id: tagsField
+                            property bool controllerNavigation: false
                             Layout.fillWidth: true
                             placeholderText: "Co-op, cozy, difficult"
                             // Copy the saved tags in instead of binding so an achievement
@@ -529,6 +530,7 @@ Item {
                         }
                         TextField {
                             id: collectionField
+                            property bool controllerNavigation: false
                             Layout.fillWidth: true
                             Layout.maximumWidth: 360
                             placeholderText: "New collection"
