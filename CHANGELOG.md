@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.1
+
+- Left the library, database, and cover requests alone when a Steam rescan finds the same
+  games, so Steam downloads no longer reset the grid every few seconds.
+- Reported a private Steam profile as private instead of as an invalid API key.
+- Fixed the details page acting on a different game after un-favoriting or changing a
+  cover while a filter was active.
+- Kept typed tags, Steam ID, and IGDB client ID text when a background refresh finished
+  mid-edit.
+- Moved keyboard arrows through game details, Settings, and dialogs the way controller
+  directions already did.
+- Gave keyboard focus a landing spot when the last visible game leaves the grid, and
+  returned focus to the collection button when its editor closes.
+- Rendered game and achievement titles as plain text so markup-looking names cannot change
+  formatting.
+- Kept toasts inside the window and above the settings panel, elided long card subtitles,
+  hid the empty year separator, and stopped covers reloading on every window resize step.
+- Ran normally when the single-instance socket cannot be created instead of exiting
+  without a window.
+- Stopped walking the achievement icon cache every time game details open.
+
 ## 1.3.0
 
 ### Steam
