@@ -1,6 +1,7 @@
 #include "app/SingleInstance.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QLocalSocket>
 
 #include <unistd.h>
@@ -36,8 +37,13 @@ bool SingleInstance::claimOrNotify() {
   }
 
   if (m_server.serverError() != QAbstractSocket::AddressInUseError) {
-    return false;
+    // An unwritable runtime directory must not leave the user with no window at all.
+    qWarning() << "Running without single-instance activation:" << m_server.errorString();
+    return true;
   }
   QLocalServer::removeServer(m_serverName);
-  return m_server.listen(m_serverName);
+  if (!m_server.listen(m_serverName)) {
+    qWarning() << "Running without single-instance activation:" << m_server.errorString();
+  }
+  return true;
 }
