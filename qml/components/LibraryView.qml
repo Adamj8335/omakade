@@ -12,12 +12,14 @@ Item {
     readonly property int count: grid.count
     readonly property bool gridFocused: grid.activeFocus
     property bool scanning: false
+    property bool filtersActive: false
     property string emptyTitle: "No games found"
     property string emptyMessage: "Try a different search or library view."
 
     signal gameActivated(int index)
     signal favoriteToggled(int index)
     signal refreshRequested()
+    signal clearFiltersRequested()
     signal coverRequested(string source, string appId)
     signal focusAboveRequested()
 
@@ -313,7 +315,14 @@ Item {
         }
         GlassButton {
             anchors.horizontalCenter: parent.horizontalCenter
-            visible: !root.scanning
+            visible: !root.scanning && root.filtersActive
+            text: "CLEAR FILTERS"
+            compact: true
+            onClicked: root.clearFiltersRequested()
+        }
+        GlassButton {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: !root.scanning && !root.filtersActive
             text: "RESCAN"
             compact: true
             onClicked: root.refreshRequested()

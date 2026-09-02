@@ -25,6 +25,9 @@
   background rescan rebuilds the library.
 - Moved keyboard and controller Up from the top row of games into the filters and
   toolbar, with arrow keys between those controls and Down back into the grid.
+- Named the search or organization filter behind an empty library and offered a Clear
+  Filters action, and made the Collection and Tag filters say how to create the first
+  one instead of doing nothing.
 - Added games sideloaded into Heroic, plus Heroic playtime and last-played activity.
 - Resolved the RetroArch Flatpak's sandbox paths so its playlists, thumbnails, and
   playtime logs are found, and matched playtime logs by the core's short name and

@@ -263,12 +263,48 @@ ApplicationWindow {
         return index < 0 ? values[0] : index + 1 < values.length ? values[index + 1] : ""
     }
 
-    function filterLabel(prefix, value) {
+    function filterLabel(prefix, value, available) {
         if (!value || value.length === 0) {
-            return prefix
+            return available && available.length > 0 ? prefix + " (" + available.length + ")" : prefix
         }
         const shortened = value.length > 16 ? value.substring(0, 15) + "…" : value
         return prefix + ": " + shortened.toUpperCase()
+    }
+
+    readonly property bool organizationFiltersActive: Library.completionFilter !== ""
+                                                      || Library.collectionFilter !== ""
+                                                      || Library.tagFilter !== ""
+
+    // Names the search or filter that produced an empty library, or returns "" when the
+    // library itself is empty.
+    function emptyTitleForFilters() {
+        if (Library.searchText !== "") {
+            return "No games match \"" + Library.searchText + "\""
+        }
+        const active = [Library.completionFilter, Library.collectionFilter, Library.tagFilter]
+                       .filter(value => value !== "").length
+        if (active > 1) {
+            return "No games match these filters"
+        }
+        if (Library.completionFilter !== "") {
+            return "No games marked " + Library.completionFilter.toUpperCase()
+        }
+        if (Library.collectionFilter !== "") {
+            return "Nothing in " + Library.collectionFilter + " yet"
+        }
+        if (Library.tagFilter !== "") {
+            return "No games tagged " + Library.tagFilter
+        }
+        return ""
+    }
+
+    function clearLibraryFilters() {
+        Library.completionFilter = ""
+        Library.collectionFilter = ""
+        Library.tagFilter = ""
+        searchField.clear()
+        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+        libraryView.focusGrid()
     }
 
     function confirmCollectionDelete() {
@@ -986,9 +1022,14 @@ ApplicationWindow {
                     id: collectionFilterButton
                     objectName: "collectionFilterButton"
                     compact: true
-                    text: root.filterLabel("COLLECTION", Library.collectionFilter)
+                    text: root.filterLabel("COLLECTION", Library.collectionFilter,
+                                           Library.collectionNames)
                     selected: Library.collectionFilter !== ""
                     onClicked: {
+                        if (Library.collectionNames.length === 0) {
+                            root.showToast("No collections yet. Open a game and use + New Collection.")
+                            return
+                        }
                         Library.collectionFilter = root.nextFilter(
                                     Library.collectionFilter, Library.collectionNames)
                         libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
@@ -998,9 +1039,13 @@ ApplicationWindow {
                     id: tagFilterButton
                     objectName: "tagFilterButton"
                     compact: true
-                    text: root.filterLabel("TAG", Library.tagFilter)
+                    text: root.filterLabel("TAG", Library.tagFilter, Library.tagNames)
                     selected: Library.tagFilter !== ""
                     onClicked: {
+                        if (Library.tagNames.length === 0) {
+                            root.showToast("No tags yet. Open a game and add tags under Organize.")
+                            return
+                        }
                         Library.tagFilter = root.nextFilter(Library.tagFilter, Library.tagNames)
                         libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
                     }
@@ -1027,7 +1072,10 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 libraryModel: Library
                 scanning: SteamLibrary ? SteamLibrary.scanning : false
-                emptyTitle: Library.sourceFilter === "Heroic" && HeroicLibrary && !HeroicLibrary.heroicDetected
+                filtersActive: root.organizationFiltersActive || Library.searchText !== ""
+                onClearFiltersRequested: root.clearLibraryFilters()
+                emptyTitle: root.emptyTitleForFilters() !== "" ? root.emptyTitleForFilters()
+                            : Library.sourceFilter === "Heroic" && HeroicLibrary && !HeroicLibrary.heroicDetected
                             ? "Heroic was not found"
                             : Library.sourceFilter === "Faugus" && FaugusLibrary && !FaugusLibrary.faugusDetected
                             ? "Faugus was not found"
@@ -1041,8 +1089,10 @@ ApplicationWindow {
                               : Library.availability === 2 ? "No games ready to install"
                               : Library.availability === 1 ? "No games in this library"
                               : "No installed games"
-                emptyMessage: Library.completionFilter !== "" || Library.collectionFilter !== "" || Library.tagFilter !== ""
-                              ? "Clear or change the organization filters to see more games."
+                emptyMessage: Library.searchText !== ""
+                              ? "Try a different search, or clear it to see the whole library."
+                              : root.organizationFiltersActive
+                              ? "This is a filter, not your library. Clear or change it to see your games."
                               : Library.sourceFilter === "Faugus" && FaugusLibrary && FaugusLibrary.errorText.length > 0
                               ? FaugusLibrary.errorText
                               : Library.sourceFilter === "RetroArch" && RetroArchLibrary && RetroArchLibrary.errorText.length > 0
