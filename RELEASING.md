@@ -25,6 +25,9 @@ testing only when the maintainer explicitly authorizes that specific release.
      ./build/release/omakade --render-screenshot=/tmp/omakade.png \
      --render-size=1380x880
    ```
+
+   Add `--render-overlay=settings` or `--render-overlay=picker` to capture those
+   overlays as well.
 5. Give the maintainer the exact candidate and checklist. Wait for local test
    results and explicit publication approval.
 6. Tag the approved commit as `vX.Y.Z` and push the tag. Do not push the

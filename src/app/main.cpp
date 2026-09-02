@@ -332,6 +332,28 @@ int main(int argc, char* argv[]) {
       quickWindow->resize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
     }
     if (renderMode) {
+      // `--render-overlay=settings|picker` opens an overlay so visual checks can cover it.
+      const QString overlay =
+          optionValue(application.arguments(), QStringLiteral("--render-overlay"));
+      if (overlay == QStringLiteral("settings")) {
+        quickWindow->setProperty("diagnosticsOpen", true);
+        QTimer::singleShot(400, quickWindow, [quickWindow] {
+          // Scroll to the end so the lower sections land in the capture.
+          auto* scroll = quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
+          QObject* flickable =
+              scroll == nullptr ? nullptr : scroll->property("contentItem").value<QObject*>();
+          if (flickable != nullptr) {
+            flickable->setProperty("contentY", flickable->property("contentHeight").toReal() -
+                                                   scroll->height());
+          }
+        });
+      } else if (overlay == QStringLiteral("picker")) {
+        QMetaObject::invokeMethod(
+            quickWindow, "openFilterPicker", Q_ARG(QVariant, QStringLiteral("collection")),
+            Q_ARG(QVariant, QVariant(QStringList{QStringLiteral("Couch co-op"),
+                                                 QStringLiteral("Cozy evenings"),
+                                                 QStringLiteral("Finish this year")})));
+      }
       QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
         const QImage screenshot = quickWindow->grabWindow();
         if (screenshot.isNull() || !screenshot.save(screenshotPath)) {
