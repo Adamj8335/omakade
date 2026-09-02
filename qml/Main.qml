@@ -1872,6 +1872,87 @@ ApplicationWindow {
                     color: root.alpha(Theme.foreground, 0.12)
                 }
                 Text {
+                    text: "STREAM WITH SUNSHINE AND MOONLIGHT"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: Sunshine ? Sunshine.statusText : "Sunshine export is unavailable in demo mode."
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "Moonlight shows Sunshine's app list. Omakade can add itself next to Steam Big Picture and one app per installed game with its cover. Sunshine reads the list when it starts, so restart it after changes."
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    wrapMode: Text.Wrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: Sunshine !== null && Sunshine.detected
+                    Text {
+                        Layout.fillWidth: true
+                        text: "OMAKADE IN MOONLIGHT"
+                        color: Theme.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                    }
+                    GlassButton {
+                        objectName: "sunshineOmakadeButton"
+                        compact: true
+                        text: Preferences.sunshineOmakadeApp ? "ENABLED" : "DISABLED"
+                        onClicked: Preferences.sunshineOmakadeApp = !Preferences.sunshineOmakadeApp
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: Sunshine !== null && Sunshine.detected
+                    Text {
+                        Layout.fillWidth: true
+                        text: Sunshine && Sunshine.exportedGames > 0
+                              ? "ONE APP PER INSTALLED GAME · " + Sunshine.exportedGames + " EXPORTED"
+                              : "ONE APP PER INSTALLED GAME"
+                        color: Theme.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                    }
+                    GlassButton {
+                        objectName: "sunshineGamesButton"
+                        compact: true
+                        text: Preferences.sunshineGameApps ? "ENABLED" : "DISABLED"
+                        onClicked: Preferences.sunshineGameApps = !Preferences.sunshineGameApps
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: Sunshine !== null && Sunshine.detected
+                    GlassButton {
+                        compact: true
+                        text: "UPDATE APP LIST"
+                        enabled: Sunshine && !Sunshine.busy
+                        onClicked: Sunshine.sync()
+                    }
+                    GlassButton {
+                        compact: true
+                        visible: Sunshine && Sunshine.restartNeeded && !Sunshine.streaming
+                        enabled: Sunshine && !Sunshine.busy
+                        text: "RESTART SUNSHINE"
+                        onClicked: Sunshine.restartSunshine()
+                    }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: root.alpha(Theme.foreground, 0.12)
+                }
+                Text {
                     text: "LIBRARY COLLECTIONS"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
