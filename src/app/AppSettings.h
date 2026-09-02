@@ -22,6 +22,8 @@ class AppSettings final : public QObject {
       bool retroArchEnabled READ retroArchEnabled WRITE setRetroArchEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool pcsx2Enabled READ pcsx2Enabled WRITE setPcsx2Enabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool ryujinxEnabled READ ryujinxEnabled WRITE setRyujinxEnabled NOTIFY sourcesChanged)
+  Q_PROPERTY(
+      bool battleNetEnabled READ battleNetEnabled WRITE setBattleNetEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool closeAfterLaunch READ closeAfterLaunch WRITE setCloseAfterLaunch NOTIFY
                  closeAfterLaunchChanged)
   Q_PROPERTY(bool sunshineOmakadeApp READ sunshineOmakadeApp WRITE setSunshineOmakadeApp NOTIFY
@@ -62,6 +64,8 @@ public:
   [[nodiscard]] bool ryujinxAutoEnabled() const;
   void setPcsx2AutoEnabled(bool value);
   void setRyujinxAutoEnabled(bool value);
+  [[nodiscard]] bool battleNetEnabled() const;
+  void setBattleNetEnabled(bool value);
   [[nodiscard]] bool closeAfterLaunch() const;
   void setCloseAfterLaunch(bool value);
   [[nodiscard]] bool sunshineOmakadeApp() const;
@@ -99,6 +103,7 @@ private:
   bool m_ryujinxEnabled = false;
   bool m_pcsx2Auto = true;
   bool m_ryujinxAuto = true;
+  bool m_battleNetEnabled = true;
   bool m_closeAfterLaunch = false;
   bool m_sunshineOmakadeApp = false;
   bool m_sunshineGameApps = false;

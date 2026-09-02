@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Battle.net
+
+- Added Battle.net as a library source. Omakade finds the Windows Battle.net
+  client in Wine, Proton, and Bottles prefixes, imports installed games from
+  `product.db`, and launches them through Battle.net.
+- Downloads missing Battle.net covers and banners from Lutris's public artwork
+  hosts, including Heroes of the Storm.
+
 ### PCSX2 and Ryujinx
 
 - Added PCSX2 as a game source: imports disc-based games from the native

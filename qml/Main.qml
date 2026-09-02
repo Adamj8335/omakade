@@ -30,6 +30,7 @@ ApplicationWindow {
                                             || (RetroArchLibrary ? RetroArchLibrary.scanning : false)
                                             || (Pcsx2Library ? Pcsx2Library.scanning : false)
                                             || (RyujinxLibrary ? RyujinxLibrary.scanning : false)
+                                            || (BattleNetLibrary ? BattleNetLibrary.scanning : false)
     readonly property int ownedGameCount: SteamAccount
                                           ? SteamAccount.ownedGameCount
                                           : OwnedGameCountOverride
@@ -124,6 +125,10 @@ ApplicationWindow {
                 && event.key !== Qt.Key_Left && event.key !== Qt.Key_Right) {
             return
         }
+        if (root.activeFocusItem
+                && root.activeFocusItem.controllerNavigation === false) {
+            return
+        }
         root.focusSpatial(container, event.key)
         event.accepted = true
     }
@@ -202,6 +207,7 @@ ApplicationWindow {
         if (RetroArchLibrary && Preferences.retroArchEnabled) RetroArchLibrary.refresh()
         if (Pcsx2Library && Preferences.pcsx2Enabled) Pcsx2Library.refresh()
         if (RyujinxLibrary && Preferences.ryujinxEnabled) RyujinxLibrary.refresh()
+        if (BattleNetLibrary && Preferences.battleNetEnabled) BattleNetLibrary.refresh()
     }
 
     function focusAboveGrid() {
@@ -414,7 +420,8 @@ ApplicationWindow {
     function manageSelected() {
         if (Launcher.manage(selectedInstallation.source, selectedInstallation.appId,
                             selectedInstallation.flatpak || false,
-                            selectedInstallation.runner || "")) {
+                            selectedInstallation.runner || "",
+                            selectedInstallation.launchTarget || "")) {
             showToast("Opening " + selectedInstallation.source)
         } else {
             showToast(Launcher.lastError)
@@ -924,6 +931,18 @@ ApplicationWindow {
                         }
                     }
                     GlassButton {
+                        id: battleNetSourceButton
+                        objectName: "battleNetSourceButton"
+                        text: "BATTLE.NET"
+                        compact: true
+                        visible: Preferences.battleNetEnabled
+                        selected: Library.sourceFilter === "Battle.net"
+                        onClicked: {
+                            Library.sourceFilter = "Battle.net"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
+                    GlassButton {
                         id: lutrisSourceButton
                         objectName: "lutrisSourceButton"
                         text: "LUTRIS"
@@ -1024,7 +1043,7 @@ ApplicationWindow {
                     font.pixelSize: 9
                 }
                 Text {
-                    visible: root.width >= 1100 && (SteamLibrary ? SteamLibrary.scanning : false)
+                    visible: root.width >= 1100 && root.libraryScanning
                     text: "SYNCING"
                     color: Theme.accent
                     font.family: Theme.fontFamily
@@ -1181,7 +1200,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 libraryModel: Library
-                scanning: SteamLibrary ? SteamLibrary.scanning : false
+                scanning: root.libraryScanning
                 filtersActive: root.organizationFiltersActive || Library.searchText !== ""
                 onClearFiltersRequested: root.clearLibraryFilters()
                 emptyTitle: root.emptyTitleForFilters() !== "" ? root.emptyTitleForFilters()
@@ -1195,6 +1214,8 @@ ApplicationWindow {
                             ? "PCSX2 was not found"
                             : Library.sourceFilter === "Ryujinx" && RyujinxLibrary && !RyujinxLibrary.ryujinxDetected
                             ? "Ryujinx was not found"
+                            : Library.sourceFilter === "Battle.net" && BattleNetLibrary && !BattleNetLibrary.battleNetDetected
+                            ? "Battle.net was not found"
                             : Library.sourceFilter === "Lutris" && LutrisLibrary && !LutrisLibrary.lutrisDetected
                             ? "Lutris was not found"
                             : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
@@ -1219,14 +1240,18 @@ ApplicationWindow {
                               ? HeroicLibrary.errorText
                               : Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
                               ? LutrisLibrary.errorText
+                              : Library.sourceFilter === "Battle.net" && BattleNetLibrary && BattleNetLibrary.errorText.length > 0
+                              ? BattleNetLibrary.errorText
                               : SteamLibrary && SteamLibrary.errorText.length > 0
                                 ? SteamLibrary.errorText
-                                : "Install a game in Steam, Lutris, Heroic, Faugus, RetroArch, PCSX2, or Ryujinx, then rescan your library."
+                                : "Install a game in Steam, Lutris, Heroic, Faugus, RetroArch, PCSX2, Ryujinx, or Battle.net, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
                 onCoverRequested: function(source, appId) {
                     if (source === "Steam" && SteamLibrary) {
                         SteamLibrary.requestCover(appId)
+                    } else if (source === "Battle.net" && BattleNetLibrary) {
+                        BattleNetLibrary.requestCover(appId)
                     }
                 }
                 onRefreshRequested: {
@@ -1700,6 +1725,11 @@ ApplicationWindow {
                           error: SteamLibrary ? SteamLibrary.errorText : "",
                           paths: SteamLibrary ? SteamLibrary.detectedPaths : [],
                           lastScan: SteamLibrary ? SteamLibrary.lastScan : 0 },
+                        { name: "BATTLE.NET", enabled: Preferences.battleNetEnabled,
+                          status: BattleNetLibrary ? BattleNetLibrary.statusText : "Unavailable",
+                          error: BattleNetLibrary ? BattleNetLibrary.errorText : "",
+                          paths: BattleNetLibrary ? BattleNetLibrary.detectedPaths : [],
+                          lastScan: BattleNetLibrary ? BattleNetLibrary.lastScan : 0 },
                         { name: "LUTRIS", enabled: Preferences.lutrisEnabled,
                           status: LutrisLibrary ? LutrisLibrary.statusText : "Unavailable",
                           error: LutrisLibrary ? LutrisLibrary.errorText : "",
@@ -1755,6 +1785,10 @@ ApplicationWindow {
                                         Preferences.steamEnabled = !Preferences.steamEnabled
                                         nowEnabled = Preferences.steamEnabled
                                         if (Preferences.steamEnabled) SteamLibrary.refresh()
+                                    } else if (modelData.name === "BATTLE.NET") {
+                                        Preferences.battleNetEnabled = !Preferences.battleNetEnabled
+                                        nowEnabled = Preferences.battleNetEnabled
+                                        if (Preferences.battleNetEnabled && BattleNetLibrary) BattleNetLibrary.refresh()
                                     } else if (modelData.name === "LUTRIS") {
                                         Preferences.lutrisEnabled = !Preferences.lutrisEnabled
                                         nowEnabled = Preferences.lutrisEnabled
@@ -1791,6 +1825,7 @@ ApplicationWindow {
                                 enabled: modelData.enabled
                                 onClicked: {
                                     if (modelData.name === "STEAM") SteamLibrary.refresh()
+                                    else if (modelData.name === "BATTLE.NET" && BattleNetLibrary) BattleNetLibrary.refresh()
                                     else if (modelData.name === "LUTRIS") LutrisLibrary.refresh()
                                     else if (modelData.name === "HEROIC") HeroicLibrary.refresh()
                                     else if (modelData.name === "FAUGUS") FaugusLibrary.refresh()

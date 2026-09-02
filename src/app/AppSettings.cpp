@@ -143,6 +143,17 @@ void AppSettings::setPcsx2Enabled(bool value) {
   emit sourcesChanged();
 }
 
+bool AppSettings::battleNetEnabled() const { return m_battleNetEnabled; }
+
+void AppSettings::setBattleNetEnabled(bool value) {
+  if (m_battleNetEnabled == value) {
+    return;
+  }
+  m_battleNetEnabled = value;
+  save();
+  emit sourcesChanged();
+}
+
 bool AppSettings::ryujinxEnabled() const { return m_ryujinxEnabled; }
 
 void AppSettings::setRyujinxEnabled(bool value) {
@@ -234,6 +245,7 @@ void AppSettings::load() {
       QStringLiteral("(?m)^ryujinx_enabled\\s*=\\s*(true|false)\\s*$"));
   m_ryujinxAuto = !ryujinxKey.match(contents).hasMatch();
   m_ryujinxEnabled = readEnabled(QStringLiteral("ryujinx_enabled"), false);
+  m_battleNetEnabled = readEnabled(QStringLiteral("battlenet_enabled"), true);
   m_closeAfterLaunch = readEnabled(QStringLiteral("close_after_launch"), false);
   m_sunshineOmakadeApp = readEnabled(QStringLiteral("sunshine_omakade_app"), false);
   m_sunshineGameApps = readEnabled(QStringLiteral("sunshine_game_apps"), false);
@@ -274,7 +286,8 @@ void AppSettings::save() const {
       QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\nsteam_id = \"%3\"\n"
                      "igdb_client_id = \"%4\"\nretroachievements_username = \"%5\"\n"
                      "steam_enabled = %6\nlutris_enabled = %7\nheroic_enabled = %8\n"
-                     "faugus_enabled = %9\nretroarch_enabled = %10\n")
+                     "faugus_enabled = %9\nretroarch_enabled = %10\n"
+                     "battlenet_enabled = %11\n")
           .arg(m_reducedMotion ? QStringLiteral("true") : QStringLiteral("false"))
           .arg(m_artworkCacheLimitMb)
           .arg(m_steamId)
@@ -284,7 +297,8 @@ void AppSettings::save() const {
           .arg(m_lutrisEnabled ? QStringLiteral("true") : QStringLiteral("false"))
           .arg(m_heroicEnabled ? QStringLiteral("true") : QStringLiteral("false"))
           .arg(m_faugusEnabled ? QStringLiteral("true") : QStringLiteral("false"))
-          .arg(m_retroArchEnabled ? QStringLiteral("true") : QStringLiteral("false"));
+          .arg(m_retroArchEnabled ? QStringLiteral("true") : QStringLiteral("false"))
+          .arg(m_battleNetEnabled ? QStringLiteral("true") : QStringLiteral("false"));
   if (!m_pcsx2Auto) {
     contents += QStringLiteral("pcsx2_enabled = %1\n")
                     .arg(m_pcsx2Enabled ? QStringLiteral("true") : QStringLiteral("false"));

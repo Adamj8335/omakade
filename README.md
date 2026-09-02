@@ -10,7 +10,7 @@
 [Watch the 18-second demo](https://btsouth.github.io/omakade/assets/omakade-demo.mp4)
 
 Omakade is a fast, local-first game library built for Omarchy. It brings
-installed Steam, Lutris, Heroic, Faugus, RetroArch, Epic, GOG, and Amazon games
+installed Steam, Lutris, Heroic, Faugus, RetroArch, Battle.net, Epic, GOG, and Amazon games
 into one quiet, cover-focused home that follows the active Omarchy theme.
 
 [Project homepage](https://btsouth.github.io/omakade/) ·
@@ -26,8 +26,10 @@ changes listed under Unreleased in the changelog.
 
 Omakade includes:
 
-- Native and Flatpak Steam, Lutris, Heroic, Faugus, and RetroArch discovery,
-  including Steam non-Steam shortcuts and games sideloaded into Heroic
+- Native and Flatpak Steam, Lutris, Heroic, Faugus, RetroArch, PCSX2, and
+  Ryujinx discovery,
+  including Steam non-Steam shortcuts and games sideloaded into Heroic, plus
+  Battle.net games from Wine, Proton, and Bottles prefixes
 - One-click details and delegated launching through the owning platform
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
@@ -35,6 +37,7 @@ Omakade includes:
 - Optional close-after-launch behavior
 - Collections, tags, completion states, and smart organization filters
 - Local Steam achievements plus optional Web API enrichment
+- Optional RetroAchievements progress for supported RetroArch systems
 - Optional Steam owned-library sync with installed and ready-to-install views
 - Optional IGDB critic aggregates and game-length estimates
 - Local, downloaded, and user-selected cover artwork
@@ -106,6 +109,10 @@ RetroArch thumbnails and runtime logs, then launches each game with its assigned
 core. Entries without a core association remain visible and explain how to fix
 launching after you press Play.
 
+Battle.net games come from the Battle.net Agent database inside a Wine, Proton,
+or Bottles prefix. Omakade launches each title through that prefix's Battle.net
+client. Wine, umu-launcher, or Bottles must be installed to play.
+
 ### Stream with Sunshine and Moonlight
 
 Omarchy installs Sunshine from its menu and ships Moonlight. Once Sunshine is
@@ -137,6 +144,7 @@ Requirements:
   Controls, SQL, and Test, plus the SVG and image format plugins
 - SDL 3
 - libsecret
+- libzip
 
 ```bash
 cmake --preset dev

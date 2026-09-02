@@ -7,6 +7,7 @@
 #include "launch/GameLauncher.h"
 #include "launch/PlayRequest.h"
 #include "streaming/SunshineIntegration.h"
+#include "library/BattleNetGameModel.h"
 #include "library/FaugusGameModel.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
@@ -171,6 +172,7 @@ int main(int argc, char* argv[]) {
   std::unique_ptr<RetroArchGameModel> retroArchGames;
   std::unique_ptr<Pcsx2GameModel> pcsx2Games;
   std::unique_ptr<RyujinxGameModel> ryujinxGames;
+  std::unique_ptr<BattleNetGameModel> battleNetGames;
   SteamGameModel* steamLibrary = nullptr;
   LutrisGameModel* lutrisLibrary = nullptr;
   HeroicGameModel* heroicLibrary = nullptr;
@@ -178,6 +180,7 @@ int main(int argc, char* argv[]) {
   RetroArchGameModel* retroArchLibrary = nullptr;
   Pcsx2GameModel* pcsx2Library = nullptr;
   RyujinxGameModel* ryujinxLibrary = nullptr;
+  BattleNetGameModel* battleNetLibrary = nullptr;
   QString libraryDatabasePath;
   if (demoMode || stressMode || navigationTest) {
     games =
@@ -199,6 +202,9 @@ int main(int argc, char* argv[]) {
     pcsx2Library = pcsx2Games.get();
     ryujinxGames = std::make_unique<RyujinxGameModel>(steamLibrary->databasePath());
     ryujinxLibrary = ryujinxGames.get();
+    battleNetGames =
+        std::make_unique<BattleNetGameModel>(steamLibrary->databasePath(), &preferences);
+    battleNetLibrary = battleNetGames.get();
   }
   if (navigationTest) {
     libraryDatabasePath = QStringLiteral(":memory:");
@@ -223,6 +229,9 @@ int main(int argc, char* argv[]) {
   if (ryujinxGames != nullptr) {
     unifiedGames.addSourceModel(ryujinxGames.get());
   }
+  if (battleNetGames != nullptr) {
+    unifiedGames.addSourceModel(battleNetGames.get());
+  }
   const auto applySourcePreferences = [&] {
     unifiedGames.setSourceEnabled(QStringLiteral("Steam"), preferences.steamEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Lutris"), preferences.lutrisEnabled());
@@ -231,6 +240,7 @@ int main(int argc, char* argv[]) {
     unifiedGames.setSourceEnabled(QStringLiteral("RetroArch"), preferences.retroArchEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("PCSX2"), preferences.pcsx2Enabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Ryujinx"), preferences.ryujinxEnabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("Battle.net"), preferences.battleNetEnabled());
   };
   applySourcePreferences();
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
@@ -273,6 +283,10 @@ int main(int argc, char* argv[]) {
                  ryujinxLibrary != nullptr &&
                  (preferences.ryujinxEnabled() || preferences.ryujinxAutoEnabled())) {
         ryujinxLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Battle.net"), Qt::CaseInsensitive) == 0 &&
+                 battleNetLibrary != nullptr && preferences.battleNetEnabled()) {
+        battleNetLibrary->refresh();
         refreshStarted = true;
       }
       if (refreshStarted) {
@@ -405,6 +419,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("RetroArchLibrary"), retroArchLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("Pcsx2Library"), pcsx2Library);
   engine.rootContext()->setContextProperty(QStringLiteral("RyujinxLibrary"), ryujinxLibrary);
+  engine.rootContext()->setContextProperty(QStringLiteral("BattleNetLibrary"), battleNetLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("Launcher"), &launcher);
   engine.rootContext()->setContextProperty(QStringLiteral("Preferences"), &preferences);
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
@@ -579,7 +594,7 @@ int main(int argc, char* argv[]) {
                   fail(QStringLiteral("Controller Left did not reach source filters when tiled"));
                   return;
                 }
-                for (int step = 0; step < 5; ++step) {
+                for (int step = 0; step < 6; ++step) {
                   controller.focusDirectionRequested(Qt::Key_Left);
                 }
                 controller.focusDirectionRequested(Qt::Key_Up);
@@ -613,7 +628,7 @@ int main(int argc, char* argv[]) {
                 fail(QStringLiteral("Controller Down did not reach source filters"));
                 return;
               }
-              for (int step = 0; step < 5; ++step) {
+              for (int step = 0; step < 6; ++step) {
                 controller.focusDirectionRequested(Qt::Key_Left);
               }
               if (!allSources->hasActiveFocus()) {
@@ -1066,6 +1081,9 @@ int main(int argc, char* argv[]) {
                          preferences.setRyujinxEnabled(true);
                        }
                      });
+  }
+  if (battleNetLibrary != nullptr && preferences.battleNetEnabled()) {
+    QTimer::singleShot(750, battleNetLibrary, &BattleNetGameModel::refresh);
   }
 
   if (smokeTest && !renderMode) {

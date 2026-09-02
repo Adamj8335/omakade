@@ -408,6 +408,7 @@ Item {
                                  || root.selectedInstallation.source === "RetroArch"
                                  || root.selectedInstallation.source === "PCSX2"
                                  || root.selectedInstallation.source === "Ryujinx"
+                                 || root.selectedInstallation.source === "Battle.net"
                         text: "MANAGE IN " + (root.selectedInstallation.source || "LAUNCHER").toUpperCase()
                         onClicked: root.manageRequested()
                     }
