@@ -1929,6 +1929,10 @@ void CoreTests::igdbInsightsLoadFromOfflineCache() {
     QVERIFY(query.exec(QStringLiteral(
         "INSERT INTO game_insights VALUES('Steam', '10', 'igdb', 1942, 'Cached Game', 88, 31, "
         "7200, 14400, 28800, 99, 1700000000)")));
+    // A remembered miss: IGDB had no entry, so provider_game_id is 0.
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO game_insights VALUES('Steam', '20', 'igdb', 0, '', -1, 0, 0, 0, 0, 0, "
+        "1700000000)")));
     database.close();
   }
   QSqlDatabase::removeDatabase(connection);
@@ -1945,6 +1949,9 @@ void CoreTests::igdbInsightsLoadFromOfflineCache() {
   QCOMPARE(insights.completeHours(), 8);
   QCOMPARE(insights.timeSampleCount(), 99);
   QCOMPARE(insights.statusText(), QStringLiteral("Cached IGDB data"));
+  insights.loadSteam(QStringLiteral("20"));
+  QVERIFY(!insights.available());
+  QCOMPARE(insights.statusText(), QStringLiteral("IGDB has no entry for this game"));
 }
 
 void CoreTests::stressLibraryContainsOneThousandGames() {
