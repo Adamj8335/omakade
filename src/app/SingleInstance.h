@@ -17,7 +17,7 @@ public:
   [[nodiscard]] static bool sendCommand(const QString& serverName, const QByteArray& command);
 
 signals:
-  void activationRequested();
+  void activationRequested(bool fullscreen);
   void playRequested(const QString& launchKey);
   void quitRequested();
 

@@ -46,6 +46,7 @@ public:
   Q_INVOKABLE bool sync();
   Q_INVOKABLE void restartSunshine();
 
+  [[nodiscard]] static QString serviceUnit();
   [[nodiscard]] static QString shellQuote(const QString& value);
   [[nodiscard]] static QString commandPrefix(bool flatpakSunshine);
   [[nodiscard]] static bool isOmakadeEntry(const QJsonObject& entry);
@@ -62,6 +63,10 @@ signals:
 private:
   void detect();
   void scheduleSync();
+  // Asks systemd when Sunshine started and compares that with the last list Omakade wrote,
+  // so the restart hint survives Omakade restarts without nagging after Sunshine reloaded.
+  void refreshRestartState();
+  void rememberWrittenList(const QByteArray& contents);
   [[nodiscard]] QString exportImage(const QString& sourcePath, const QString& name);
   void setStatus(const QString& text);
 

@@ -21,7 +21,8 @@ SingleInstance::SingleInstance(const QString& serverName, QObject* parent)
         } else if (command == "quit") {
           emit quitRequested();
         } else if (command.contains("activate")) {
-          emit activationRequested();
+          // "activate stream" comes from a launch inside a Sunshine session.
+          emit activationRequested(command.contains("stream"));
         }
         socket->disconnectFromServer();
       });

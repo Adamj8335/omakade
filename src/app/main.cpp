@@ -104,7 +104,9 @@ int main(int argc, char* argv[]) {
   }
   SingleInstance singleInstance;
   const QByteArray instanceCommand =
-      playKey.isEmpty() ? QByteArray("activate") : QByteArray("play ") + playKey.toUtf8();
+      !playKey.isEmpty()                 ? QByteArray("play ") + playKey.toUtf8()
+      : SunshineIntegration::streaming() ? QByteArray("activate stream")
+                                         : QByteArray("activate");
   if (!smokeTest && !renderMode && !navigationTest &&
       !singleInstance.claimOrNotify(instanceCommand)) {
     return EXIT_SUCCESS;
@@ -853,11 +855,16 @@ int main(int argc, char* argv[]) {
     }
   }
   QObject::connect(&singleInstance, &SingleInstance::activationRequested, &application,
-                   [rootWindow] {
-                     if (rootWindow != nullptr) {
-                       rootWindow->show();
-                       rootWindow->requestActivate();
+                   [rootWindow](bool fullscreen) {
+                     if (rootWindow == nullptr) {
+                       return;
                      }
+                     if (fullscreen) {
+                       rootWindow->showFullScreen();
+                     } else {
+                       rootWindow->show();
+                     }
+                     rootWindow->requestActivate();
                    });
   QObject* rootObject = engine.rootObjects().constFirst();
   QObject::connect(&singleInstance, &SingleInstance::playRequested, &application,
