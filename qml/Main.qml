@@ -1430,9 +1430,10 @@ ApplicationWindow {
                     // Land on the current value so Enter keeps it and arrows move from it.
                     const current = root.filterPickerCurrent()
                     const index = current === "" ? 0 : root.filterPickerValues.indexOf(current) + 1
-                    const item = pickerList.itemAtIndex(Math.max(0, index))
+                    pickerList.currentIndex = Math.max(0, index)
+                    pickerList.positionViewAtIndex(pickerList.currentIndex, ListView.Contain)
+                    const item = pickerList.itemAtIndex(pickerList.currentIndex)
                     if (item) {
-                        pickerList.currentIndex = Math.max(0, index)
                         item.forceActiveFocus(Qt.TabFocusReason)
                     } else {
                         root.focusWithin(filterPickerOverlay, true)
@@ -1485,7 +1486,7 @@ ApplicationWindow {
                 ListView {
                     id: pickerList
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(count * 43, root.height - 160)
+                    Layout.preferredHeight: Math.min(contentHeight, root.height - 160)
                     implicitHeight: Layout.preferredHeight
                     clip: true
                     spacing: 6
