@@ -2,17 +2,12 @@
 
 ## 1.3.0
 
-- Added controller navigation across library modes, source filters,
-  organization controls, Settings, and game details.
-- Kept detail-page controller movement in content order below collections.
-- Added controller and keyboard scrolling through Steam achievement cards.
-- Clarified that automatic closing after launch is an opt-in setting.
-- Added a visible whole-library Rescan action.
+### Steam
+
 - Added optional owned Steam library sync, installed and ready-to-install
   filters, and Steam installation handoff.
 - Loads owned-game covers as they enter the visible library instead of fetching
   an entire account at once.
-- Fixed narrow game-details layouts and prerelease owned-library cache upgrades.
 - Kept the Steam library when a configured library path is missing or a manifest is
   unreadable instead of showing an empty or frozen library.
 - Skipped unusable entries and Steam tools during owned-library sync instead of failing
@@ -21,22 +16,38 @@
   visit, and reported that state plainly.
 - Required a 17-digit Steam ID, reported when Steam is still busy, and stopped
   re-requesting covers Steam does not have.
-- Kept the highlighted card and the open game details on the same game when a
-  background rescan rebuilds the library.
-- Moved keyboard and controller Up from the top row of games into the filters and
-  toolbar, with arrow keys between those controls and Down back into the grid.
-- Named the search or organization filter behind an empty library and offered a Clear
-  Filters action, and made the Collection and Tag filters say how to create the first
-  one instead of doing nothing.
+
+### Heroic, RetroArch, and Lutris
+
 - Added games sideloaded into Heroic, plus Heroic playtime and last-played activity.
 - Resolved the RetroArch Flatpak's sandbox paths so its playlists, thumbnails, and
   playtime logs are found, and matched playtime logs by the core's short name and
   archived content name.
 - Ignored a leftover Lutris database whose native or Flatpak launcher is no longer
   installed, and checked Flatpak launchers without blocking the interface.
-- Made Escape close the new-collection editor before closing game details, reused the
-  IGDB access token within a session, and declared the Qt SVG and image format plugins
-  the package needs.
+
+### Navigation and library
+
+- Added controller navigation across library modes, source filters,
+  organization controls, Settings, and game details.
+- Moved keyboard and controller Up from the top row of games into the filters and
+  toolbar, with arrow keys between those controls and Down back into the grid.
+- Kept detail-page controller movement in content order below collections.
+- Added controller and keyboard scrolling through Steam achievement cards.
+- Kept the highlighted card and the open game details on the same game when a
+  background rescan rebuilds the library.
+- Named the search or organization filter behind an empty library and offered a Clear
+  Filters action, and made the Collection and Tag filters say how to create the first
+  one instead of doing nothing.
+- Added a visible whole-library Rescan action.
+- Made Escape close the new-collection editor before closing game details.
+- Clarified that automatic closing after launch is an opt-in setting.
+
+### Fixes and housekeeping
+
+- Fixed narrow game-details layouts and prerelease owned-library cache upgrades.
+- Reused the IGDB access token within a session and declared the Qt SVG and image
+  format plugins the package needs.
 - Prevented space-separated screenshot options from creating an invisible main instance.
 - Pinned third-party workflow actions and enabled monthly dependency updates.
 - Added end-to-end navigation coverage and owned-library regression tests.
