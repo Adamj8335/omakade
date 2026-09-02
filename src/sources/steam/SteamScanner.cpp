@@ -227,6 +227,7 @@ void importNonSteamShortcuts(const QStringList& steamRoots, const QHash<QString,
       if (!ValveKeyValuesParser::parseBinaryFile(shortcutsPath, &parsed, &error)) {
         result->warnings.append(
             QStringLiteral("Could not read %1: %2").arg(shortcutsPath, error));
+        result->unreadableManifests.append(shortcutsPath);
         continue;
       }
       const ValveKeyValues* shortcuts = parsed.object(QStringLiteral("shortcuts"));

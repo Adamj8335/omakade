@@ -303,6 +303,11 @@ bool ValveKeyValuesParser::parseBinary(const QByteArray& contents, ValveKeyValue
       static_cast<unsigned char>(contents.at(position)) == 0x08) {
     ++position;
   }
+  if (success && position != contents.size()) {
+    localError = QStringLiteral("Unexpected trailing data");
+    *result = {};
+    success = false;
+  }
   if (error != nullptr) {
     *error = localError;
   }
@@ -318,11 +323,12 @@ bool ValveKeyValuesParser::parseBinaryFile(const QString& path, ValveKeyValues* 
     }
     return false;
   }
-  if (file.size() > kMaximumFileBytes) {
+  const QByteArray contents = file.read(kMaximumFileBytes + 1);
+  if (contents.size() > kMaximumFileBytes) {
     if (error != nullptr) {
       *error = QStringLiteral("File is too large");
     }
     return false;
   }
-  return parseBinary(file.readAll(), result, error);
+  return parseBinary(contents, result, error);
 }

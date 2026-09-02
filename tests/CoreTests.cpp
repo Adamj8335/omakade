@@ -579,6 +579,10 @@ void CoreTests::valveKeyValuesRejectsMalformedInput() {
   QString error;
   QVERIFY(!ValveKeyValuesParser::parse("\"Root\" { \"name\" \"unfinished\"", &values, &error));
   QVERIFY(!error.isEmpty());
+
+  const QByteArray trailing = sampleShortcutsVdf("/icon.png") + QByteArray(1, 0x01);
+  QVERIFY(!ValveKeyValuesParser::parseBinary(trailing, &values, &error));
+  QCOMPARE(error, QStringLiteral("Unexpected trailing data"));
 }
 
 void CoreTests::valveKeyValuesRejectsExcessiveNesting() {
@@ -657,6 +661,14 @@ void CoreTests::steamScannerImportsNonSteamShortcuts() {
   QCOMPARE(shortcut->lastPlayed, 1700000001);
   QVERIFY(shortcut->coverPath.endsWith(QStringLiteral("3236138358p.png")));
   QVERIFY(result.warnings.isEmpty());
+  QVERIFY(result.unreadableManifests.isEmpty());
+
+  writeFile(root + QStringLiteral("/userdata/42/config/shortcuts.vdf"), "not a binary vdf");
+  const SteamScanResult unreadable = SteamScanner::scan({root});
+  QCOMPARE(unreadable.games.size(), 2);
+  QCOMPARE(unreadable.unreadableManifests.size(), 1);
+  QVERIFY(unreadable.unreadableManifests.constFirst().endsWith(QStringLiteral("shortcuts.vdf")));
+  QVERIFY(unreadable.warnings.join(QLatin1Char('\n')).contains(QStringLiteral("shortcuts.vdf")));
 }
 
 void CoreTests::steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements() {
