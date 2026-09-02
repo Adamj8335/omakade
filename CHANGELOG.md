@@ -2,58 +2,44 @@
 
 ## 1.4.0
 
-### Streaming
+### Sunshine and Moonlight
 
-- Added optional Sunshine app export: Omakade next to Steam Big Picture in Moonlight, and one
-  app per installed game with its cover. Other Sunshine apps are left untouched and a
-  one-time backup sits next to `apps.json`.
-- Added a Restart Sunshine action in Settings, since Sunshine reads its app list at startup.
-- Added `omakade --play Source:runner:id` and `omakade --quit`, which reach the running
-  window or launch from the cached library without opening one.
-- Opened fullscreen when Sunshine starts Omakade for a Moonlight client.
+- Added optional Sunshine app export for Omakade and individual installed games, including
+  cover art, while preserving existing Sunshine apps and keeping a one-time backup.
+- Added a Restart Sunshine action in Settings.
+- Added `omakade --play Source:runner:id` and `omakade --quit` for Sunshine app entries and
+  other integrations.
+- Opened Omakade fullscreen for Moonlight sessions and used each game's normal launcher.
 
-### Library
+### Library and organization
 
-- Replaced click-to-cycle on the Status, Collection, and Tag filters with a picker list that
-  opens on the current value and works with keyboard, mouse, and controller.
+- Replaced the Status, Collection, and Tag filter cycles with picker lists that open on the
+  current value and work with keyboard, mouse, and controller.
+- Kept the grid and details on the correct game during unchanged Steam rescans, filtered
+  edits, and cover changes.
+- Preserved unfinished text in tags and credential fields when background refreshes finish.
+- Reported private Steam profiles correctly and showed scanning state for every library
+  source.
 
-### Fixes
+### Navigation and interface
 
-- Kept search fast with many linked games by looking installations up through prebuilt maps.
-- Stopped theme reloads from blocking on Hyprland and from firing for unrelated files dropped
-  into `~/.config` or `~/.local/state`.
-- Polled for controllers four times a second instead of 125 until one connects.
-- Trimmed leftover covers before covers the library still shows, and requested a pruned cover
-  again instead of showing a broken image.
-- Remembered when IGDB has no entry for a game instead of asking on every visit.
-- Left focus where it was when the window is re-activated, named every text field for
-  assistive technology, and wrote cached cover paths in one transaction.
-- Showed scanning state, disabled Rescan, and worded the empty library for every source's
-  scan instead of only Steam's.
-- Listed each Steam custom-artwork folder once per scan instead of three times per game.
-- Left the keyring alone at startup until a Steam ID or IGDB client ID is configured.
+- Made keyboard arrows use the same spatial navigation as controllers in game details,
+  Settings, and dialogs, without taking arrow keys from text fields.
+- Moved focus to Clear Filters when the last visible game leaves a filtered grid and returned
+  focus to the collection button when its editor closes.
+- Kept focus in place when the window is reactivated and added accessible names to text fields.
+- Rendered titles as plain text, kept toasts inside the window, shortened long card subtitles,
+  and avoided unnecessary cover reloads while resizing.
 
-## 1.3.1
+### Performance and reliability
 
-- Left the library, database, and cover requests alone when a Steam rescan finds the same
-  games, so Steam downloads no longer reset the grid every few seconds.
-- Reported a private Steam profile as private instead of as an invalid API key.
-- Fixed the details page acting on a different game after un-favoriting or changing a
-  cover while a filter was active.
-- Kept typed tags, Steam ID, and IGDB client ID text when a background refresh finished
-  mid-edit.
-- Moved keyboard arrows through game details, Settings, and dialogs the way controller
-  directions already did.
-- Gave keyboard focus a landing spot when the last visible game leaves the grid, and
-  returned focus to the collection button when its editor closes.
-- Rendered game and achievement titles as plain text so markup-looking names cannot change
-  formatting.
-- Kept toasts inside the window and above the settings panel, elided long card subtitles,
-  hid the empty year separator, and stopped covers reloading on every window resize step.
-- Ran normally when the single-instance socket cannot be created instead of exiting
-  without a window.
-- Stopped walking the achievement icon cache every time game details open.
-- Let SIGTERM, logout, and service stops close Omakade; SDL had been swallowing the signals.
+- Sped up linked-game searches, Steam artwork scans, controller detection, and theme updates.
+- Pruned unused covers first, retried covers removed by the cache limit, and remembered IGDB
+  misses instead of requesting them repeatedly.
+- Delayed keyring access until credentials are configured and reduced unnecessary database
+  and cover work during unchanged scans.
+- Kept running when the single-instance socket is unavailable and restored normal SIGTERM,
+  logout, and service-stop behavior.
 
 ## 1.3.0
 

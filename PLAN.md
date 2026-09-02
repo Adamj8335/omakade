@@ -817,7 +817,7 @@ after the 1.3.0 release:
   as markup
 - Re-runnable release workflow and a pinned Arch base image for CI
 
-Everything found in the post-1.3.0 sweep has been fixed in 1.3.1 or 1.4.
+Everything found in the post-1.3.0 sweep has been fixed for 1.4.
 
 ## Explicitly deferred
 
