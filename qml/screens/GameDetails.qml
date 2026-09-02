@@ -6,6 +6,7 @@ import "../components"
 
 Item {
     id: root
+    objectName: "gameDetails"
 
     Accessible.name: (game.title || "Game") + " details"
     Accessible.role: Accessible.Pane

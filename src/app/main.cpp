@@ -55,6 +55,48 @@ QString optionValue(const QStringList& arguments, const QString& name) {
   }
   return {};
 }
+
+void runEmptyFilterFocusTest(QQuickWindow* window, QGuiApplication* application) {
+  const auto fail = [application](const QString& message) {
+    qCritical().noquote() << message;
+    application->exit(EXIT_FAILURE);
+  };
+  auto* library = qobject_cast<QAbstractItemModel*>(
+      qmlContext(window)->contextProperty(QStringLiteral("Library")).value<QObject*>());
+  if (library == nullptr) {
+    fail(QStringLiteral("Navigation test could not find the library model"));
+    return;
+  }
+  bool statusChanged = false;
+  const bool invoked = QMetaObject::invokeMethod(
+      library, "setCompletionStatus", Q_RETURN_ARG(bool, statusChanged), Q_ARG(int, 0),
+      Q_ARG(QString, QStringLiteral("backlog")));
+  library->setProperty("completionFilter", QStringLiteral("backlog"));
+  if (!invoked || !statusChanged || library->rowCount() != 1) {
+    fail(QStringLiteral("Navigation test could not prepare one filtered game"));
+    return;
+  }
+  QMetaObject::invokeMethod(window, "openGame", Q_ARG(QVariant, QVariant(0)));
+  QTimer::singleShot(80, window, [window, library, application, fail] {
+    auto* details = window->findChild<QQuickItem*>(QStringLiteral("gameDetails"));
+    if (details == nullptr || !window->property("detailOpen").toBool()) {
+      fail(QStringLiteral("Navigation test could not open the filtered game"));
+      return;
+    }
+    QMetaObject::invokeMethod(details, "completionStatusRequested",
+                              Q_ARG(QString, QStringLiteral("completed")));
+    QTimer::singleShot(100, window, [window, library, application, fail] {
+      auto* emptyClear = window->findChild<QQuickItem*>(QStringLiteral("emptyClearButton"));
+      if (library->rowCount() != 0 || emptyClear == nullptr || !emptyClear->isVisible() ||
+          !emptyClear->hasActiveFocus()) {
+        fail(QStringLiteral("Removing the last filtered game did not focus Clear Filters"));
+        return;
+      }
+      library->setProperty("completionFilter", QString{});
+      application->quit();
+    });
+  });
+}
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -145,6 +187,9 @@ int main(int argc, char* argv[]) {
     faugusLibrary = faugusGames.get();
     retroArchGames = std::make_unique<RetroArchGameModel>(steamLibrary->databasePath());
     retroArchLibrary = retroArchGames.get();
+  }
+  if (navigationTest) {
+    libraryDatabasePath = QStringLiteral(":memory:");
   }
   UnifiedGameModel unifiedGames(libraryDatabasePath);
   unifiedGames.addSourceModel(games.get());
@@ -852,7 +897,7 @@ int main(int argc, char* argv[]) {
             fail(QStringLiteral("Escape did not close the filter picker and restore focus"));
             return;
           }
-          application.quit();
+          runEmptyFilterFocusTest(quickWindow, &application);
         });
       });
 });

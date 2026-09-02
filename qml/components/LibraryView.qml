@@ -30,11 +30,11 @@ Item {
     function focusGrid() {
         if (grid.count > 0) {
             grid.forceActiveFocus()
-        } else if (emptyClearButton.visible) {
+        } else if (!root.scanning && root.filtersActive) {
             // Keyboard focus needs somewhere to land when the last visible game leaves the grid.
-            emptyClearButton.forceActiveFocus()
-        } else if (emptyRescanButton.visible) {
-            emptyRescanButton.forceActiveFocus()
+            Qt.callLater(emptyClearButton.forceActiveFocus)
+        } else if (!root.scanning) {
+            Qt.callLater(emptyRescanButton.forceActiveFocus)
         }
     }
 
@@ -320,6 +320,7 @@ Item {
         }
         GlassButton {
             id: emptyClearButton
+            objectName: "emptyClearButton"
             anchors.horizontalCenter: parent.horizontalCenter
             visible: !root.scanning && root.filtersActive
             text: "CLEAR FILTERS"
