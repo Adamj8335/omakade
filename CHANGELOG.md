@@ -12,6 +12,11 @@
   window or launch from the cached library without opening one.
 - Opened fullscreen when Sunshine starts Omakade for a Moonlight client.
 
+### Library
+
+- Replaced click-to-cycle on the Status, Collection, and Tag filters with a picker list that
+  opens on the current value and works with keyboard, mouse, and controller.
+
 ## 1.3.1
 
 - Left the library, database, and cover requests alone when a Steam rescan finds the same

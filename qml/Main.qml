@@ -18,6 +18,10 @@ ApplicationWindow {
     property bool diagnosticsOpen: false
     property bool linkDialogOpen: false
     property bool collectionDeleteOpen: false
+    // The organize filters open a picker list instead of cycling through every value.
+    property bool filterPickerOpen: false
+    property string filterPickerKind: ""
+    property var filterPickerValues: []
     property string pendingCollectionDelete: ""
     readonly property bool libraryScanning: SteamLibrary ? SteamLibrary.scanning : false
     readonly property int ownedGameCount: SteamAccount
@@ -34,7 +38,34 @@ ApplicationWindow {
         return false
     }
 
+    function openFilterPicker(kind, values) {
+        filterPickerKind = kind
+        filterPickerValues = values
+        filterPickerOpen = true
+    }
+
+    function filterPickerCurrent() {
+        return filterPickerKind === "status" ? Library.completionFilter
+             : filterPickerKind === "collection" ? Library.collectionFilter
+             : Library.tagFilter
+    }
+
+    function applyFilterPick(value) {
+        if (filterPickerKind === "status") {
+            Library.completionFilter = value
+        } else if (filterPickerKind === "collection") {
+            Library.collectionFilter = value
+        } else {
+            Library.tagFilter = value
+        }
+        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+        filterPickerOpen = false
+    }
+
     function navigationContainer() {
+        if (filterPickerOpen) {
+            return filterPickerOverlay
+        }
         if (collectionDeleteOpen) {
             return collectionDeleteOverlay
         }
@@ -266,14 +297,6 @@ ApplicationWindow {
         toastTimer.restart()
     }
 
-    function nextFilter(current, values) {
-        if (!values || values.length === 0) {
-            return ""
-        }
-        const index = values.indexOf(current)
-        return index < 0 ? values[0] : index + 1 < values.length ? values[index + 1] : ""
-    }
-
     function filterLabel(prefix, value, available) {
         if (!value || value.length === 0) {
             return available && available.length > 0 ? prefix + " (" + available.length + ")" : prefix
@@ -485,7 +508,9 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            if (root.linkDialogOpen) {
+            if (root.filterPickerOpen) {
+                root.filterPickerOpen = false
+            } else if (root.linkDialogOpen) {
                 root.linkDialogOpen = false
             } else if (root.collectionDeleteOpen) {
                 root.collectionDeleteOpen = false
@@ -1022,12 +1047,8 @@ ApplicationWindow {
                     compact: true
                     text: root.filterLabel("STATUS", Library.completionFilter)
                     selected: Library.completionFilter !== ""
-                    onClicked: {
-                        Library.completionFilter = root.nextFilter(
-                                    Library.completionFilter,
-                                    ["backlog", "playing", "completed", "abandoned"])
-                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
-                    }
+                    onClicked: root.openFilterPicker("status",
+                                                     ["backlog", "playing", "completed", "abandoned"])
                 }
                 GlassButton {
                     id: collectionFilterButton
@@ -1041,9 +1062,7 @@ ApplicationWindow {
                             root.showToast("No collections yet. Open a game and use + New Collection.")
                             return
                         }
-                        Library.collectionFilter = root.nextFilter(
-                                    Library.collectionFilter, Library.collectionNames)
-                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        root.openFilterPicker("collection", Library.collectionNames)
                     }
                 }
                 GlassButton {
@@ -1057,8 +1076,7 @@ ApplicationWindow {
                             root.showToast("No tags yet. Open a game and add tags under Organize.")
                             return
                         }
-                        Library.tagFilter = root.nextFilter(Library.tagFilter, Library.tagNames)
-                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        root.openFilterPicker("tag", Library.tagNames)
                     }
                 }
                 GlassButton {
@@ -1385,6 +1403,101 @@ ApplicationWindow {
                     font.pixelSize: 11
                 }
             }
+            }
+        }
+    }
+
+    Rectangle {
+        id: filterPickerOverlay
+        objectName: "filterPickerOverlay"
+        property var previousFocus: null
+        anchors.fill: parent
+        visible: root.filterPickerOpen
+        z: 30
+        Keys.onPressed: function(event) { root.handleArrowKey(filterPickerOverlay, event) }
+        color: root.alpha(Theme.darkerBackground, 0.6)
+        onVisibleChanged: {
+            if (visible) {
+                previousFocus = root.activeFocusItem
+                Qt.callLater(function() {
+                    // Land on the current value so Enter keeps it and arrows move from it.
+                    const current = root.filterPickerCurrent()
+                    const index = current === "" ? 0 : root.filterPickerValues.indexOf(current) + 1
+                    const item = pickerList.itemAtIndex(Math.max(0, index))
+                    if (item) {
+                        pickerList.currentIndex = Math.max(0, index)
+                        item.forceActiveFocus(Qt.TabFocusReason)
+                    } else {
+                        root.focusWithin(filterPickerOverlay, true)
+                    }
+                })
+            } else if (previousFocus) {
+                root.restoreFocus(previousFocus)
+                previousFocus = null
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.filterPickerOpen = false
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(380, root.width - 56)
+            height: Math.min(pickerColumn.implicitHeight + 40, root.height - 56)
+            radius: Math.max(8, Theme.cornerRadius)
+            color: root.alpha(Theme.background, 0.98)
+            border.color: root.alpha(Theme.foreground, 0.22)
+
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+                id: pickerColumn
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 10
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: root.filterPickerKind === "status" ? "FILTER BY STATUS"
+                            : root.filterPickerKind === "collection" ? "FILTER BY COLLECTION"
+                            : "FILTER BY TAG"
+                        color: Theme.brightForeground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                    }
+                    Item { Layout.fillWidth: true }
+                    GlassButton {
+                        compact: true
+                        text: "CLOSE"
+                        onClicked: root.filterPickerOpen = false
+                    }
+                }
+                ListView {
+                    id: pickerList
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(count * 43, root.height - 160)
+                    implicitHeight: Layout.preferredHeight
+                    clip: true
+                    spacing: 6
+                    // The first row clears the filter; the rest are the available values.
+                    model: [""].concat(root.filterPickerValues)
+                    delegate: GlassButton {
+                        required property string modelData
+                        required property int index
+                        width: pickerList.width
+                        compact: true
+                        selected: modelData === root.filterPickerCurrent()
+                        text: modelData === ""
+                              ? (root.filterPickerKind === "status" ? "ANY STATUS"
+                                 : root.filterPickerKind === "collection" ? "ALL COLLECTIONS"
+                                 : "ALL TAGS")
+                              : modelData.toUpperCase()
+                        onClicked: root.applyFilterPick(modelData)
+                    }
+                }
             }
         }
     }

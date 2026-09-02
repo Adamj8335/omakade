@@ -796,20 +796,47 @@ int main(int argc, char* argv[]) {
                                                                             Qt::NoModifier);
                                                                         QTimer::singleShot(
                                                                             50, quickWindow,
-                                                                            [grid, &application,
-                                                                             fail] {
-                                                                              if (!grid->hasActiveFocus()) {
-                                                                                fail(QStringLiteral(
-                                                                                    "Keyboard F6 "
-                                                                                    "did "
-                                                                                    "not return to "
-                                                                                    "the "
-                                                                                    "library "
-                                                                                    "grid"));
-                                                                                return;
-                                                                              }
-                                                                              application.quit();
-                                                                            });
+                                                                            [grid, quickWindow, &application, &controller, fail] {
+  if (!grid->hasActiveFocus()) {
+    fail(QStringLiteral("Keyboard F6 did not return to the library grid"));
+    return;
+  }
+  // The organize filters open a picker list. Return opens it on the current value and
+  // Escape closes it and hands focus back to the button.
+  auto* statusFilter =
+      quickWindow->findChild<QQuickItem*>(QStringLiteral("statusFilterButton"));
+  auto* picker =
+      quickWindow->findChild<QQuickItem*>(QStringLiteral("filterPickerOverlay"));
+  if (statusFilter == nullptr || picker == nullptr) {
+    fail(QStringLiteral("Navigation test could not find the filter picker"));
+    return;
+  }
+  statusFilter->forceActiveFocus();
+  controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
+  QTimer::singleShot(
+      80, quickWindow, [quickWindow, statusFilter, picker, &application, &controller, fail] {
+        bool focusInsidePicker = false;
+        for (QQuickItem* item = quickWindow->activeFocusItem(); item != nullptr;
+             item = item->parentItem()) {
+          focusInsidePicker = focusInsidePicker || item == picker;
+        }
+        if (!quickWindow->property("filterPickerOpen").toBool() || !picker->isVisible() ||
+            !focusInsidePicker) {
+          fail(QStringLiteral("Return did not open the status filter picker with focus"));
+          return;
+        }
+        controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
+        QTimer::singleShot(80, quickWindow, [quickWindow, statusFilter, &application, fail] {
+          if (quickWindow->property("filterPickerOpen").toBool() ||
+              !statusFilter->hasActiveFocus()) {
+            fail(QStringLiteral("Escape did not close the filter picker and restore focus"));
+            return;
+          }
+          application.quit();
+        });
+      });
+});
+
                                                                       });
                                                                 });
                                                           });
