@@ -28,7 +28,11 @@ RetroArchGameModel::RetroArchGameModel(const QString& databasePath, QObject* par
       m_connectionName(
           QStringLiteral("omakade-retroarch-%1").arg(reinterpret_cast<quintptr>(this))) {
   connect(&m_scanWatcher, &QFutureWatcher<RetroArchScanResult>::finished, this,
-          [this] { applyScan(m_scanWatcher.result()); });
+          [this] {
+            m_scanning = false;
+            applyScan(m_scanWatcher.result());
+            emit statusChanged();
+          });
   if (openDatabase(databasePath) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
@@ -128,6 +132,7 @@ void RetroArchGameModel::refresh() {
   if (m_scanWatcher.isRunning()) {
     return;
   }
+  m_scanning = true;
   const QStringList roots = RetroArchScanner::discoverRoots();
   setStatus(QStringLiteral("Scanning RetroArch library"));
   m_scanWatcher.setFuture(QtConcurrent::run([roots] { return RetroArchScanner::scan(roots); }));

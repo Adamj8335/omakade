@@ -14,6 +14,7 @@ class RetroArchGameModel final : public QAbstractListModel {
   Q_PROPERTY(QString errorText READ errorText NOTIFY statusChanged)
   Q_PROPERTY(QStringList detectedPaths READ detectedPaths NOTIFY statusChanged)
   Q_PROPERTY(qint64 lastScan READ lastScan NOTIFY statusChanged)
+  Q_PROPERTY(bool scanning READ scanning NOTIFY statusChanged)
 
 public:
   explicit RetroArchGameModel(const QString& databasePath, QObject* parent = nullptr);
@@ -29,6 +30,7 @@ public:
   Q_INVOKABLE void toggleFavorite(int row);
   Q_INVOKABLE void toggleHidden(int row);
   Q_INVOKABLE void refresh();
+  [[nodiscard]] bool scanning() const { return m_scanning; }
   void refreshFromRoots(const QStringList& roots);
 
 signals:
@@ -59,4 +61,5 @@ private:
   QStringList m_detectedPaths;
   qint64 m_lastScan = 0;
   QFutureWatcher<RetroArchScanResult> m_scanWatcher;
+  bool m_scanning = false;
 };

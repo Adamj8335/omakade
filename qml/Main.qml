@@ -23,7 +23,11 @@ ApplicationWindow {
     property string filterPickerKind: ""
     property var filterPickerValues: []
     property string pendingCollectionDelete: ""
-    readonly property bool libraryScanning: SteamLibrary ? SteamLibrary.scanning : false
+    readonly property bool libraryScanning: (SteamLibrary ? SteamLibrary.scanning : false)
+                                            || (LutrisLibrary ? LutrisLibrary.scanning : false)
+                                            || (HeroicLibrary ? HeroicLibrary.scanning : false)
+                                            || (FaugusLibrary ? FaugusLibrary.scanning : false)
+                                            || (RetroArchLibrary ? RetroArchLibrary.scanning : false)
     readonly property int ownedGameCount: SteamAccount
                                           ? SteamAccount.ownedGameCount
                                           : OwnedGameCountOverride
