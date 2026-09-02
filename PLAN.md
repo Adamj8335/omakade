@@ -769,6 +769,25 @@ Gate:
   without reaching for a keyboard or mouse
 - Leaving couch mode restores the prior desktop layout and focus position
 
+### 1.4 candidates
+
+Collected after the 1.3.0 release:
+
+- Controller-first couch mode (M6 above)
+- A picker list for the Collection and Tag filters instead of click-to-cycle,
+  with controller focus handling
+- aarch64 packages in releases (issue 13, contributor offered a workflow PR)
+- Optional RetroAchievements provider (issue 10)
+- PCSX2 and Ryujinx sources (PR 14, needs a rebase and off-by-default sources)
+- Legacy plaintext RetroArch playlists, Lutris `hidden` flag and banner artwork
+- Demo mode should use its own config and skip the single-instance lock
+- Settings source rows should update in place instead of rebuilding on every
+  status change
+- Achievement cards should use a lazy view for games with thousands of entries
+- Plain-text rendering for game titles so markup-looking names cannot render
+  as markup
+- Re-runnable release workflow and a pinned Arch base image for CI
+
 ## Explicitly deferred
 
 - Installing, updating, repairing, or moving games
