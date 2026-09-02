@@ -560,6 +560,8 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
       m_failedCovers.clear();
       requestMissingCovers();
     }
+    // Steam saves by rename, which drops the watch on the replaced file, so re-arm them.
+    rebuildWatchPaths(result);
     reportScan(result);
     return;
   }
