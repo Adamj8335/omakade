@@ -14,8 +14,14 @@ SingleInstance::SingleInstance(const QString& serverName, QObject* parent)
     : QObject(parent), m_serverName(serverName.isEmpty() ? defaultServerName() : serverName) {
   connect(&m_server, &QLocalServer::newConnection, this, [this] {
     while (QLocalSocket* socket = m_server.nextPendingConnection()) {
-      connect(socket, &QLocalSocket::readyRead, this, [this, socket] {
-        const QByteArray command = socket->readAll().trimmed();
+      // The client writes one command and closes, so act once the whole message is in.
+      auto* buffer = new QByteArray;
+      connect(socket, &QLocalSocket::readyRead, this,
+              [socket, buffer] { buffer->append(socket->readAll()); });
+      connect(socket, &QLocalSocket::disconnected, this, [this, socket, buffer] {
+        buffer->append(socket->readAll());
+        const QByteArray command = buffer->trimmed();
+        delete buffer;
         if (command.startsWith("play ")) {
           emit playRequested(QString::fromUtf8(command.mid(5)).trimmed());
         } else if (command == "quit") {
@@ -24,9 +30,8 @@ SingleInstance::SingleInstance(const QString& serverName, QObject* parent)
           // "activate stream" comes from a launch inside a Sunshine session.
           emit activationRequested(command.contains("stream"));
         }
-        socket->disconnectFromServer();
+        socket->deleteLater();
       });
-      connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
     }
   });
 }
