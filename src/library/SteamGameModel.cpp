@@ -497,6 +497,10 @@ void SteamGameModel::loadDatabase() {
     if (isLandscapeHeader(steam.coverPath)) {
       steam.coverPath.clear();
     }
+    if (steam.coverPath.startsWith(coverCacheRoot()) && !QFileInfo::exists(steam.coverPath)) {
+      // A pruned cached cover must be requested again instead of showing a broken image.
+      steam.coverPath.clear();
+    }
     const QString cachedCover = coverCachePath(steam.appId);
     if (steam.coverPath.isEmpty() && QFileInfo::exists(cachedCover)) {
       steam.coverPath = cachedCover;
@@ -515,12 +519,20 @@ void SteamGameModel::loadDatabase() {
   m_games = loaded;
   endResetModel();
   query.finish();
+  if (cachedCoverUpdates.isEmpty()) {
+    return;
+  }
+  // One transaction instead of one autocommit per game keeps this off the critical path.
+  const bool transaction = m_database.transaction();
   for (const auto& [appId, coverPath] : cachedCoverUpdates) {
     QSqlQuery update(m_database);
     update.prepare(QStringLiteral("UPDATE installations SET cover_path = ? WHERE app_id = ?"));
     update.addBindValue(coverPath);
     update.addBindValue(appId);
     update.exec();
+  }
+  if (transaction) {
+    m_database.commit();
   }
 }
 
@@ -862,15 +874,35 @@ void SteamGameModel::pruneCoverCache() {
     files.append({info.absoluteFilePath(), info.lastModified(), info.size()});
     total += info.size();
   }
-  std::sort(files.begin(), files.end(), [](const CachedFile& left, const CachedFile& right) {
-    return left.modified < right.modified;
-  });
+  if (total <= limit) {
+    return;
+  }
+  // Covers the library still shows go last, so leftovers from removed games are trimmed first.
+  QSet<QString> referenced;
+  for (const Game& game : m_games) {
+    referenced.insert(game.steam.coverPath);
+  }
+  std::sort(files.begin(), files.end(),
+            [&referenced](const CachedFile& left, const CachedFile& right) {
+              const bool leftReferenced = referenced.contains(left.path);
+              const bool rightReferenced = referenced.contains(right.path);
+              if (leftReferenced != rightReferenced) {
+                return !leftReferenced;
+              }
+              return left.modified < right.modified;
+            });
   for (const CachedFile& file : files) {
     if (total <= limit) {
       break;
     }
     if (QFile::remove(file.path)) {
       total -= file.size;
+      for (int row = 0; row < m_games.size(); ++row) {
+        if (m_games[row].steam.coverPath == file.path) {
+          m_games[row].steam.coverPath.clear();
+          emit dataChanged(index(row), index(row), {GameRoles::CoverPath});
+        }
+      }
     }
   }
 }
