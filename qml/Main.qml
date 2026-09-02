@@ -1305,6 +1305,14 @@ ApplicationWindow {
                     focusPolicy: Qt.StrongFocus
                     Accessible.name: "Link " + modelData.title + " from " + modelData.source
                     onClicked: root.linkCandidate(modelData)
+                    Keys.onReturnPressed: function(event) {
+                        root.linkCandidate(modelData)
+                        event.accepted = true
+                    }
+                    Keys.onEnterPressed: function(event) {
+                        root.linkCandidate(modelData)
+                        event.accepted = true
+                    }
                     onActiveFocusChanged: {
                         if (activeFocus) {
                             candidateList.currentIndex = index

@@ -41,6 +41,8 @@
   one instead of doing nothing.
 - Added a visible whole-library Rescan action.
 - Made Escape close the new-collection editor before closing game details.
+- Made Return, Enter, and the controller confirm button press every button on desktops
+  whose Qt platform theme does not map them.
 - Clarified that automatic closing after launch is an opt-in setting.
 
 ### Fixes and housekeeping

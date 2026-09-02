@@ -20,6 +20,21 @@ Button {
     spacing: 8
     focusPolicy: Qt.StrongFocus
 
+    // Qt only presses a Button on Return or Enter when the platform theme says so. Controller
+    // and keyboard confirm must work on every desktop, so handle both keys here.
+    Keys.onReturnPressed: function(event) {
+        if (enabled) {
+            clicked()
+        }
+        event.accepted = true
+    }
+    Keys.onEnterPressed: function(event) {
+        if (enabled) {
+            clicked()
+        }
+        event.accepted = true
+    }
+
     background: Rectangle {
         radius: Math.max(4, Theme.cornerRadius)
         color: root.down
