@@ -43,7 +43,11 @@ HeroicGameModel::HeroicGameModel(const QString& omakadeDatabasePath, QObject* pa
     : QAbstractListModel(parent),
       m_connectionName(QStringLiteral("omakade-heroic-%1").arg(reinterpret_cast<quintptr>(this))) {
   connect(&m_scanWatcher, &QFutureWatcher<HeroicScanResult>::finished, this,
-          [this] { applyScan(m_scanWatcher.result()); });
+          [this] {
+            m_scanning = false;
+            applyScan(m_scanWatcher.result());
+            emit statusChanged();
+          });
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
@@ -142,6 +146,7 @@ void HeroicGameModel::refresh() {
   if (m_scanWatcher.isRunning()) {
     return;
   }
+  m_scanning = true;
   const QStringList roots = HeroicScanner::discoverRoots();
   setStatus(QStringLiteral("Scanning Heroic library"));
   m_scanWatcher.setFuture(QtConcurrent::run([roots] { return HeroicScanner::scan(roots); }));

@@ -20,6 +20,10 @@ class AppSettings final : public QObject {
       bool retroArchEnabled READ retroArchEnabled WRITE setRetroArchEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool closeAfterLaunch READ closeAfterLaunch WRITE setCloseAfterLaunch NOTIFY
                  closeAfterLaunchChanged)
+  Q_PROPERTY(bool sunshineOmakadeApp READ sunshineOmakadeApp WRITE setSunshineOmakadeApp NOTIFY
+                 sunshineChanged)
+  Q_PROPERTY(bool sunshineGameApps READ sunshineGameApps WRITE setSunshineGameApps NOTIFY
+                 sunshineChanged)
 
 public:
   explicit AppSettings(const QString& path = {}, QObject* parent = nullptr);
@@ -44,6 +48,10 @@ public:
   void setRetroArchEnabled(bool value);
   [[nodiscard]] bool closeAfterLaunch() const;
   void setCloseAfterLaunch(bool value);
+  [[nodiscard]] bool sunshineOmakadeApp() const;
+  void setSunshineOmakadeApp(bool value);
+  [[nodiscard]] bool sunshineGameApps() const;
+  void setSunshineGameApps(bool value);
 
 signals:
   void reducedMotionChanged();
@@ -52,6 +60,7 @@ signals:
   void igdbClientIdChanged();
   void sourcesChanged();
   void closeAfterLaunchChanged();
+  void sunshineChanged();
 
 private:
   [[nodiscard]] static QString defaultPath();
@@ -69,4 +78,6 @@ private:
   bool m_faugusEnabled = true;
   bool m_retroArchEnabled = true;
   bool m_closeAfterLaunch = false;
+  bool m_sunshineOmakadeApp = false;
+  bool m_sunshineGameApps = false;
 };

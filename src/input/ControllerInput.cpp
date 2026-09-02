@@ -125,6 +125,11 @@ void ControllerInput::pollEvents() {
       closeController(id);
     }
   }
+  // With no pad connected only hot-plug events matter, so stop waking up 125 times a second.
+  const int interval = m_controllers.isEmpty() ? 250 : 8;
+  if (m_pollTimer.interval() != interval) {
+    m_pollTimer.setInterval(interval);
+  }
 }
 
 void ControllerInput::openAvailableControllers() {

@@ -4,6 +4,8 @@
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
+#include "launch/PlayRequest.h"
+#include "streaming/SunshineIntegration.h"
 #include "library/FaugusGameModel.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
@@ -78,6 +80,10 @@ int main(int argc, char* argv[]) {
   const QString screenshotPath =
       optionValue(application.arguments(), QStringLiteral("--render-screenshot"));
   const QString renderSize = optionValue(application.arguments(), QStringLiteral("--render-size"));
+  // `--play Source:runner:id` launches one library game, through the running window when
+  // there is one, and `--quit` closes the running window. Sunshine app entries use both.
+  const QString playKey = optionValue(application.arguments(), QStringLiteral("--play"));
+  const bool quitRequest = application.arguments().contains(QStringLiteral("--quit"));
   const bool renderMode = !screenshotPath.isEmpty();
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
   const bool navigationTest =
@@ -93,8 +99,16 @@ int main(int argc, char* argv[]) {
   if (benchmarkMode) {
     qInfo() << "Theme ready in" << startupTimer.elapsed() << "ms";
   }
+  if (quitRequest) {
+    return SingleInstance::sendCommand({}, "quit") ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
   SingleInstance singleInstance;
-  if (!smokeTest && !renderMode && !navigationTest && !singleInstance.claimOrNotify()) {
+  const QByteArray instanceCommand =
+      !playKey.isEmpty()                 ? QByteArray("play ") + playKey.toUtf8()
+      : SunshineIntegration::streaming() ? QByteArray("activate stream")
+                                         : QByteArray("activate");
+  if (!smokeTest && !renderMode && !navigationTest &&
+      !singleInstance.claimOrNotify(instanceCommand)) {
     return EXIT_SUCCESS;
   }
   const QString settingsPath =
@@ -156,6 +170,16 @@ int main(int argc, char* argv[]) {
   applySourcePreferences();
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
                    applySourcePreferences);
+  if (!playKey.isEmpty()) {
+    // No window is running, so launch from the cached library without showing one.
+    GameLauncher headlessLauncher;
+    QString error;
+    if (!PlayRequest::perform(unifiedGames, headlessLauncher, LaunchKey::parse(playKey), &error)) {
+      qCritical().noquote() << error;
+      return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+  }
   LibraryFilterModel library;
   library.setSourceModel(&unifiedGames);
   if (uninstalledLayoutTest) {
@@ -231,6 +255,12 @@ int main(int argc, char* argv[]) {
         std::make_unique<GameInsightsService>(steamLibrary->databasePath(), &preferences);
   }
   GameLauncher launcher;
+  std::unique_ptr<SunshineIntegration> sunshine;
+  if (steamLibrary != nullptr) {
+    sunshine = std::make_unique<SunshineIntegration>(&unifiedGames, &preferences);
+    sunshine->setIconSource(
+        QStringLiteral(":/icons/resources/icons/io.github.tsouth89.Omakade.svg"));
+  }
 
   QObject::connect(&controller, &ControllerInput::keyRequested, &application,
                    [&application](int key, int modifiers) {
@@ -264,6 +294,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamAccount"), steamAccount.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Insights"), gameInsights.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("Sunshine"), sunshine.get());
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"),
                                            (demoMode || stressMode) && !ownedLayoutTest);
   engine.rootContext()->setContextProperty(QStringLiteral("StartupMilliseconds"),
@@ -290,12 +321,39 @@ int main(int argc, char* argv[]) {
   }
 
   auto* rootWindow = qobject_cast<QWindow*>(engine.rootObjects().constFirst());
+  if (rootWindow != nullptr && qEnvironmentVariableIsSet("SUNSHINE_APP_ID") && !renderMode &&
+      !navigationTest && !smokeTest) {
+    // Sunshine launched Omakade for a Moonlight client, so fill the streamed display.
+    rootWindow->showFullScreen();
+  }
   if (auto* quickWindow = qobject_cast<QQuickWindow*>(rootWindow)) {
     const QStringList dimensions = renderSize.split(QLatin1Char('x'));
     if ((renderMode || navigationTest) && dimensions.size() == 2) {
       quickWindow->resize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
     }
     if (renderMode) {
+      // `--render-overlay=settings|picker` opens an overlay so visual checks can cover it.
+      const QString overlay =
+          optionValue(application.arguments(), QStringLiteral("--render-overlay"));
+      if (overlay == QStringLiteral("settings")) {
+        quickWindow->setProperty("diagnosticsOpen", true);
+        QTimer::singleShot(400, quickWindow, [quickWindow] {
+          // Scroll to the end so the lower sections land in the capture.
+          auto* scroll = quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
+          QObject* flickable =
+              scroll == nullptr ? nullptr : scroll->property("contentItem").value<QObject*>();
+          if (flickable != nullptr) {
+            flickable->setProperty("contentY", flickable->property("contentHeight").toReal() -
+                                                   scroll->height());
+          }
+        });
+      } else if (overlay == QStringLiteral("picker")) {
+        QMetaObject::invokeMethod(
+            quickWindow, "openFilterPicker", Q_ARG(QVariant, QStringLiteral("collection")),
+            Q_ARG(QVariant, QVariant(QStringList{QStringLiteral("Couch co-op"),
+                                                 QStringLiteral("Cozy evenings"),
+                                                 QStringLiteral("Finish this year")})));
+      }
       QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
         const QImage screenshot = quickWindow->grabWindow();
         if (screenshot.isNull() || !screenshot.save(screenshotPath)) {
@@ -758,20 +816,47 @@ int main(int argc, char* argv[]) {
                                                                             Qt::NoModifier);
                                                                         QTimer::singleShot(
                                                                             50, quickWindow,
-                                                                            [grid, &application,
-                                                                             fail] {
-                                                                              if (!grid->hasActiveFocus()) {
-                                                                                fail(QStringLiteral(
-                                                                                    "Keyboard F6 "
-                                                                                    "did "
-                                                                                    "not return to "
-                                                                                    "the "
-                                                                                    "library "
-                                                                                    "grid"));
-                                                                                return;
-                                                                              }
-                                                                              application.quit();
-                                                                            });
+                                                                            [grid, quickWindow, &application, &controller, fail] {
+  if (!grid->hasActiveFocus()) {
+    fail(QStringLiteral("Keyboard F6 did not return to the library grid"));
+    return;
+  }
+  // The organize filters open a picker list. Return opens it on the current value and
+  // Escape closes it and hands focus back to the button.
+  auto* statusFilter =
+      quickWindow->findChild<QQuickItem*>(QStringLiteral("statusFilterButton"));
+  auto* picker =
+      quickWindow->findChild<QQuickItem*>(QStringLiteral("filterPickerOverlay"));
+  if (statusFilter == nullptr || picker == nullptr) {
+    fail(QStringLiteral("Navigation test could not find the filter picker"));
+    return;
+  }
+  statusFilter->forceActiveFocus();
+  controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
+  QTimer::singleShot(
+      80, quickWindow, [quickWindow, statusFilter, picker, &application, &controller, fail] {
+        bool focusInsidePicker = false;
+        for (QQuickItem* item = quickWindow->activeFocusItem(); item != nullptr;
+             item = item->parentItem()) {
+          focusInsidePicker = focusInsidePicker || item == picker;
+        }
+        if (!quickWindow->property("filterPickerOpen").toBool() || !picker->isVisible() ||
+            !focusInsidePicker) {
+          fail(QStringLiteral("Return did not open the status filter picker with focus"));
+          return;
+        }
+        controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
+        QTimer::singleShot(80, quickWindow, [quickWindow, statusFilter, &application, fail] {
+          if (quickWindow->property("filterPickerOpen").toBool() ||
+              !statusFilter->hasActiveFocus()) {
+            fail(QStringLiteral("Escape did not close the filter picker and restore focus"));
+            return;
+          }
+          application.quit();
+        });
+      });
+});
+
                                                                       });
                                                                 });
                                                           });
@@ -788,12 +873,29 @@ int main(int argc, char* argv[]) {
     }
   }
   QObject::connect(&singleInstance, &SingleInstance::activationRequested, &application,
-                   [rootWindow] {
-                     if (rootWindow != nullptr) {
-                       rootWindow->show();
-                       rootWindow->requestActivate();
+                   [rootWindow](bool fullscreen) {
+                     if (rootWindow == nullptr) {
+                       return;
                      }
+                     if (fullscreen) {
+                       rootWindow->showFullScreen();
+                     } else {
+                       rootWindow->show();
+                     }
+                     rootWindow->requestActivate();
                    });
+  QObject* rootObject = engine.rootObjects().constFirst();
+  QObject::connect(&singleInstance, &SingleInstance::playRequested, &application,
+                   [&unifiedGames, &launcher, rootObject](const QString& key) {
+                     QString error;
+                     const bool okay = PlayRequest::perform(unifiedGames, launcher,
+                                                            LaunchKey::parse(key), &error);
+                     QMetaObject::invokeMethod(
+                         rootObject, "showToast",
+                         Q_ARG(QVariant, okay ? QStringLiteral("Launching from Sunshine") : error));
+                   });
+  QObject::connect(&singleInstance, &SingleInstance::quitRequested, &application,
+                   &QCoreApplication::quit);
 
   if (steamLibrary != nullptr && preferences.steamEnabled()) {
     QTimer::singleShot(0, steamLibrary, &SteamGameModel::refresh);

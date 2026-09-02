@@ -172,6 +172,30 @@ void AppSettings::load() {
   m_faugusEnabled = readEnabled(QStringLiteral("faugus_enabled"), true);
   m_retroArchEnabled = readEnabled(QStringLiteral("retroarch_enabled"), true);
   m_closeAfterLaunch = readEnabled(QStringLiteral("close_after_launch"), false);
+  m_sunshineOmakadeApp = readEnabled(QStringLiteral("sunshine_omakade_app"), false);
+  m_sunshineGameApps = readEnabled(QStringLiteral("sunshine_game_apps"), false);
+}
+
+bool AppSettings::sunshineOmakadeApp() const { return m_sunshineOmakadeApp; }
+
+void AppSettings::setSunshineOmakadeApp(bool value) {
+  if (m_sunshineOmakadeApp == value) {
+    return;
+  }
+  m_sunshineOmakadeApp = value;
+  save();
+  emit sunshineChanged();
+}
+
+bool AppSettings::sunshineGameApps() const { return m_sunshineGameApps; }
+
+void AppSettings::setSunshineGameApps(bool value) {
+  if (m_sunshineGameApps == value) {
+    return;
+  }
+  m_sunshineGameApps = value;
+  save();
+  emit sunshineChanged();
 }
 
 void AppSettings::save() const {
@@ -183,7 +207,8 @@ void AppSettings::save() const {
   file.write(QStringLiteral("reduced_motion = %1\nartwork_cache_limit_mb = %2\nsteam_id = "
                             "\"%3\"\nigdb_client_id = \"%4\"\nsteam_enabled = %5\n"
                             "lutris_enabled = %6\nheroic_enabled = %7\nfaugus_enabled = %8\n"
-                            "retroarch_enabled = %9\nclose_after_launch = %10\n")
+                            "retroarch_enabled = %9\nclose_after_launch = %10\n"
+                            "sunshine_omakade_app = %11\nsunshine_game_apps = %12\n")
                  .arg(m_reducedMotion ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_artworkCacheLimitMb)
                  .arg(m_steamId)
@@ -194,6 +219,8 @@ void AppSettings::save() const {
                  .arg(m_faugusEnabled ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_retroArchEnabled ? QStringLiteral("true") : QStringLiteral("false"))
                  .arg(m_closeAfterLaunch ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(m_sunshineOmakadeApp ? QStringLiteral("true") : QStringLiteral("false"))
+                 .arg(m_sunshineGameApps ? QStringLiteral("true") : QStringLiteral("false"))
                  .toUtf8());
   file.commit();
 }

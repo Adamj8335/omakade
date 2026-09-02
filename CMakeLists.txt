@@ -49,6 +49,8 @@ add_library(omakade_core STATIC
   src/library/UnifiedGameModel.h
   src/launch/GameLauncher.cpp
   src/launch/GameLauncher.h
+  src/launch/PlayRequest.cpp
+  src/launch/PlayRequest.h
   src/launch/SteamLauncher.cpp
   src/launch/SteamLauncher.h
   src/metadata/IgdbApi.cpp
@@ -68,6 +70,8 @@ add_library(omakade_core STATIC
   src/sources/heroic/HeroicScanner.h
   src/sources/faugus/FaugusScanner.cpp
   src/sources/faugus/FaugusScanner.h
+  src/streaming/SunshineIntegration.cpp
+  src/streaming/SunshineIntegration.h
   src/theme/OmarchyTheme.cpp
   src/theme/OmarchyTheme.h
 )

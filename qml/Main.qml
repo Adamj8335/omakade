@@ -18,8 +18,16 @@ ApplicationWindow {
     property bool diagnosticsOpen: false
     property bool linkDialogOpen: false
     property bool collectionDeleteOpen: false
+    // The organize filters open a picker list instead of cycling through every value.
+    property bool filterPickerOpen: false
+    property string filterPickerKind: ""
+    property var filterPickerValues: []
     property string pendingCollectionDelete: ""
-    readonly property bool libraryScanning: SteamLibrary ? SteamLibrary.scanning : false
+    readonly property bool libraryScanning: (SteamLibrary ? SteamLibrary.scanning : false)
+                                            || (LutrisLibrary ? LutrisLibrary.scanning : false)
+                                            || (HeroicLibrary ? HeroicLibrary.scanning : false)
+                                            || (FaugusLibrary ? FaugusLibrary.scanning : false)
+                                            || (RetroArchLibrary ? RetroArchLibrary.scanning : false)
     readonly property int ownedGameCount: SteamAccount
                                           ? SteamAccount.ownedGameCount
                                           : OwnedGameCountOverride
@@ -34,7 +42,34 @@ ApplicationWindow {
         return false
     }
 
+    function openFilterPicker(kind, values) {
+        filterPickerKind = kind
+        filterPickerValues = values
+        filterPickerOpen = true
+    }
+
+    function filterPickerCurrent() {
+        return filterPickerKind === "status" ? Library.completionFilter
+             : filterPickerKind === "collection" ? Library.collectionFilter
+             : Library.tagFilter
+    }
+
+    function applyFilterPick(value) {
+        if (filterPickerKind === "status") {
+            Library.completionFilter = value
+        } else if (filterPickerKind === "collection") {
+            Library.collectionFilter = value
+        } else {
+            Library.tagFilter = value
+        }
+        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+        filterPickerOpen = false
+    }
+
     function navigationContainer() {
+        if (filterPickerOpen) {
+            return filterPickerOverlay
+        }
         if (collectionDeleteOpen) {
             return collectionDeleteOverlay
         }
@@ -271,14 +306,6 @@ ApplicationWindow {
         toastTimer.restart()
     }
 
-    function nextFilter(current, values) {
-        if (!values || values.length === 0) {
-            return ""
-        }
-        const index = values.indexOf(current)
-        return index < 0 ? values[0] : index + 1 < values.length ? values[index + 1] : ""
-    }
-
     function filterLabel(prefix, value, available) {
         if (!value || value.length === 0) {
             return available && available.length > 0 ? prefix + " (" + available.length + ")" : prefix
@@ -510,7 +537,9 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            if (root.linkDialogOpen) {
+            if (root.filterPickerOpen) {
+                root.filterPickerOpen = false
+            } else if (root.linkDialogOpen) {
                 root.linkDialogOpen = false
             } else if (root.collectionDeleteOpen) {
                 root.collectionDeleteOpen = false
@@ -558,7 +587,9 @@ ApplicationWindow {
     }
 
     onActiveChanged: {
-        if (active && root.navigationContainer() === null && !searchField.activeFocus) {
+        // Only give the grid focus when nothing has it, so alt-tabbing back does not pull
+        // focus away from a toolbar control or an empty-state button.
+        if (active && root.navigationContainer() === null && !root.activeFocusItem) {
             Qt.callLater(libraryView.focusGrid)
         }
     }
@@ -1047,12 +1078,8 @@ ApplicationWindow {
                     compact: true
                     text: root.filterLabel("STATUS", Library.completionFilter)
                     selected: Library.completionFilter !== ""
-                    onClicked: {
-                        Library.completionFilter = root.nextFilter(
-                                    Library.completionFilter,
-                                    ["backlog", "playing", "completed", "abandoned"])
-                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
-                    }
+                    onClicked: root.openFilterPicker("status",
+                                                     ["backlog", "playing", "completed", "abandoned"])
                 }
                 GlassButton {
                     id: collectionFilterButton
@@ -1066,9 +1093,7 @@ ApplicationWindow {
                             root.showToast("No collections yet. Open a game and use + New Collection.")
                             return
                         }
-                        Library.collectionFilter = root.nextFilter(
-                                    Library.collectionFilter, Library.collectionNames)
-                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        root.openFilterPicker("collection", Library.collectionNames)
                     }
                 }
                 GlassButton {
@@ -1082,8 +1107,7 @@ ApplicationWindow {
                             root.showToast("No tags yet. Open a game and add tags under Organize.")
                             return
                         }
-                        Library.tagFilter = root.nextFilter(Library.tagFilter, Library.tagNames)
-                        libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        root.openFilterPicker("tag", Library.tagNames)
                     }
                 }
                 GlassButton {
@@ -1313,6 +1337,7 @@ ApplicationWindow {
                 property bool controllerNavigation: false
                 Layout.fillWidth: true
                 placeholderText: "Search installed games"
+                Accessible.name: placeholderText
                 color: Theme.foreground
                 font.family: Theme.fontFamily
                 onTextChanged: root.linkResults = Library.linkCandidates(root.selectedIndex, text)
@@ -1411,6 +1436,102 @@ ApplicationWindow {
                     font.pixelSize: 11
                 }
             }
+            }
+        }
+    }
+
+    Rectangle {
+        id: filterPickerOverlay
+        objectName: "filterPickerOverlay"
+        property var previousFocus: null
+        anchors.fill: parent
+        visible: root.filterPickerOpen
+        z: 30
+        Keys.onPressed: function(event) { root.handleArrowKey(filterPickerOverlay, event) }
+        color: root.alpha(Theme.darkerBackground, 0.6)
+        onVisibleChanged: {
+            if (visible) {
+                previousFocus = root.activeFocusItem
+                Qt.callLater(function() {
+                    // Land on the current value so Enter keeps it and arrows move from it.
+                    const current = root.filterPickerCurrent()
+                    const index = current === "" ? 0 : root.filterPickerValues.indexOf(current) + 1
+                    pickerList.currentIndex = Math.max(0, index)
+                    pickerList.positionViewAtIndex(pickerList.currentIndex, ListView.Contain)
+                    const item = pickerList.itemAtIndex(pickerList.currentIndex)
+                    if (item) {
+                        item.forceActiveFocus(Qt.TabFocusReason)
+                    } else {
+                        root.focusWithin(filterPickerOverlay, true)
+                    }
+                })
+            } else if (previousFocus) {
+                root.restoreFocus(previousFocus)
+                previousFocus = null
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.filterPickerOpen = false
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(380, root.width - 56)
+            height: Math.min(pickerColumn.implicitHeight + 40, root.height - 56)
+            radius: Math.max(8, Theme.cornerRadius)
+            color: root.alpha(Theme.background, 0.98)
+            border.color: root.alpha(Theme.foreground, 0.22)
+
+            MouseArea { anchors.fill: parent }
+
+            ColumnLayout {
+                id: pickerColumn
+                anchors.fill: parent
+                anchors.margins: 20
+                spacing: 10
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: root.filterPickerKind === "status" ? "FILTER BY STATUS"
+                            : root.filterPickerKind === "collection" ? "FILTER BY COLLECTION"
+                            : "FILTER BY TAG"
+                        color: Theme.brightForeground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                    }
+                    Item { Layout.fillWidth: true }
+                    GlassButton {
+                        compact: true
+                        text: "CLOSE"
+                        onClicked: root.filterPickerOpen = false
+                    }
+                }
+                ListView {
+                    id: pickerList
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(contentHeight, root.height - 160)
+                    implicitHeight: Layout.preferredHeight
+                    clip: true
+                    spacing: 6
+                    // The first row clears the filter; the rest are the available values.
+                    model: [""].concat(root.filterPickerValues)
+                    delegate: GlassButton {
+                        required property string modelData
+                        required property int index
+                        width: pickerList.width
+                        compact: true
+                        selected: modelData === root.filterPickerCurrent()
+                        text: modelData === ""
+                              ? (root.filterPickerKind === "status" ? "ANY STATUS"
+                                 : root.filterPickerKind === "collection" ? "ALL COLLECTIONS"
+                                 : "ALL TAGS")
+                              : modelData.toUpperCase()
+                        onClicked: root.applyFilterPick(modelData)
+                    }
+                }
             }
         }
     }
@@ -1698,6 +1819,7 @@ ApplicationWindow {
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Steam ID (17 digits, starts with 7656119)"
+                        Accessible.name: "Steam ID"
                         // Copy the saved value in instead of binding so a keyring lookup
                         // finishing mid-edit cannot overwrite what is being typed.
                         readonly property string savedText: SteamAccount ? SteamAccount.steamId : ""
@@ -1729,6 +1851,7 @@ ApplicationWindow {
                         id: apiKeyField
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
+                        Accessible.name: "Steam Web API key"
                         placeholderText: SteamAccount && SteamAccount.hasApiKey
                                          ? "API key stored securely" : "Steam Web API key"
                         color: Theme.foreground
@@ -1829,6 +1952,7 @@ ApplicationWindow {
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Twitch developer client ID"
+                        Accessible.name: placeholderText
                         readonly property string savedText: Insights ? Insights.clientId : ""
                         onSavedTextChanged: if (!activeFocus) text = savedText
                         Component.onCompleted: text = savedText
@@ -1857,6 +1981,7 @@ ApplicationWindow {
                         id: igdbSecretField
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
+                        Accessible.name: "Twitch developer client secret"
                         placeholderText: Insights && Insights.hasClientSecret
                                          ? "Client secret stored securely" : "Twitch developer client secret"
                         color: Theme.foreground
@@ -1891,6 +2016,87 @@ ApplicationWindow {
                     compact: true
                     text: "OPEN TWITCH APPLICATIONS"
                     onClicked: Qt.openUrlExternally("https://dev.twitch.tv/console/apps")
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: root.alpha(Theme.foreground, 0.12)
+                }
+                Text {
+                    text: "STREAM WITH SUNSHINE AND MOONLIGHT"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: Sunshine ? Sunshine.statusText : "Sunshine export is unavailable in demo mode."
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "Moonlight shows Sunshine's app list. Omakade can add itself next to Steam Big Picture and one app per installed game with its cover. Sunshine reads the list when it starts, so restart it after changes."
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 9
+                    wrapMode: Text.Wrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: Sunshine !== null && Sunshine.detected
+                    Text {
+                        Layout.fillWidth: true
+                        text: "OMAKADE IN MOONLIGHT"
+                        color: Theme.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                    }
+                    GlassButton {
+                        objectName: "sunshineOmakadeButton"
+                        compact: true
+                        text: Preferences.sunshineOmakadeApp ? "ENABLED" : "DISABLED"
+                        onClicked: Preferences.sunshineOmakadeApp = !Preferences.sunshineOmakadeApp
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: Sunshine !== null && Sunshine.detected
+                    Text {
+                        Layout.fillWidth: true
+                        text: Sunshine && Sunshine.exportedGames > 0
+                              ? "ONE APP PER INSTALLED GAME · " + Sunshine.exportedGames + " EXPORTED"
+                              : "ONE APP PER INSTALLED GAME"
+                        color: Theme.foreground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                    }
+                    GlassButton {
+                        objectName: "sunshineGamesButton"
+                        compact: true
+                        text: Preferences.sunshineGameApps ? "ENABLED" : "DISABLED"
+                        onClicked: Preferences.sunshineGameApps = !Preferences.sunshineGameApps
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: Sunshine !== null && Sunshine.detected
+                    GlassButton {
+                        compact: true
+                        text: "UPDATE APP LIST"
+                        enabled: Sunshine && !Sunshine.busy
+                        onClicked: Sunshine.sync()
+                    }
+                    GlassButton {
+                        compact: true
+                        visible: Sunshine && Sunshine.restartNeeded && !Sunshine.streaming
+                        enabled: Sunshine && !Sunshine.busy
+                        text: "RESTART SUNSHINE"
+                        onClicked: Sunshine.restartSunshine()
+                    }
                 }
                 Rectangle {
                     Layout.fillWidth: true

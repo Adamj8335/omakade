@@ -238,19 +238,38 @@ QStringList libraryPaths(const QString& steamRoot, QStringList* warnings, bool* 
   return paths;
 }
 
-void resolveArtwork(SteamGameRecord* game, const QStringList& steamRoots) {
+// Custom artwork folders can hold thousands of files, so each grid directory is listed once
+// per scan and matched in memory instead of three times per game.
+QString firstCachedMatch(QHash<QString, QStringList>* listings, const QString& directory,
+                         const QString& appId, const QString& filter) {
+  if (!listings->contains(directory)) {
+    listings->insert(directory, QDir(directory).entryList(QDir::Files, QDir::Name));
+  }
+  for (const QString& name : listings->value(directory)) {
+    if (name.startsWith(appId) && QDir::match(filter, name)) {
+      return QDir(directory).absoluteFilePath(name);
+    }
+  }
+  return {};
+}
+
+void resolveArtwork(SteamGameRecord* game, const QStringList& steamRoots,
+                    QHash<QString, QStringList>* gridListings) {
   for (const QString& root : steamRoots) {
     QDir userdata(root + QStringLiteral("/userdata"));
     for (const QString& user : userdata.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
       const QString grid = userdata.absoluteFilePath(user + QStringLiteral("/config/grid"));
       if (game->coverPath.isEmpty()) {
-        game->coverPath = firstMatchingFile(grid, {game->appId + QStringLiteral("p.*")});
+        game->coverPath =
+            firstCachedMatch(gridListings, grid, game->appId, game->appId + QStringLiteral("p.*"));
       }
       if (game->heroPath.isEmpty()) {
-        game->heroPath = firstMatchingFile(grid, {game->appId + QStringLiteral("_hero.*")});
+        game->heroPath = firstCachedMatch(gridListings, grid, game->appId,
+                                          game->appId + QStringLiteral("_hero.*"));
       }
       if (game->logoPath.isEmpty()) {
-        game->logoPath = firstMatchingFile(grid, {game->appId + QStringLiteral("_logo.*")});
+        game->logoPath = firstCachedMatch(gridListings, grid, game->appId,
+                                          game->appId + QStringLiteral("_logo.*"));
       }
     }
   }
@@ -311,6 +330,7 @@ SteamScanResult SteamScanner::scan(const QStringList& steamRoots) {
   const QHash<QString, Activity> activity = readActivity(steamRoots);
   const QHash<QString, AchievementCache> achievementCaches = readAchievementCaches(steamRoots);
   QSet<QString> importedIds;
+  QHash<QString, QStringList> gridListings;
 
   for (const QString& steamRoot : steamRoots) {
     const QStringList discoveredLibraries =
@@ -366,7 +386,7 @@ SteamScanResult SteamScanner::scan(const QStringList& steamRoots) {
             .achievementsTotal = achievementCache.total,
             .achievements = achievementCache.achievements,
         };
-        resolveArtwork(&game, steamRoots);
+        resolveArtwork(&game, steamRoots, &gridListings);
         result.games.append(game);
         importedIds.insert(appId);
       }

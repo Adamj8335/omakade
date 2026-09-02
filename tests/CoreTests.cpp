@@ -4,6 +4,7 @@
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
+#include "launch/PlayRequest.h"
 #include "launch/SteamLauncher.h"
 #include "library/FaugusGameModel.h"
 #include "library/GameRoles.h"
@@ -23,23 +24,74 @@
 #include "sources/retroarch/RetroArchScanner.h"
 #include "sources/steam/SteamScanner.h"
 #include "sources/steam/ValveKeyValues.h"
+#include "streaming/SunshineIntegration.h"
 #include "theme/OmarchyTheme.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QScopeGuard>
 #include <QSignalSpy>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QUrl>
 #include <QUuid>
 
 #include <SDL3/SDL.h>
 
 namespace {
+// A launcher-style source that, like Lutris or Heroic, has no Installed role at all.
+class LauncherOnlyModel final : public QAbstractListModel {
+public:
+  explicit LauncherOnlyModel(QString title, QString coverPath = {}, QObject* parent = nullptr)
+      : QAbstractListModel(parent), m_title(std::move(title)), m_coverPath(std::move(coverPath)) {}
+  [[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override {
+    return parent.isValid() ? 0 : 1;
+  }
+  [[nodiscard]] QVariant data(const QModelIndex& index, int role) const override {
+    if (!index.isValid()) {
+      return {};
+    }
+    switch (role) {
+    case GameRoles::Title:
+      return m_title;
+    case GameRoles::Source:
+      return QStringLiteral("Lutris");
+    case GameRoles::AppId:
+      return QStringLiteral("celeste");
+    case GameRoles::Runner:
+      return QString{};
+    case GameRoles::CoverPath:
+      return m_coverPath.isEmpty() ? QString{} : QUrl::fromLocalFile(m_coverPath).toString();
+    case GameRoles::Hidden:
+    case GameRoles::Favorite:
+      return false;
+    default:
+      return {};
+    }
+  }
+  [[nodiscard]] QHash<int, QByteArray> roleNames() const override {
+    return {{GameRoles::Title, "title"},
+            {GameRoles::Source, "source"},
+            {GameRoles::AppId, "appId"},
+            {GameRoles::Runner, "runner"},
+            {GameRoles::CoverPath, "coverPath"},
+            {GameRoles::Hidden, "hidden"}};
+  }
+
+private:
+  QString m_title;
+  QString m_coverPath;
+};
+
 void writeFile(const QString& path, const QByteArray& contents) {
   QDir().mkpath(QFileInfo(path).absolutePath());
   QFile file(path);
@@ -276,6 +328,9 @@ private slots:
   void igdbInsightsLoadFromOfflineCache();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
+  void launchKeysRoundTripAndResolveInstallations();
+  void singleInstanceForwardsPlayAndQuitCommands();
+  void sunshineIntegrationWritesOnlyItsOwnEntries();
   void secondInstanceRequestsActivation();
   void virtualControllerConnectsAndMapsPrimaryButton();
   void thousandGameSearchStaysResponsive();
@@ -1920,6 +1975,10 @@ void CoreTests::igdbInsightsLoadFromOfflineCache() {
     QVERIFY(query.exec(QStringLiteral(
         "INSERT INTO game_insights VALUES('Steam', '10', 'igdb', 1942, 'Cached Game', 88, 31, "
         "7200, 14400, 28800, 99, 1700000000)")));
+    // A remembered miss: IGDB had no entry, so provider_game_id is 0.
+    QVERIFY(query.exec(QStringLiteral(
+        "INSERT INTO game_insights VALUES('Steam', '20', 'igdb', 0, '', -1, 0, 0, 0, 0, 0, "
+        "1700000000)")));
     database.close();
   }
   QSqlDatabase::removeDatabase(connection);
@@ -1936,6 +1995,9 @@ void CoreTests::igdbInsightsLoadFromOfflineCache() {
   QCOMPARE(insights.completeHours(), 8);
   QCOMPARE(insights.timeSampleCount(), 99);
   QCOMPARE(insights.statusText(), QStringLiteral("Cached IGDB data"));
+  insights.loadSteam(QStringLiteral("20"));
+  QVERIFY(!insights.available());
+  QCOMPARE(insights.statusText(), QStringLiteral("IGDB has no entry for this game"));
 }
 
 void CoreTests::stressLibraryContainsOneThousandGames() {
@@ -1973,6 +2035,186 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   QVERIFY(!reloaded.faugusEnabled());
   QVERIFY(!reloaded.retroArchEnabled());
   QVERIFY(reloaded.closeAfterLaunch());
+}
+
+void CoreTests::launchKeysRoundTripAndResolveInstallations() {
+  const LaunchKey heroic = LaunchKey::parse(QStringLiteral("Heroic:legendary:Sugar"));
+  QVERIFY(heroic.isValid());
+  QCOMPARE(heroic.source, QStringLiteral("Heroic"));
+  QCOMPARE(heroic.runner, QStringLiteral("legendary"));
+  QCOMPARE(heroic.appId, QStringLiteral("Sugar"));
+  QCOMPARE(heroic.toString(), QStringLiteral("Heroic:legendary:Sugar"));
+  // RetroArch ids are content paths, so everything after the second colon belongs to the id.
+  const LaunchKey retro = LaunchKey::parse(QStringLiteral("RetroArch::/roms/Game: Two (USA).zip"));
+  QCOMPARE(retro.runner, QString{});
+  QCOMPARE(retro.appId, QStringLiteral("/roms/Game: Two (USA).zip"));
+  QVERIFY(!LaunchKey::parse(QStringLiteral("Steam")).isValid());
+  QVERIFY(!LaunchKey::parse(QStringLiteral("Steam:620")).isValid());
+  QVERIFY(!LaunchKey::parse(QStringLiteral("::620")).isValid());
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  MockGameModel games(nullptr, 3, true);
+  UnifiedGameModel unified(directory.path() + QStringLiteral("/library.sqlite3"));
+  unified.addSourceModel(&games);
+  int row = -1;
+  const QVariantMap found =
+      PlayRequest::findInstallation(unified, LaunchKey::parse(QStringLiteral("demo::demo-1")), &row);
+  QCOMPARE(row, 1);
+  QCOMPARE(found.value(QStringLiteral("appId")).toString(), QStringLiteral("demo-1"));
+  QCOMPARE(found.value(QStringLiteral("title")).toString(),
+           unified.data(unified.index(1, 0), GameRoles::Title).toString());
+  QVERIFY(PlayRequest::findInstallation(unified, LaunchKey::parse(QStringLiteral("Demo::nope")),
+                                        &row)
+              .isEmpty());
+  QCOMPARE(row, -1);
+
+  GameLauncher launcher;
+  QString error;
+  QVERIFY(!PlayRequest::perform(unified, launcher, LaunchKey::parse(QStringLiteral("Steam::demo-0")),
+                                &error));
+  QVERIFY(error.contains(QStringLiteral("not installed")));
+  QVERIFY(!PlayRequest::perform(unified, launcher, LaunchKey::parse(QStringLiteral("Demo::demo-1")),
+                                &error));
+  QCOMPARE(error, QStringLiteral("Demo games cannot be launched yet."));
+  QVERIFY(!PlayRequest::perform(unified, launcher, LaunchKey::parse(QStringLiteral("bad")), &error));
+  QVERIFY(error.contains(QStringLiteral("Steam::620")));
+}
+
+void CoreTests::singleInstanceForwardsPlayAndQuitCommands() {
+  const QString name = QStringLiteral("omakade-test-") + QUuid::createUuid().toString();
+  QVERIFY(!SingleInstance::sendCommand(name, "quit"));
+  SingleInstance primary(name);
+  QVERIFY(primary.claimOrNotify());
+  QSignalSpy plays(&primary, &SingleInstance::playRequested);
+  QSignalSpy quits(&primary, &SingleInstance::quitRequested);
+  QSignalSpy activations(&primary, &SingleInstance::activationRequested);
+
+  QVERIFY(SingleInstance::sendCommand(name, "play Steam::620"));
+  QTRY_COMPARE_WITH_TIMEOUT(plays.size(), 1, 1000);
+  QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("Steam::620"));
+  SingleInstance secondary(name);
+  QVERIFY(!secondary.claimOrNotify("play RetroArch::/roms/a b.zip"));
+  QTRY_COMPARE_WITH_TIMEOUT(plays.size(), 1, 1000);
+  QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("RetroArch::/roms/a b.zip"));
+  QVERIFY(SingleInstance::sendCommand(name, "quit"));
+  QTRY_COMPARE_WITH_TIMEOUT(quits.size(), 1, 1000);
+  QCOMPARE(activations.size(), 0);
+}
+
+void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
+  QCOMPARE(SunshineIntegration::shellQuote(QStringLiteral("it's")), QStringLiteral("'it'\\''s'"));
+  QCOMPARE(SunshineIntegration::commandPrefix(true),
+           QStringLiteral("flatpak-spawn --host omakade"));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString appsPath = directory.path() + QStringLiteral("/apps.json");
+  const QByteArray stock = R"({
+    "env": {"PATH": "$(PATH):$(HOME)/.local/bin"},
+    "apps": [
+        {"name": "Desktop", "image-path": "desktop.png"},
+        {"name": "Steam Big Picture", "cmd": "", "detached": ["setsid steam steam://open/bigpicture"],
+         "image-path": "steam.png", "prep-cmd": [{"do": "", "undo": "setsid steam steam://close/bigpicture"}]}
+    ]
+})";
+  writeFile(appsPath, stock);
+  const auto readApps = [&appsPath]() -> QJsonObject {
+    QFile file(appsPath);
+    if (!file.open(QIODevice::ReadOnly)) {
+      return {};
+    }
+    return QJsonDocument::fromJson(file.readAll()).object();
+  };
+
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  MockGameModel games(nullptr, 3, true);
+  UnifiedGameModel unified(directory.path() + QStringLiteral("/library.sqlite3"));
+  unified.addSourceModel(&games);
+  // Same title as the second demo game, from a source without an Installed role.
+  const QString sharedTitle = unified.data(unified.index(1, 0), GameRoles::Title).toString();
+  const QString coverPath = directory.path() + QStringLiteral("/celeste.jpg");
+  QImage cover(300, 450, QImage::Format_RGB32);
+  cover.fill(Qt::red);
+  QVERIFY(cover.save(coverPath, "JPEG"));
+  LauncherOnlyModel lutris(sharedTitle, coverPath);
+  unified.addSourceModel(&lutris);
+  const QString imageRoot = directory.path() + QStringLiteral("/images");
+  SunshineIntegration sunshine(&unified, &settings, appsPath, imageRoot);
+  QVERIFY(sunshine.detected());
+  QVERIFY(!sunshine.restartNeeded());
+  QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 2);
+  // The export runs on a worker thread; wait for it before reading the file.
+  const auto settle = [&sunshine] { QTRY_VERIFY_WITH_TIMEOUT(!sunshine.busy(), 10000); };
+
+  // The uninstalled first demo game stays out; the two installed demo games and the
+  // launcher game (no Installed role) become apps.
+  settings.setSunshineGameApps(true);
+  settle();
+  QJsonObject document = readApps();
+  QJsonArray apps = document.value(QStringLiteral("apps")).toArray();
+  QCOMPARE(apps.size(), 5);
+  QCOMPARE(apps.at(0).toObject().value(QStringLiteral("name")).toString(),
+           QStringLiteral("Desktop"));
+  QCOMPARE(apps.at(1).toObject().value(QStringLiteral("prep-cmd")).toArray().size(), 1);
+  QCOMPARE(document.value(QStringLiteral("env")).toObject().value(QStringLiteral("PATH")).toString(),
+           QStringLiteral("$(PATH):$(HOME)/.local/bin"));
+  const QJsonObject firstGame = apps.at(2).toObject();
+  QCOMPARE(firstGame.value(QStringLiteral("omakade")).toString(), QStringLiteral("Demo::demo-1"));
+  QCOMPARE(firstGame.value(QStringLiteral("cmd")).toString(), QString{});
+  QCOMPARE(firstGame.value(QStringLiteral("detached")).toArray().at(0).toString(),
+           QStringLiteral("omakade --play 'Demo::demo-1'"));
+  QVERIFY(!firstGame.contains(QStringLiteral("image-path")));
+  // Two stores share a title, so both names carry their source.
+  QCOMPARE(firstGame.value(QStringLiteral("name")).toString(), sharedTitle + QStringLiteral(" (Demo)"));
+  const QJsonObject lutrisGame = apps.at(4).toObject();
+  QCOMPARE(lutrisGame.value(QStringLiteral("name")).toString(),
+           sharedTitle + QStringLiteral(" (Lutris)"));
+  QCOMPARE(lutrisGame.value(QStringLiteral("omakade")).toString(), QStringLiteral("Lutris::celeste"));
+  const QString boxArt = lutrisGame.value(QStringLiteral("image-path")).toString();
+  QVERIFY(boxArt.startsWith(imageRoot));
+  QCOMPARE(QImage(boxArt).size(), QSize(600, 800));
+  QCOMPARE(apps.at(3).toObject().value(QStringLiteral("name")).toString(),
+           unified.data(unified.index(2, 0), GameRoles::Title).toString());
+  QCOMPARE(sunshine.exportedGames(), 3);
+  QVERIFY(sunshine.restartNeeded());
+  QVERIFY(QFileInfo::exists(appsPath + QStringLiteral(".omakade-backup")));
+
+  settings.setSunshineOmakadeApp(true);
+  settle();
+  apps = readApps().value(QStringLiteral("apps")).toArray();
+  QCOMPARE(apps.size(), 6);
+  const QJsonObject omakade = apps.at(2).toObject();
+  QCOMPARE(omakade.value(QStringLiteral("name")).toString(), QStringLiteral("Omakade"));
+  QCOMPARE(omakade.value(QStringLiteral("detached")).toArray().at(0).toString(),
+           QStringLiteral("omakade"));
+  QCOMPARE(omakade.value(QStringLiteral("prep-cmd"))
+               .toArray()
+               .at(0)
+               .toObject()
+               .value(QStringLiteral("undo"))
+               .toString(),
+           QStringLiteral("omakade --quit"));
+
+  // A second sync with nothing changed leaves the file alone, even though Sunshine's own
+  // formatting differs from Qt's.
+  writeFile(appsPath, QJsonDocument(readApps()).toJson(QJsonDocument::Compact));
+  const QDateTime before = QFileInfo(appsPath).lastModified();
+  QVERIFY(sunshine.sync());
+  settle();
+  QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 6);
+  QCOMPARE(QFileInfo(appsPath).lastModified(), before);
+  QCOMPARE(sunshine.statusText(), QStringLiteral("Sunshine app list is up to date"));
+
+  settings.setSunshineGameApps(false);
+  settings.setSunshineOmakadeApp(false);
+  settle();
+  apps = readApps().value(QStringLiteral("apps")).toArray();
+  QCOMPARE(apps.size(), 2);
+  QCOMPARE(apps.at(1).toObject().value(QStringLiteral("name")).toString(),
+           QStringLiteral("Steam Big Picture"));
+  QCOMPARE(sunshine.exportedGames(), 0);
+  QVERIFY(QDir(imageRoot).entryList({QStringLiteral("*.png")}, QDir::Files).isEmpty());
 }
 
 void CoreTests::secondInstanceRequestsActivation() {

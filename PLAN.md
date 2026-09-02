@@ -769,9 +769,38 @@ Gate:
   without reaching for a keyboard or mouse
 - Leaving couch mode restores the prior desktop layout and focus position
 
+### M7: Sunshine and Moonlight streaming
+
+Status: the 1.4 feature. Omarchy installs Sunshine as a user service and ships
+Moonlight, and Sunshine's stock app list is only Desktop and Steam Big Picture.
+
+Deliver:
+
+- `omakade --play Source:runner:id` and `omakade --quit`, forwarded to the
+  running window through the single-instance socket or run headless from the
+  cached library
+- Opt-in export of Omakade and of every installed game into Sunshine's
+  `apps.json` as detached entries with PNG box art, marked so only Omakade's
+  own entries are ever rewritten, with a one-time backup and a user-service
+  restart action
+- Fullscreen when Sunshine launches Omakade for a Moonlight client
+- Native and Flatpak Sunshine paths, with `flatpak-spawn --host` for the
+  sandboxed one
+
+Gate:
+
+- Foreign Sunshine entries and the `env` block survive every sync byte for
+  byte
+- A play request for a hidden, linked, or RetroArch game resolves the same
+  installation Play would
+- Nothing is written when `apps.json` does not exist yet; Sunshine creates it
+
+Couch mode (M6) follows in 1.5, where streaming makes it worth more.
+
 ### 1.4 candidates
 
-Collected after the 1.3.0 release:
+1.4 is the streaming release (M7) plus the Collection and Tag picker. Collected
+after the 1.3.0 release:
 
 - Controller-first couch mode (M6 above)
 - A picker list for the Collection and Tag filters instead of click-to-cycle,
@@ -788,25 +817,7 @@ Collected after the 1.3.0 release:
   as markup
 - Re-runnable release workflow and a pinned Arch base image for CI
 
-Found in the post-1.3.0 sweep and deferred from 1.3.1:
-
-- Unified model lookups are O(N) per role for linked games; precompute group and key
-  maps in `rebuildRows` so a search keystroke stays cheap with many links
-- The theme watcher watches `~/.config` and `~/.local/state` themselves and blocks on
-  `hyprctl` during reload; watch only the Omarchy subdirectories and query Hyprland
-  asynchronously
-- Steam artwork resolution lists the `grid/` directory three times per game; read it once
-  per scan
-- Cover cache pruning removes files still referenced by the library with no re-request
-  until the next scan
-- Negative IGDB lookups are never cached, so games without a mapping re-request on every
-  details open
-- Controller polling runs at 125 Hz with no pad connected
-- Both keyring lookups run at startup even when no Steam ID or IGDB client ID is set
-- Scanning state, the Rescan button, and the empty-state copy only reflect Steam
-- Window re-activation forces focus back to the grid even when a toolbar control had it
-- Text fields lack `Accessible.name`
-- The cached-cover write-back in `loadDatabase` runs one autocommit per game
+Everything found in the post-1.3.0 sweep has been fixed in 1.3.1 or 1.4.
 
 ## Explicitly deferred
 

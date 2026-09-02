@@ -721,15 +721,7 @@ QString UnifiedGameModel::gameKey(const SourceRow& source) const {
 }
 
 UnifiedGameModel::SourceRow UnifiedGameModel::sourceForKey(const QString& key) const {
-  for (QAbstractItemModel* model : m_models) {
-    for (int row = 0; row < model->rowCount(); ++row) {
-      const SourceRow source{.model = model, .row = row};
-      if (sourceEnabled(source) && gameKey(source) == key) {
-        return source;
-      }
-    }
-  }
-  return {};
+  return m_rowForKey.value(key);
 }
 
 bool UnifiedGameModel::sourceEnabled(const SourceRow& source) const {
@@ -746,17 +738,14 @@ QVector<UnifiedGameModel::SourceRow> UnifiedGameModel::groupRows(const SourceRow
     return rows;
   }
   rows.append(source);
-  const QString groupId = m_groupForGame.value(gameKey(source));
+  const QString key = gameKey(source);
+  const QString groupId = m_groupForGame.value(key);
   if (groupId.isEmpty()) {
     return rows;
   }
-  for (QAbstractItemModel* model : m_models) {
-    for (int row = 0; row < model->rowCount(); ++row) {
-      const SourceRow candidate{.model = model, .row = row};
-      if (sourceEnabled(candidate) && gameKey(candidate) != gameKey(source) &&
-          m_groupForGame.value(gameKey(candidate)) == groupId) {
-        rows.append(candidate);
-      }
+  for (const SourceRow& candidate : m_rowsForGroup.value(groupId)) {
+    if (candidate.model != source.model || candidate.row != source.row) {
+      rows.append(candidate);
     }
   }
   return rows;
@@ -793,6 +782,25 @@ QVariantMap UnifiedGameModel::gameMap(const SourceRow& source) const {
 void UnifiedGameModel::rebuildRows() {
   beginResetModel();
   m_rows.clear();
+  m_rowForKey.clear();
+  m_rowsForGroup.clear();
+  for (QAbstractItemModel* model : m_models) {
+    for (int row = 0; row < model->rowCount(); ++row) {
+      const SourceRow source{.model = model, .row = row};
+      if (!sourceEnabled(source)) {
+        continue;
+      }
+      const QString key = gameKey(source);
+      if (key.isEmpty()) {
+        continue;
+      }
+      m_rowForKey.insert(key, source);
+      const QString groupId = m_groupForGame.value(key);
+      if (!groupId.isEmpty()) {
+        m_rowsForGroup[groupId].append(source);
+      }
+    }
+  }
   QSet<QString> addedGroups;
   for (QAbstractItemModel* model : m_models) {
     for (int row = 0; row < model->rowCount(); ++row) {

@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.4.0
+
+### Streaming
+
+- Added optional Sunshine app export: Omakade next to Steam Big Picture in Moonlight, and one
+  app per installed game with its cover. Other Sunshine apps are left untouched and a
+  one-time backup sits next to `apps.json`.
+- Added a Restart Sunshine action in Settings, since Sunshine reads its app list at startup.
+- Added `omakade --play Source:runner:id` and `omakade --quit`, which reach the running
+  window or launch from the cached library without opening one.
+- Opened fullscreen when Sunshine starts Omakade for a Moonlight client.
+
+### Library
+
+- Replaced click-to-cycle on the Status, Collection, and Tag filters with a picker list that
+  opens on the current value and works with keyboard, mouse, and controller.
+
+### Fixes
+
+- Kept search fast with many linked games by looking installations up through prebuilt maps.
+- Stopped theme reloads from blocking on Hyprland and from firing for unrelated files dropped
+  into `~/.config` or `~/.local/state`.
+- Polled for controllers four times a second instead of 125 until one connects.
+- Trimmed leftover covers before covers the library still shows, and requested a pruned cover
+  again instead of showing a broken image.
+- Remembered when IGDB has no entry for a game instead of asking on every visit.
+- Left focus where it was when the window is re-activated, named every text field for
+  assistive technology, and wrote cached cover paths in one transaction.
+- Showed scanning state, disabled Rescan, and worded the empty library for every source's
+  scan instead of only Steam's.
+- Listed each Steam custom-artwork folder once per scan instead of three times per game.
+- Left the keyring alone at startup until a Steam ID or IGDB client ID is configured.
+
 ## 1.3.1
 
 - Left the library, database, and cover requests alone when a Steam rescan finds the same

@@ -27,7 +27,11 @@ FaugusGameModel::FaugusGameModel(const QString& omakadeDatabasePath, QObject* pa
     : QAbstractListModel(parent),
       m_connectionName(QStringLiteral("omakade-faugus-%1").arg(reinterpret_cast<quintptr>(this))) {
   connect(&m_scanWatcher, &QFutureWatcher<FaugusScanResult>::finished, this,
-          [this] { applyScan(m_scanWatcher.result()); });
+          [this] {
+            m_scanning = false;
+            applyScan(m_scanWatcher.result());
+            emit statusChanged();
+          });
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
@@ -126,6 +130,7 @@ void FaugusGameModel::refresh() {
   if (m_scanWatcher.isRunning()) {
     return;
   }
+  m_scanning = true;
   const QStringList roots = FaugusScanner::discoverRoots();
   setStatus(QStringLiteral("Scanning Faugus library"));
   m_scanWatcher.setFuture(QtConcurrent::run([roots] { return FaugusScanner::scan(roots); }));
