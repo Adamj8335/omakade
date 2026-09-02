@@ -17,6 +17,7 @@ QJsonObject parseObject(const QByteArray& contents, bool* okay) {
 SteamApiState playerErrorState(const QString& message) {
   const QString normalized = message.toLower();
   if (normalized.contains(QStringLiteral("private")) ||
+      normalized.contains(QStringLiteral("not public")) ||
       normalized.contains(QStringLiteral("not be found"))) {
     return SteamApiState::PrivateProfile;
   }
@@ -61,6 +62,18 @@ bool SteamAchievementApi::isNoStatsResponse(const QByteArray& playerResponse) {
          playerStats.value(QStringLiteral("error"))
              .toString()
              .contains(QStringLiteral("no stats"), Qt::CaseInsensitive);
+}
+
+bool SteamAchievementApi::isPrivateProfileResponse(const QByteArray& playerResponse) {
+  bool okay = false;
+  const QJsonObject root = parseObject(playerResponse, &okay);
+  if (!okay) {
+    return false;
+  }
+  const QJsonObject playerStats = root.value(QStringLiteral("playerstats")).toObject();
+  return !playerStats.value(QStringLiteral("success")).toBool() &&
+         playerErrorState(playerStats.value(QStringLiteral("error")).toString()) ==
+             SteamApiState::PrivateProfile;
 }
 
 SteamApiState SteamAchievementApi::parse(const QByteArray& playerResponse,

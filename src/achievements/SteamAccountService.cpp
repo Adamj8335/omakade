@@ -525,10 +525,15 @@ void SteamAccountService::handleApiReply(QNetworkReply* reply) {
   }
   const bool tooLarge =
       reply->property("responseTooLarge").toBool() || contents.size() > kMaximumApiResponseBytes;
-  const SteamApiState responseState = tooLarge
-                                          ? SteamApiState::RemoteError
-                                          : SteamAchievementApi::classifyHttpResponse(
-                                                status, reply->error() != QNetworkReply::NoError);
+  SteamApiState responseState = tooLarge
+                                    ? SteamApiState::RemoteError
+                                    : SteamAchievementApi::classifyHttpResponse(
+                                          status, reply->error() != QNetworkReply::NoError);
+  if (kind == QStringLiteral("player") && responseState == SteamApiState::InvalidKey &&
+      SteamAchievementApi::isPrivateProfileResponse(contents)) {
+    // Steam answers HTTP 403 for profiles whose game details are private. The key is fine.
+    responseState = SteamApiState::PrivateProfile;
+  }
   if (kind == QStringLiteral("player")) {
     m_api.player = contents;
   } else if (kind == QStringLiteral("schema")) {
