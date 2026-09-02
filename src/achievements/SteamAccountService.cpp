@@ -120,7 +120,20 @@ SteamAccountService::SteamAccountService(const QString& databasePath, AppSetting
   loadOwnedGameCount();
   connect(&m_secretWatcher, &QFutureWatcher<SteamSecretResult>::finished, this,
           &SteamAccountService::finishSecretOperation);
-  beginSecretOperation(SecretAction::Detect);
+  if (steamId().isEmpty()) {
+    // Nobody has set up a Steam connection, so leave the keyring alone until they do. On a
+    // locked keyring the lookup would otherwise prompt at every start.
+    setStatus(QStringLiteral("local"), QStringLiteral("Using Steam's local achievement cache"));
+  } else {
+    beginSecretOperation(SecretAction::Detect);
+  }
+  if (m_settings != nullptr) {
+    connect(m_settings, &AppSettings::steamIdChanged, this, [this] {
+      if (!steamId().isEmpty() && !m_hasApiKey && !m_busy) {
+        beginSecretOperation(SecretAction::Detect);
+      }
+    });
+  }
 }
 
 SteamAccountService::~SteamAccountService() {

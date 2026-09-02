@@ -77,9 +77,17 @@ GameInsightsService::GameInsightsService(const QString& databasePath, AppSetting
   connect(&m_secretWatcher, &QFutureWatcher<InsightsSecretResult>::finished, this,
           &GameInsightsService::finishSecretOperation);
   if (m_settings != nullptr) {
-    connect(m_settings, &AppSettings::igdbClientIdChanged, this, &GameInsightsService::changed);
+    connect(m_settings, &AppSettings::igdbClientIdChanged, this, [this] {
+      if (!clientId().isEmpty() && !m_hasClientSecret && !m_busy) {
+        beginSecretOperation(SecretAction::Detect);
+      }
+      emit changed();
+    });
   }
-  beginSecretOperation(SecretAction::Detect);
+  // Without a client ID there is nothing to look up, so skip the keyring at startup.
+  if (!clientId().isEmpty()) {
+    beginSecretOperation(SecretAction::Detect);
+  }
 }
 
 GameInsightsService::~GameInsightsService() {
