@@ -236,6 +236,7 @@ private slots:
   void steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements();
   void steamScannerSurvivesMissingLibrariesAndBrokenManifests();
   void steamModelPersistsFavoritesAndHiddenState();
+  void steamModelSkipsUnchangedRescans();
   void steamModelMigratesVersionOneDatabase();
   void steamModelMigratesUnscopedOwnedGamesCache();
   void achievementModelLoadsLocalSteamCache();
@@ -659,6 +660,36 @@ void CoreTests::steamModelPersistsFavoritesAndHiddenState() {
   QVERIFY(reloaded.get(1).value(QStringLiteral("hidden")).toBool());
 }
 
+void CoreTests::steamModelSkipsUnchangedRescans() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/Steam");
+  const QString second = directory.path() + QStringLiteral("/Library");
+  createSteamFixture(root, second);
+
+  SteamGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
+  QSignalSpy resets(&model, &QAbstractItemModel::modelReset);
+  model.refreshFromRoots({root});
+  QTRY_VERIFY_WITH_TIMEOUT(!model.scanning(), 3000);
+  QCOMPARE(model.rowCount(), 2);
+  QCOMPARE(resets.count(), 1);
+
+  // Steam touches manifests constantly while downloading. A rescan that finds the same
+  // library must not rebuild the model or the database.
+  model.refreshFromRoots({root});
+  QTRY_VERIFY_WITH_TIMEOUT(!model.scanning(), 3000);
+  QCOMPARE(model.rowCount(), 2);
+  QCOMPARE(resets.count(), 1);
+  QVERIFY(model.statusText().startsWith(QStringLiteral("Imported 2")));
+
+  writeFile(second + QStringLiteral("/steamapps/appmanifest_30.acf"),
+            manifest("30", "Day of Defeat", "Day of Defeat"));
+  model.refreshFromRoots({root});
+  QTRY_VERIFY_WITH_TIMEOUT(!model.scanning(), 3000);
+  QCOMPARE(model.rowCount(), 3);
+  QCOMPARE(resets.count(), 2);
+}
+
 void CoreTests::steamModelMigratesVersionOneDatabase() {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -888,6 +919,15 @@ void CoreTests::steamAchievementApiClassifiesFailures() {
   QVERIFY(SteamAchievementApi::isNoStatsResponse(
       R"({"playerstats":{"error":"Requested app has no stats","success":false}})"));
   QVERIFY(!SteamAchievementApi::isNoStatsResponse(privatePlayer));
+  // Steam answers HTTP 403 with this body when game details are private; the key is valid.
+  const QByteArray notPublic =
+      R"({"playerstats":{"error":"Profile is not public","success":false}})";
+  QVERIFY(SteamAchievementApi::isPrivateProfileResponse(notPublic));
+  QVERIFY(SteamAchievementApi::isPrivateProfileResponse(privatePlayer));
+  QVERIFY(!SteamAchievementApi::isPrivateProfileResponse(invalidKey));
+  QVERIFY(!SteamAchievementApi::isPrivateProfileResponse("not json"));
+  QCOMPARE(SteamAchievementApi::parse(notPublic, R"({"game":{}})", R"({})", &result, &error),
+           SteamApiState::PrivateProfile);
   QVERIFY(!SteamAchievementApi::isNoStatsResponse("not json"));
   QVERIFY(!SteamAchievementApi::isNoStatsResponse(R"({"playerstats":{"success":true}})"));
 }
