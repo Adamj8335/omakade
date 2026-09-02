@@ -223,6 +223,12 @@ private slots:
   void themeFallsBackWithoutOmarchy();
   void themeReloadsWhenActiveFileChanges();
   void themeFollowsShellLauncherTransparency();
+  void themeResolvesCompactTerminalPalette();
+  void themeFallsBackAccentToTerminalBlue();
+  void themeResolvesLegacySemanticNames();
+  void themeFindsLegacyOmarchyLocation();
+  void themeFollowsAtomicDirectoryReplacement();
+  void themeUsesMachineLauncherOverride();
   void valveKeyValuesParsesNestedAndEscapedValues();
   void valveKeyValuesRejectsMalformedInput();
   void valveKeyValuesRejectsExcessiveNesting();
@@ -367,6 +373,136 @@ void CoreTests::themeFollowsShellLauncherTransparency() {
   QTRY_COMPARE_WITH_TIMEOUT(theme.surfaceAlpha(), 0.91, 1500);
   writeFile(shell, "[launcher]\nbackground-alpha = 1.0\n");
   QTRY_COMPARE_WITH_TIMEOUT(theme.surfaceAlpha(), 1.0, 1500);
+}
+
+void CoreTests::themeResolvesCompactTerminalPalette() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString stateHome = directory.path() + QStringLiteral("/state");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  writeFile(stateHome + QStringLiteral("/omarchy/current/theme/colors.toml"),
+            "accent = \"#589df6\"\nselection = \"#b5d5ff\"\n"
+            "background = \"#1d2837\"\nforeground = \"#ffffff\"\n"
+            "color0 = \"#000000\"\ncolor1 = \"#f9555f\"\n"
+            "color2 = \"#21b089\"\ncolor3 = \"#fef02a\"\n"
+            "color4 = \"#589df6\"\ncolor5 = \"#944d95\"\n"
+            "color6 = \"#1f9ee7\"\ncolor7 = \"#bbbbbb\"\n"
+            "color8 = \"#555555\"\ncolor9 = \"#fa8c8f\"\n"
+            "color10 = \"#35bb9a\"\ncolor11 = \"#ffff55\"\n"
+            "color12 = \"#589df6\"\ncolor13 = \"#e75699\"\n"
+            "color14 = \"#3979bc\"\ncolor15 = \"#ffffff\"\n");
+
+  OmarchyTheme theme(stateHome, configHome);
+  QVERIFY(theme.omarchyAvailable());
+  QCOMPARE(theme.mode(), QStringLiteral("dark"));
+  QCOMPARE(theme.accent(), QColor(QStringLiteral("#589df6")));
+  QCOMPARE(theme.selection(), QColor(QStringLiteral("#b5d5ff")));
+  QCOMPARE(theme.background(), QColor(QStringLiteral("#1d2837")));
+  QCOMPARE(theme.darkBackground(), QColor(QStringLiteral("#161e29")));
+  QCOMPARE(theme.darkerBackground(), QColor(QStringLiteral("#0f141c")));
+  QCOMPARE(theme.lighterBackground(), QColor(QStringLiteral("#1d2837")));
+  QCOMPARE(theme.darkForeground(), QColor(QStringLiteral("#555555")));
+  QCOMPARE(theme.lightForeground(), QColor(QStringLiteral("#ffffff")));
+  QCOMPARE(theme.brightForeground(), QColor(QStringLiteral("#ffffff")));
+  QCOMPARE(theme.muted(), QColor(QStringLiteral("#555555")));
+  QCOMPARE(theme.red(), QColor(QStringLiteral("#f9555f")));
+  QCOMPARE(theme.green(), QColor(QStringLiteral("#21b089")));
+  QCOMPARE(theme.yellow(), QColor(QStringLiteral("#fef02a")));
+  QCOMPARE(theme.blue(), QColor(QStringLiteral("#589df6")));
+}
+
+void CoreTests::themeFallsBackAccentToTerminalBlue() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString stateHome = directory.path() + QStringLiteral("/state");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  writeFile(stateHome + QStringLiteral("/omarchy/current/theme/colors.toml"),
+            "background = \"#16181d\"\nforeground = \"#c5c5d2\"\ncolor4 = \"#6c9ef8\"\n");
+
+  OmarchyTheme theme(stateHome, configHome);
+  QVERIFY(theme.omarchyAvailable());
+  QCOMPARE(theme.accent(), QColor(QStringLiteral("#6c9ef8")));
+}
+
+void CoreTests::themeResolvesLegacySemanticNames() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString stateHome = directory.path() + QStringLiteral("/state");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  writeFile(stateHome + QStringLiteral("/omarchy/current/theme/colors.toml"),
+            "mode = \"dark\"\naccent = \"#fcef0c\"\n"
+            "bg = \"#1b1d1e\"\ndark_bg = \"#353738\"\n"
+            "darker_bg = \"#1a1b1c\"\nlighter_bg = \"#1b1d1e\"\n"
+            "fg = \"#a7a8a3\"\ndark_fg = \"#8a8c89\"\n"
+            "light_fg = \"#c5c5be\"\nbright_fg = \"#dadad5\"\n");
+
+  OmarchyTheme theme(stateHome, configHome);
+  QVERIFY(theme.omarchyAvailable());
+  QCOMPARE(theme.background(), QColor(QStringLiteral("#1b1d1e")));
+  QCOMPARE(theme.darkBackground(), QColor(QStringLiteral("#353738")));
+  QCOMPARE(theme.darkerBackground(), QColor(QStringLiteral("#1a1b1c")));
+  QCOMPARE(theme.lighterBackground(), QColor(QStringLiteral("#1b1d1e")));
+  QCOMPARE(theme.foreground(), QColor(QStringLiteral("#a7a8a3")));
+  QCOMPARE(theme.darkForeground(), QColor(QStringLiteral("#8a8c89")));
+  QCOMPARE(theme.lightForeground(), QColor(QStringLiteral("#c5c5be")));
+  QCOMPARE(theme.brightForeground(), QColor(QStringLiteral("#dadad5")));
+}
+
+void CoreTests::themeFindsLegacyOmarchyLocation() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString stateHome = directory.path() + QStringLiteral("/state");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  const QString current = configHome + QStringLiteral("/omarchy/current");
+  writeFile(current + QStringLiteral("/theme/colors.toml"),
+            "background = \"#202040\"\nforeground = \"#eeeeff\"\naccent = \"#6060ff\"\n");
+  writeFile(current + QStringLiteral("/theme.name"), "legacy-blue\n");
+
+  OmarchyTheme theme(stateHome, configHome);
+  QVERIFY(theme.omarchyAvailable());
+  QCOMPARE(theme.themeName(), QStringLiteral("Legacy Blue"));
+  QCOMPARE(theme.background(), QColor(QStringLiteral("#202040")));
+  QCOMPARE(theme.accent(), QColor(QStringLiteral("#6060ff")));
+}
+
+void CoreTests::themeFollowsAtomicDirectoryReplacement() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString stateHome = directory.path() + QStringLiteral("/state");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  const QString root = stateHome + QStringLiteral("/omarchy/current");
+  writeFile(root + QStringLiteral("/theme/colors.toml"),
+            "background = \"#101020\"\nforeground = \"#eeeeff\"\n");
+
+  OmarchyTheme theme(stateHome, configHome);
+  QCOMPARE(theme.background(), QColor(QStringLiteral("#101020")));
+
+  writeFile(root + QStringLiteral("/next-theme/colors.toml"),
+            "background = \"#302010\"\nforeground = \"#fff0ee\"\n");
+  QVERIFY(QDir(root + QStringLiteral("/theme")).removeRecursively());
+  QVERIFY(QDir(root).rename(QStringLiteral("next-theme"), QStringLiteral("theme")));
+  QTRY_COMPARE_WITH_TIMEOUT(theme.background(), QColor(QStringLiteral("#302010")), 1500);
+}
+
+void CoreTests::themeUsesMachineLauncherOverride() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString stateHome = directory.path() + QStringLiteral("/state");
+  const QString configHome = directory.path() + QStringLiteral("/config");
+  const QString themeRoot = stateHome + QStringLiteral("/omarchy/current/theme");
+  writeFile(themeRoot + QStringLiteral("/colors.toml"), sampleTheme());
+  writeFile(themeRoot + QStringLiteral("/shell.toml"), "[launcher]\nbackground-alpha = 0.73\n");
+  const QString userShell = configHome + QStringLiteral("/omarchy/shell.toml");
+  writeFile(userShell, "[launcher]\nbackground-alpha = 0.91\n");
+
+  OmarchyTheme theme(stateHome, configHome);
+  QCOMPARE(theme.surfaceAlpha(), 0.91);
+
+  writeFile(userShell, "[launcher]\nbackground-alpha = 0.64\n");
+  QTRY_COMPARE_WITH_TIMEOUT(theme.surfaceAlpha(), 0.64, 1500);
+
+  QVERIFY(QFile::remove(userShell));
+  QTRY_COMPARE_WITH_TIMEOUT(theme.surfaceAlpha(), 0.73, 1500);
 }
 
 void CoreTests::valveKeyValuesParsesNestedAndEscapedValues() {
