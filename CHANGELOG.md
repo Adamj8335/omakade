@@ -20,6 +20,7 @@
 - Ran normally when the single-instance socket cannot be created instead of exiting
   without a window.
 - Stopped walking the achievement icon cache every time game details open.
+- Let SIGTERM, logout, and service stops close Omakade; SDL had been swallowing the signals.
 
 ## 1.3.0
 
