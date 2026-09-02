@@ -27,6 +27,7 @@
 #include "streaming/SunshineIntegration.h"
 #include "theme/OmarchyTheme.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -41,6 +42,7 @@
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QUrl>
 #include <QUuid>
 
 #include <SDL3/SDL.h>
@@ -49,8 +51,8 @@ namespace {
 // A launcher-style source that, like Lutris or Heroic, has no Installed role at all.
 class LauncherOnlyModel final : public QAbstractListModel {
 public:
-  explicit LauncherOnlyModel(QString title, QObject* parent = nullptr)
-      : QAbstractListModel(parent), m_title(std::move(title)) {}
+  explicit LauncherOnlyModel(QString title, QString coverPath = {}, QObject* parent = nullptr)
+      : QAbstractListModel(parent), m_title(std::move(title)), m_coverPath(std::move(coverPath)) {}
   [[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override {
     return parent.isValid() ? 0 : 1;
   }
@@ -67,6 +69,8 @@ public:
       return QStringLiteral("celeste");
     case GameRoles::Runner:
       return QString{};
+    case GameRoles::CoverPath:
+      return m_coverPath.isEmpty() ? QString{} : QUrl::fromLocalFile(m_coverPath).toString();
     case GameRoles::Hidden:
     case GameRoles::Favorite:
       return false;
@@ -79,11 +83,13 @@ public:
             {GameRoles::Source, "source"},
             {GameRoles::AppId, "appId"},
             {GameRoles::Runner, "runner"},
+            {GameRoles::CoverPath, "coverPath"},
             {GameRoles::Hidden, "hidden"}};
   }
 
 private:
   QString m_title;
+  QString m_coverPath;
 };
 
 void writeFile(const QString& path, const QByteArray& contents) {
@@ -2127,17 +2133,24 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   unified.addSourceModel(&games);
   // Same title as the second demo game, from a source without an Installed role.
   const QString sharedTitle = unified.data(unified.index(1, 0), GameRoles::Title).toString();
-  LauncherOnlyModel lutris(sharedTitle);
+  const QString coverPath = directory.path() + QStringLiteral("/celeste.jpg");
+  QImage cover(300, 450, QImage::Format_RGB32);
+  cover.fill(Qt::red);
+  QVERIFY(cover.save(coverPath, "JPEG"));
+  LauncherOnlyModel lutris(sharedTitle, coverPath);
   unified.addSourceModel(&lutris);
-  SunshineIntegration sunshine(&unified, &settings, appsPath,
-                               directory.path() + QStringLiteral("/images"));
+  const QString imageRoot = directory.path() + QStringLiteral("/images");
+  SunshineIntegration sunshine(&unified, &settings, appsPath, imageRoot);
   QVERIFY(sunshine.detected());
   QVERIFY(!sunshine.restartNeeded());
   QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 2);
+  // The export runs on a worker thread; wait for it before reading the file.
+  const auto settle = [&sunshine] { QTRY_VERIFY_WITH_TIMEOUT(!sunshine.busy(), 10000); };
 
   // The uninstalled first demo game stays out; the two installed demo games and the
   // launcher game (no Installed role) become apps.
   settings.setSunshineGameApps(true);
+  settle();
   QJsonObject document = readApps();
   QJsonArray apps = document.value(QStringLiteral("apps")).toArray();
   QCOMPARE(apps.size(), 5);
@@ -2158,6 +2171,9 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   QCOMPARE(lutrisGame.value(QStringLiteral("name")).toString(),
            sharedTitle + QStringLiteral(" (Lutris)"));
   QCOMPARE(lutrisGame.value(QStringLiteral("omakade")).toString(), QStringLiteral("Lutris::celeste"));
+  const QString boxArt = lutrisGame.value(QStringLiteral("image-path")).toString();
+  QVERIFY(boxArt.startsWith(imageRoot));
+  QCOMPARE(QImage(boxArt).size(), QSize(600, 800));
   QCOMPARE(apps.at(3).toObject().value(QStringLiteral("name")).toString(),
            unified.data(unified.index(2, 0), GameRoles::Title).toString());
   QCOMPARE(sunshine.exportedGames(), 3);
@@ -2165,6 +2181,7 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   QVERIFY(QFileInfo::exists(appsPath + QStringLiteral(".omakade-backup")));
 
   settings.setSunshineOmakadeApp(true);
+  settle();
   apps = readApps().value(QStringLiteral("apps")).toArray();
   QCOMPARE(apps.size(), 6);
   const QJsonObject omakade = apps.at(2).toObject();
@@ -2179,17 +2196,25 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
                .toString(),
            QStringLiteral("omakade --quit"));
 
-  // A second sync with nothing changed leaves the file alone.
+  // A second sync with nothing changed leaves the file alone, even though Sunshine's own
+  // formatting differs from Qt's.
+  writeFile(appsPath, QJsonDocument(readApps()).toJson(QJsonDocument::Compact));
+  const QDateTime before = QFileInfo(appsPath).lastModified();
   QVERIFY(sunshine.sync());
+  settle();
   QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 6);
+  QCOMPARE(QFileInfo(appsPath).lastModified(), before);
+  QCOMPARE(sunshine.statusText(), QStringLiteral("Sunshine app list is up to date"));
 
   settings.setSunshineGameApps(false);
   settings.setSunshineOmakadeApp(false);
+  settle();
   apps = readApps().value(QStringLiteral("apps")).toArray();
   QCOMPARE(apps.size(), 2);
   QCOMPARE(apps.at(1).toObject().value(QStringLiteral("name")).toString(),
            QStringLiteral("Steam Big Picture"));
   QCOMPARE(sunshine.exportedGames(), 0);
+  QVERIFY(QDir(imageRoot).entryList({QStringLiteral("*.png")}, QDir::Files).isEmpty());
 }
 
 void CoreTests::secondInstanceRequestsActivation() {

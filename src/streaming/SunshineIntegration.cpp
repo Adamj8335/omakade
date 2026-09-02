@@ -9,8 +9,8 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFileInfo>
-#include <QImage>
 #include <QHash>
+#include <QImage>
 #include <QImageReader>
 #include <QJsonDocument>
 #include <QPainter>
@@ -19,6 +19,7 @@
 #include <QSet>
 #include <QStandardPaths>
 #include <QUrl>
+#include <QtConcurrent>
 
 namespace {
 constexpr auto kMarker = "omakade";
@@ -29,6 +30,14 @@ constexpr int kBoxArtHeight = 800;
 QString localPath(const QString& value) {
   const QUrl url(value);
   return url.isLocalFile() ? url.toLocalFile() : value;
+}
+
+QByteArray sha1(const QByteArray& contents) {
+  return QCryptographicHash::hash(contents, QCryptographicHash::Sha1).toHex();
+}
+
+QString writtenListMarker(const QString& imageRoot) {
+  return imageRoot + QStringLiteral("/apps.sha1");
 }
 } // namespace
 
@@ -47,8 +56,18 @@ SunshineIntegration::SunshineIntegration(UnifiedGameModel* games, AppSettings* s
   m_syncTimer.setSingleShot(true);
   m_syncTimer.setInterval(1500);
   connect(&m_syncTimer, &QTimer::timeout, this, [this] { sync(); });
+  connect(&m_syncWatcher, &QFutureWatcher<SyncResult>::finished, this,
+          &SunshineIntegration::finishSync);
   if (m_games != nullptr) {
     connect(m_games, &QAbstractItemModel::modelReset, this, &SunshineIntegration::scheduleSync);
+    connect(m_games, &QAbstractItemModel::dataChanged, this,
+            [this](const QModelIndex&, const QModelIndex&, const QList<int>& roles) {
+              // Hiding a game or changing its cover changes what Moonlight should show.
+              if (roles.isEmpty() || roles.contains(GameRoles::Hidden) ||
+                  roles.contains(GameRoles::CoverPath) || roles.contains(GameRoles::CustomCover)) {
+                scheduleSync();
+              }
+            });
   }
   if (m_settings != nullptr) {
     connect(m_settings, &AppSettings::sunshineChanged, this, [this] { sync(); });
@@ -67,56 +86,10 @@ SunshineIntegration::SunshineIntegration(UnifiedGameModel* games, AppSettings* s
   }
 }
 
-void SunshineIntegration::rememberWrittenList(const QByteArray& contents) {
-  QDir().mkpath(m_imageRoot);
-  QSaveFile marker(m_imageRoot + QStringLiteral("/apps.sha1"));
-  if (marker.open(QIODevice::WriteOnly)) {
-    marker.write(QCryptographicHash::hash(contents, QCryptographicHash::Sha1).toHex());
-    marker.commit();
+SunshineIntegration::~SunshineIntegration() {
+  if (m_syncWatcher.isRunning()) {
+    m_syncWatcher.waitForFinished();
   }
-}
-
-void SunshineIntegration::refreshRestartState() {
-  QFile marker(m_imageRoot + QStringLiteral("/apps.sha1"));
-  QFile apps(m_appsPath);
-  if (!marker.open(QIODevice::ReadOnly) || !apps.open(QIODevice::ReadOnly)) {
-    return;
-  }
-  const QByteArray written = marker.readAll().trimmed();
-  const QByteArray current =
-      QCryptographicHash::hash(apps.readAll(), QCryptographicHash::Sha1).toHex();
-  if (written != current) {
-    // Someone else wrote the list since; Sunshine's own web UI reloads on save.
-    return;
-  }
-  const qint64 modified = QFileInfo(m_appsPath).lastModified().toSecsSinceEpoch();
-  auto* process = new QProcess(this);
-  connect(process, &QProcess::finished, this, [this, process, modified](int, QProcess::ExitStatus) {
-    const QString output = QString::fromUtf8(process->readAllStandardOutput());
-    process->deleteLater();
-    qint64 activeSince = -1;
-    bool active = false;
-    for (const QString& line : output.split(QLatin1Char('\n'))) {
-      if (line.startsWith(QStringLiteral("ActiveEnterTimestamp=@"))) {
-        activeSince = line.mid(22).trimmed().toLongLong();
-      } else if (line.startsWith(QStringLiteral("ActiveState="))) {
-        active = line.mid(12).trimmed() == QStringLiteral("active");
-      }
-    }
-    if (activeSince < 0) {
-      return;
-    }
-    const bool needed = active && modified > activeSince;
-    if (needed != m_restartNeeded) {
-      m_restartNeeded = needed;
-      emit stateChanged();
-    }
-  });
-  connect(process, &QProcess::errorOccurred, process, &QObject::deleteLater);
-  process->start(QStringLiteral("systemctl"),
-                 {QStringLiteral("--user"), QStringLiteral("show"), QStringLiteral("--timestamp=unix"),
-                  QStringLiteral("-p"), QStringLiteral("ActiveEnterTimestamp,ActiveState"),
-                  serviceUnit()});
 }
 
 bool SunshineIntegration::streaming() { return qEnvironmentVariableIsSet("SUNSHINE_APP_ID"); }
@@ -137,9 +110,26 @@ void SunshineIntegration::detect() {
 }
 
 void SunshineIntegration::scheduleSync() {
-  if (detected()) {
+  if (detected() && m_settings != nullptr &&
+      (m_settings->sunshineOmakadeApp() || m_settings->sunshineGameApps())) {
     m_syncTimer.start();
   }
+}
+
+QString SunshineIntegration::serviceUnit() {
+  // The Arch package installs app-dev.lizardbyte.app.Sunshine.service with a
+  // sunshine.service alias that only exists once the unit is enabled, so prefer the real
+  // unit name whenever its file is present.
+  const QString packaged = QStringLiteral("app-dev.lizardbyte.app.Sunshine.service");
+  for (const QString& directory :
+       {QStringLiteral("/usr/lib/systemd/user/"), QStringLiteral("/etc/systemd/user/"),
+        QDir::homePath() + QStringLiteral("/.config/systemd/user/"),
+        QDir::homePath() + QStringLiteral("/.local/share/systemd/user/")}) {
+    if (QFileInfo::exists(directory + packaged)) {
+      return packaged;
+    }
+  }
+  return QStringLiteral("sunshine.service");
 }
 
 QString SunshineIntegration::shellQuote(const QString& value) {
@@ -209,42 +199,42 @@ QJsonObject SunshineIntegration::mergeEntries(const QJsonObject& existing,
   return result;
 }
 
-QString SunshineIntegration::exportImage(const QString& sourcePath, const QString& name) {
+QString SunshineIntegration::exportImage(const QString& imageRoot, const QString& sourcePath,
+                                         const QString& name) {
   const QString source = localPath(sourcePath);
   if (source.isEmpty() || !QFileInfo::exists(source)) {
     return {};
   }
-  const QString hash = QString::fromLatin1(
-      QCryptographicHash::hash(name.toUtf8(), QCryptographicHash::Sha1).toHex().left(16));
-  const QString target = m_imageRoot + QLatin1Char('/') + hash + QStringLiteral(".png");
+  // The source path is part of the name so a swapped cover gets fresh box art even when
+  // the new file is older than the previous export.
+  const QString hash = QString::fromLatin1(sha1((name + QChar::Null + source).toUtf8()).left(16));
+  const QString target = imageRoot + QLatin1Char('/') + hash + QStringLiteral(".png");
   const QFileInfo targetInfo(target);
   if (targetInfo.exists() &&
       targetInfo.lastModified() >= QFileInfo(source).lastModified()) {
     return target;
   }
+  const bool vector = source.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive);
   QImageReader reader(source);
   reader.setAutoTransform(true);
-  if (source.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive)) {
+  if (vector) {
     reader.setScaledSize(QSize(kBoxArtWidth * 2 / 3, kBoxArtWidth * 2 / 3));
   }
   const QImage image = reader.read();
   if (image.isNull()) {
     return {};
   }
-  QDir().mkpath(m_imageRoot);
+  QDir().mkpath(imageRoot);
   QImage boxArt(kBoxArtWidth, kBoxArtHeight, QImage::Format_ARGB32_Premultiplied);
   boxArt.fill(QColor(24, 26, 30));
   QPainter painter(&boxArt);
   painter.setRenderHint(QPainter::SmoothPixmapTransform);
-  if (source.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive)) {
-    painter.drawImage((kBoxArtWidth - image.width()) / 2, (kBoxArtHeight - image.height()) / 2,
-                      image);
-  } else {
-    const QImage scaled = image.scaled(kBoxArtWidth, kBoxArtHeight, Qt::KeepAspectRatioByExpanding,
-                                       Qt::SmoothTransformation);
-    painter.drawImage((kBoxArtWidth - scaled.width()) / 2, (kBoxArtHeight - scaled.height()) / 2,
-                      scaled);
-  }
+  const QImage scaled = vector ? image
+                               : image.scaled(kBoxArtWidth, kBoxArtHeight,
+                                              Qt::KeepAspectRatioByExpanding,
+                                              Qt::SmoothTransformation);
+  painter.drawImage((kBoxArtWidth - scaled.width()) / 2, (kBoxArtHeight - scaled.height()) / 2,
+                    scaled);
   painter.end();
   return boxArt.save(target, "PNG") ? target : QString{};
 }
@@ -253,94 +243,177 @@ bool SunshineIntegration::sync() {
   if (!detected() || m_games == nullptr || m_settings == nullptr) {
     return false;
   }
-  QFile file(m_appsPath);
+  if (m_busy) {
+    // Finish the running export first, then run again with the latest library.
+    m_syncPending = true;
+    return true;
+  }
+  QVector<GameEntry> games;
+  if (m_settings->sunshineGameApps()) {
+    for (int row = 0; row < m_games->rowCount(); ++row) {
+      const QModelIndex game = m_games->index(row, 0);
+      if (game.data(GameRoles::Hidden).toBool() || !game.data(GameRoles::Installed).toBool()) {
+        continue;
+      }
+      games.append({.title = game.data(GameRoles::Title).toString(),
+                    .launchKey = LaunchKey{.source = game.data(GameRoles::Source).toString(),
+                                           .runner = game.data(GameRoles::Runner).toString(),
+                                           .appId = game.data(GameRoles::AppId).toString()}
+                                     .toString(),
+                    .coverSource = game.data(GameRoles::CoverPath).toString()});
+    }
+  }
+  m_busy = true;
+  emit stateChanged();
+  m_syncWatcher.setFuture(QtConcurrent::run(
+      [appsPath = m_appsPath, imageRoot = m_imageRoot, prefix = commandPrefix(m_flatpak),
+       includeOmakade = m_settings->sunshineOmakadeApp(), iconSource = m_iconSource, games] {
+        return runSync(appsPath, imageRoot, prefix, includeOmakade, iconSource, games);
+      }));
+  return true;
+}
+
+SunshineIntegration::SyncResult SunshineIntegration::runSync(
+    const QString& appsPath, const QString& imageRoot, const QString& prefix,
+    bool includeOmakade, const QString& iconSource, const QVector<GameEntry>& games) {
+  SyncResult result;
+  QFile file(appsPath);
   if (!file.open(QIODevice::ReadOnly)) {
     // Sunshine writes its default list on first start; never invent one for it.
-    setStatus(QStringLiteral("Start Sunshine once so it creates %1").arg(m_appsPath));
-    return false;
+    result.status = QStringLiteral("Start Sunshine once so it creates %1").arg(appsPath);
+    return result;
   }
   const QByteArray previous = file.readAll();
   file.close();
   QJsonParseError parseError;
   const QJsonDocument document = QJsonDocument::fromJson(previous, &parseError);
   if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-    setStatus(QStringLiteral("Could not read %1: %2").arg(m_appsPath, parseError.errorString()));
-    return false;
+    result.status =
+        QStringLiteral("Could not read %1: %2").arg(appsPath, parseError.errorString());
+    return result;
   }
 
-  const QString prefix = commandPrefix(m_flatpak);
   QJsonArray ours;
-  if (m_settings->sunshineOmakadeApp()) {
-    ours.append(omakadeEntry(prefix, exportImage(m_iconSource, QStringLiteral("omakade"))));
-  }
-  int games = 0;
-  if (m_settings->sunshineGameApps()) {
-    QVector<int> rows;
-    QHash<QString, int> titleCounts;
-    for (int row = 0; row < m_games->rowCount(); ++row) {
-      const QModelIndex game = m_games->index(row, 0);
-      if (game.data(GameRoles::Hidden).toBool() || !game.data(GameRoles::Installed).toBool()) {
-        continue;
-      }
-      rows.append(row);
-      ++titleCounts[game.data(GameRoles::Title).toString().toLower()];
-    }
-    for (int row : rows) {
-      const QModelIndex game = m_games->index(row, 0);
-      const QString source = game.data(GameRoles::Source).toString();
-      const QString launchKey = LaunchKey{.source = source,
-                                          .runner = game.data(GameRoles::Runner).toString(),
-                                          .appId = game.data(GameRoles::AppId).toString()}
-                                    .toString();
-      QString title = game.data(GameRoles::Title).toString();
-      if (titleCounts.value(title.toLower()) > 1) {
-        // Sunshine identifies apps by name, so two stores' copies need distinct names.
-        title += QStringLiteral(" (%1)").arg(source);
-      }
-      ours.append(gameEntry(title, launchKey, prefix,
-                            exportImage(game.data(GameRoles::CoverPath).toString(), launchKey)));
-      ++games;
-    }
-  }
-
-  // Drop box art for games that are no longer exported so the folder does not grow forever.
   QSet<QString> usedImages;
-  for (const QJsonValue& value : ours) {
-    usedImages.insert(value.toObject().value(QStringLiteral("image-path")).toString());
+  if (includeOmakade) {
+    const QString image = exportImage(imageRoot, iconSource, QStringLiteral("omakade"));
+    usedImages.insert(image);
+    ours.append(omakadeEntry(prefix, image));
   }
+  QHash<QString, int> titleCounts;
+  for (const GameEntry& game : games) {
+    ++titleCounts[game.title.toLower()];
+  }
+  for (const GameEntry& game : games) {
+    QString title = game.title;
+    if (titleCounts.value(title.toLower()) > 1) {
+      // Sunshine identifies apps by name, so two stores' copies need distinct names.
+      title += QStringLiteral(" (%1)").arg(LaunchKey::parse(game.launchKey).source);
+    }
+    const QString image = exportImage(imageRoot, game.coverSource, game.launchKey);
+    usedImages.insert(image);
+    ours.append(gameEntry(title, game.launchKey, prefix, image));
+  }
+  result.games = games.size();
+  result.entries = ours.size();
+
+  const QJsonObject merged = mergeEntries(document.object(), ours);
+  const bool unchanged = merged == document.object();
+  if (!unchanged) {
+    const QString backup = appsPath + QStringLiteral(".omakade-backup");
+    if (!QFileInfo::exists(backup)) {
+      QFile::copy(appsPath, backup);
+    }
+    const QByteArray contents = QJsonDocument(merged).toJson(QJsonDocument::Indented);
+    QSaveFile output(appsPath);
+    if (!output.open(QIODevice::WriteOnly) || output.write(contents) != contents.size() ||
+        !output.commit()) {
+      result.status = QStringLiteral("Could not write %1").arg(appsPath);
+      return result;
+    }
+    QDir().mkpath(imageRoot);
+    QSaveFile marker(writtenListMarker(imageRoot));
+    if (marker.open(QIODevice::WriteOnly)) {
+      marker.write(sha1(contents));
+      marker.commit();
+    }
+    result.wrote = true;
+  }
+  // Drop box art for games that are no longer exported, now that nothing references it.
   for (const QFileInfo& image :
-       QDir(m_imageRoot).entryInfoList({QStringLiteral("*.png")}, QDir::Files)) {
+       QDir(imageRoot).entryInfoList({QStringLiteral("*.png")}, QDir::Files)) {
     if (!usedImages.contains(image.absoluteFilePath())) {
       QFile::remove(image.absoluteFilePath());
     }
   }
+  result.okay = true;
+  if (!result.wrote) {
+    result.status = ours.isEmpty() ? QStringLiteral("Nothing is exported to Sunshine")
+                                   : QStringLiteral("Sunshine app list is up to date");
+  } else if (ours.isEmpty()) {
+    result.status = QStringLiteral("Removed Omakade from Sunshine. Restart Sunshine to apply.");
+  } else {
+    result.status =
+        QStringLiteral("Wrote %1 Sunshine app(s). Restart Sunshine to apply.").arg(ours.size());
+  }
+  return result;
+}
 
-  const QJsonObject merged = mergeEntries(document.object(), ours);
-  const QByteArray contents = QJsonDocument(merged).toJson(QJsonDocument::Indented);
-  if (contents == previous) {
-    m_exportedGames = games;
-    setStatus(ours.isEmpty() ? QStringLiteral("Nothing is exported to Sunshine")
-                             : QStringLiteral("Sunshine app list is up to date"));
-    return true;
+void SunshineIntegration::finishSync() {
+  const SyncResult result = m_syncWatcher.result();
+  m_busy = false;
+  if (result.okay) {
+    m_exportedGames = result.games;
+    if (result.wrote) {
+      m_restartNeeded = true;
+    }
   }
-  const QString backup = m_appsPath + QStringLiteral(".omakade-backup");
-  if (!QFileInfo::exists(backup)) {
-    QFile::copy(m_appsPath, backup);
+  setStatus(result.status);
+  if (m_syncPending) {
+    m_syncPending = false;
+    sync();
   }
-  QSaveFile output(m_appsPath);
-  if (!output.open(QIODevice::WriteOnly) || output.write(contents) != contents.size() ||
-      !output.commit()) {
-    setStatus(QStringLiteral("Could not write %1").arg(m_appsPath));
-    return false;
+}
+
+void SunshineIntegration::refreshRestartState() {
+  QFile marker(writtenListMarker(m_imageRoot));
+  QFile apps(m_appsPath);
+  if (!marker.open(QIODevice::ReadOnly) || !apps.open(QIODevice::ReadOnly)) {
+    return;
   }
-  rememberWrittenList(contents);
-  m_exportedGames = games;
-  m_restartNeeded = true;
-  setStatus(ours.isEmpty()
-                ? QStringLiteral("Removed Omakade from Sunshine. Restart Sunshine to apply.")
-                : QStringLiteral("Wrote %1 Sunshine app(s). Restart Sunshine to apply.")
-                      .arg(ours.size()));
-  return true;
+  if (marker.readAll().trimmed() != sha1(apps.readAll())) {
+    // Someone else wrote the list since; Sunshine's own web UI reloads on save.
+    return;
+  }
+  auto* process = new QProcess(this);
+  connect(process, &QProcess::finished, this, [this, process](int, QProcess::ExitStatus) {
+    const QString output = QString::fromUtf8(process->readAllStandardOutput());
+    process->deleteLater();
+    qint64 activeSince = -1;
+    bool active = false;
+    for (const QString& line : output.split(QLatin1Char('\n'))) {
+      if (line.startsWith(QStringLiteral("ActiveEnterTimestamp=@"))) {
+        activeSince = line.mid(22).trimmed().toLongLong();
+      } else if (line.startsWith(QStringLiteral("ActiveState="))) {
+        active = line.mid(12).trimmed() == QStringLiteral("active");
+      }
+    }
+    if (activeSince < 0 || m_busy) {
+      return;
+    }
+    // Read the time now rather than before the query, so a write that landed meanwhile counts.
+    const qint64 modified = QFileInfo(m_appsPath).lastModified().toSecsSinceEpoch();
+    const bool needed = active && modified > activeSince;
+    if (needed != m_restartNeeded) {
+      m_restartNeeded = needed;
+      emit stateChanged();
+    }
+  });
+  connect(process, &QProcess::errorOccurred, process, &QObject::deleteLater);
+  process->start(QStringLiteral("systemctl"),
+                 {QStringLiteral("--user"), QStringLiteral("show"), QStringLiteral("--timestamp=unix"),
+                  QStringLiteral("-p"), QStringLiteral("ActiveEnterTimestamp,ActiveState"),
+                  serviceUnit()});
 }
 
 void SunshineIntegration::restartSunshine() {
@@ -369,22 +442,6 @@ void SunshineIntegration::restartSunshine() {
   });
   process->start(QStringLiteral("systemctl"),
                  {QStringLiteral("--user"), QStringLiteral("restart"), serviceUnit()});
-}
-
-QString SunshineIntegration::serviceUnit() {
-  // The Arch package installs app-dev.lizardbyte.app.Sunshine.service with a
-  // sunshine.service alias that only exists once the unit is enabled, so prefer the real
-  // unit name whenever its file is present.
-  const QString packaged = QStringLiteral("app-dev.lizardbyte.app.Sunshine.service");
-  for (const QString& directory :
-       {QStringLiteral("/usr/lib/systemd/user/"), QStringLiteral("/etc/systemd/user/"),
-        QDir::homePath() + QStringLiteral("/.config/systemd/user/"),
-        QDir::homePath() + QStringLiteral("/.local/share/systemd/user/")}) {
-    if (QFileInfo::exists(directory + packaged)) {
-      return packaged;
-    }
-  }
-  return QStringLiteral("sunshine.service");
 }
 
 void SunshineIntegration::setStatus(const QString& text) {

@@ -1,10 +1,12 @@
 #pragma once
 
+#include <QFutureWatcher>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QVector>
 
 class AppSettings;
 class UnifiedGameModel;
@@ -27,10 +29,25 @@ class SunshineIntegration final : public QObject {
   Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
 
 public:
+  // One game as the export worker sees it, copied off the model on the GUI thread.
+  struct GameEntry {
+    QString title;
+    QString launchKey;
+    QString coverSource;
+  };
+  struct SyncResult {
+    bool okay = false;
+    bool wrote = false;
+    int games = 0;
+    int entries = 0;
+    QString status;
+  };
+
   // `appsPath` and `imageRoot` override detection; tests point them at temporary files.
   explicit SunshineIntegration(UnifiedGameModel* games, AppSettings* settings,
                                const QString& appsPath = {}, const QString& imageRoot = {},
                                QObject* parent = nullptr);
+  ~SunshineIntegration() override;
 
   [[nodiscard]] bool detected() const { return !m_appsPath.isEmpty(); }
   [[nodiscard]] bool flatpak() const { return m_flatpak; }
@@ -42,7 +59,8 @@ public:
   [[nodiscard]] bool busy() const { return m_busy; }
   void setIconSource(const QString& path) { m_iconSource = path; }
 
-  // Rewrites the Omakade entries to match the current preferences and library.
+  // Starts rewriting the Omakade entries to match the preferences and library. The work
+  // runs on a worker thread; `busy` clears and `stateChanged` fires when it is done.
   Q_INVOKABLE bool sync();
   Q_INVOKABLE void restartSunshine();
 
@@ -56,6 +74,10 @@ public:
   // Keeps every foreign entry in order and replaces Omakade's with `ours`.
   [[nodiscard]] static QJsonObject mergeEntries(const QJsonObject& existing,
                                                 const QJsonArray& ours);
+  // Renders a cover or the app icon as 600x800 PNG box art under `imageRoot`. Returns the
+  // target path, or an empty string when the source cannot be read.
+  [[nodiscard]] static QString exportImage(const QString& imageRoot, const QString& sourcePath,
+                                           const QString& name);
 
 signals:
   void stateChanged();
@@ -63,12 +85,15 @@ signals:
 private:
   void detect();
   void scheduleSync();
+  void finishSync();
   // Asks systemd when Sunshine started and compares that with the last list Omakade wrote,
   // so the restart hint survives Omakade restarts without nagging after Sunshine reloaded.
   void refreshRestartState();
-  void rememberWrittenList(const QByteArray& contents);
-  [[nodiscard]] QString exportImage(const QString& sourcePath, const QString& name);
   void setStatus(const QString& text);
+  [[nodiscard]] static SyncResult runSync(const QString& appsPath, const QString& imageRoot,
+                                          const QString& prefix, bool includeOmakade,
+                                          const QString& iconSource,
+                                          const QVector<GameEntry>& games);
 
   UnifiedGameModel* m_games = nullptr;
   AppSettings* m_settings = nullptr;
@@ -77,8 +102,10 @@ private:
   QString m_iconSource;
   QString m_statusText;
   QTimer m_syncTimer;
+  QFutureWatcher<SyncResult> m_syncWatcher;
   bool m_flatpak = false;
   bool m_restartNeeded = false;
   bool m_busy = false;
+  bool m_syncPending = false;
   int m_exportedGames = 0;
 };
