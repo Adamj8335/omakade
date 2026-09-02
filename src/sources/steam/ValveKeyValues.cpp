@@ -1,6 +1,7 @@
 #include "sources/steam/ValveKeyValues.h"
 
 #include <QFile>
+#include <QtEndian>
 
 #include <cctype>
 
@@ -185,4 +186,143 @@ bool ValveKeyValuesParser::parseFile(const QString& path, ValveKeyValues* result
     return false;
   }
   return parse(file.readAll(), result, error);
+}
+
+namespace {
+bool readCString(const QByteArray& input, qsizetype* position, QString* result, QString* error) {
+  const qsizetype start = *position;
+  while (*position < input.size()) {
+    if (input.at(*position) == '\0') {
+      *result = QString::fromUtf8(input.constData() + start, *position - start);
+      ++(*position);
+      return true;
+    }
+    ++(*position);
+  }
+  *error = QStringLiteral("Unterminated binary string");
+  return false;
+}
+
+bool parseBinaryObject(const QByteArray& input, qsizetype* position, ValveKeyValues* result,
+                       int depth, QString* error) {
+  if (depth > kMaximumNestingDepth) {
+    *error = QStringLiteral("Object nesting is too deep");
+    return false;
+  }
+  while (true) {
+    if (*position >= input.size()) {
+      *error = QStringLiteral("Object is missing a closing marker");
+      return false;
+    }
+    const auto type = static_cast<unsigned char>(input.at((*position)++));
+    if (type == 0x08) {
+      return true;
+    }
+    QString key;
+    if (!readCString(input, position, &key, error)) {
+      return false;
+    }
+    if (type == 0x00) {
+      ValveKeyValues child;
+      if (!parseBinaryObject(input, position, &child, depth + 1, error)) {
+        return false;
+      }
+      result->objects.insert(key, child);
+      continue;
+    }
+    if (type == 0x01) {
+      QString value;
+      if (!readCString(input, position, &value, error)) {
+        return false;
+      }
+      result->values.insert(key, value);
+      continue;
+    }
+    if (type == 0x02) {
+      if (*position + 4 > input.size()) {
+        *error = QStringLiteral("Truncated 32-bit value");
+        return false;
+      }
+      const auto value =
+          qFromLittleEndian<quint32>(input.constData() + *position);
+      *position += 4;
+      result->values.insert(key, QString::number(value));
+      continue;
+    }
+    if (type == 0x07) {
+      if (*position + 8 > input.size()) {
+        *error = QStringLiteral("Truncated 64-bit value");
+        return false;
+      }
+      const auto value =
+          qFromLittleEndian<quint64>(input.constData() + *position);
+      *position += 8;
+      result->values.insert(key, QString::number(value));
+      continue;
+    }
+    *error = QStringLiteral("Unsupported binary type %1").arg(type);
+    return false;
+  }
+}
+} // namespace
+
+bool ValveKeyValuesParser::parseBinary(const QByteArray& contents, ValveKeyValues* result,
+                                       QString* error) {
+  if (result == nullptr) {
+    return false;
+  }
+  *result = {};
+  if (contents.size() > kMaximumFileBytes) {
+    if (error != nullptr) {
+      *error = QStringLiteral("File is too large");
+    }
+    return false;
+  }
+  if (contents.isEmpty()) {
+    return true;
+  }
+
+  QString localError;
+  qsizetype position = 0;
+  bool success = false;
+  if (static_cast<unsigned char>(contents.at(0)) == 0x00) {
+    ++position;
+    QString rootKey;
+    success = readCString(contents, &position, &rootKey, &localError);
+    if (success) {
+      ValveKeyValues child;
+      success = parseBinaryObject(contents, &position, &child, 1, &localError);
+      if (success) {
+        result->objects.insert(rootKey, child);
+      }
+    }
+  } else {
+    success = parseBinaryObject(contents, &position, result, 0, &localError);
+  }
+  if (success && position < contents.size() &&
+      static_cast<unsigned char>(contents.at(position)) == 0x08) {
+    ++position;
+  }
+  if (error != nullptr) {
+    *error = localError;
+  }
+  return success;
+}
+
+bool ValveKeyValuesParser::parseBinaryFile(const QString& path, ValveKeyValues* result,
+                                           QString* error) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    if (error != nullptr) {
+      *error = file.errorString();
+    }
+    return false;
+  }
+  if (file.size() > kMaximumFileBytes) {
+    if (error != nullptr) {
+      *error = QStringLiteral("File is too large");
+    }
+    return false;
+  }
+  return parseBinary(file.readAll(), result, error);
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Steam
+
+- Imported non-Steam shortcuts from `shortcuts.vdf`, including Wine/Proton
+  games added to Steam, and launched them with the 64-bit shortcut ID Steam
+  expects.
+
 ## 1.3.0
 
 ### Steam

@@ -684,9 +684,16 @@ void SteamGameModel::rebuildWatchPaths(const SteamScanResult& result) {
     for (const QString& user : userdata.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
       const QString userConfig = userdata.absoluteFilePath(user + QStringLiteral("/config"));
       const QString localConfig = userConfig + QStringLiteral("/localconfig.vdf");
+      const QString shortcuts = userConfig + QStringLiteral("/shortcuts.vdf");
       const QString grid = userConfig + QStringLiteral("/grid");
       if (QFileInfo::exists(localConfig)) {
         files.append(localConfig);
+      }
+      if (QFileInfo::exists(shortcuts)) {
+        files.append(shortcuts);
+      }
+      if (QFileInfo(userConfig).isDir()) {
+        directories.append(userConfig);
       }
       if (QFileInfo(grid).isDir()) {
         directories.append(grid);
@@ -726,8 +733,13 @@ void SteamGameModel::requestCoverForGame(const Game& game) {
     return;
   }
   bool numeric = false;
-  game.steam.appId.toULongLong(&numeric);
+  const quint64 appId = game.steam.appId.toULongLong(&numeric);
   if (!numeric) {
+    return;
+  }
+  // Non-Steam shortcuts have no Steam store capsule. Grid art or the shortcut
+  // icon is already resolved during the local scan.
+  if (appId <= 0xFFFFFFFFull && (appId & 0x80000000ull) != 0) {
     return;
   }
   const QString cached = coverCachePath(game.steam.appId);

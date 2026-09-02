@@ -8,6 +8,23 @@ bool validAppId(const QString& appId) {
   static const QRegularExpression digits(QStringLiteral("^[1-9][0-9]*$"));
   return digits.match(appId).hasMatch();
 }
+
+QString launchTargetId(const QString& appId) {
+  if (!validAppId(appId)) {
+    return {};
+  }
+  bool numeric = false;
+  const quint64 id = appId.toULongLong(&numeric);
+  if (!numeric || id == 0) {
+    return {};
+  }
+  // Non-Steam shortcuts store a 32-bit ID with the high bit set. Steam launches
+  // them with the 64-bit Big Picture ID: (appid << 32) | 0x02000000.
+  if (id <= 0xFFFFFFFFull && (id & 0x80000000ull) != 0) {
+    return QString::number((id << 32) | 0x02000000ull);
+  }
+  return appId;
+}
 } // namespace
 
 SteamLauncher::SteamLauncher(QObject* parent) : QObject(parent) {}
@@ -15,7 +32,8 @@ SteamLauncher::SteamLauncher(QObject* parent) : QObject(parent) {}
 QString SteamLauncher::lastError() const { return m_lastError; }
 
 QUrl SteamLauncher::launchUrl(const QString& appId) {
-  return validAppId(appId) ? QUrl(QStringLiteral("steam://rungameid/%1").arg(appId)) : QUrl{};
+  const QString target = launchTargetId(appId);
+  return target.isEmpty() ? QUrl{} : QUrl(QStringLiteral("steam://rungameid/%1").arg(target));
 }
 
 QUrl SteamLauncher::manageUrl(const QString& appId) {

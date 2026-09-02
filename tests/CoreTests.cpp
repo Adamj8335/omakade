@@ -39,12 +39,65 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+
 namespace {
 void writeFile(const QString& path, const QByteArray& contents) {
   QDir().mkpath(QFileInfo(path).absolutePath());
   QFile file(path);
   QVERIFY2(file.open(QIODevice::WriteOnly | QIODevice::Truncate), qPrintable(file.errorString()));
   QCOMPARE(file.write(contents), contents.size());
+}
+
+QByteArray binaryCString(const QByteArray& value) {
+  QByteArray out = value;
+  out.append('\0');
+  return out;
+}
+
+QByteArray binaryKey(char type, const QByteArray& key) {
+  QByteArray out;
+  out.append(type);
+  out.append(binaryCString(key));
+  return out;
+}
+
+QByteArray binaryStringField(const QByteArray& key, const QByteArray& value) {
+  return binaryKey(0x01, key) + binaryCString(value);
+}
+
+QByteArray binaryIntField(const QByteArray& key, quint32 value) {
+  QByteArray out = binaryKey(0x02, key);
+  out.append(char(value & 0xff));
+  out.append(char((value >> 8) & 0xff));
+  out.append(char((value >> 16) & 0xff));
+  out.append(char((value >> 24) & 0xff));
+  return out;
+}
+
+QByteArray sampleShortcutsVdf(const QByteArray& iconPath) {
+  QByteArray shortcut = binaryKey(0x00, "0");
+  shortcut += binaryIntField("appid", 3236138358u);
+  shortcut += binaryStringField("AppName", "Soulframe");
+  shortcut += binaryStringField("Exe", "/games/Soulframe/Launcher.exe");
+  shortcut += binaryStringField("StartDir", "/games/Soulframe");
+  shortcut += binaryStringField("icon", iconPath);
+  shortcut += binaryIntField("LastPlayTime", 1700000001);
+  shortcut += binaryKey(0x00, "tags");
+  shortcut += char(0x08);
+  shortcut += char(0x08);
+
+  QByteArray skipped = binaryKey(0x00, "1");
+  skipped += binaryIntField("appid", 1);
+  skipped += binaryStringField("AppName", "");
+  skipped += char(0x08);
+
+  QByteArray shortcuts = binaryKey(0x00, "shortcuts");
+  shortcuts += shortcut;
+  shortcuts += skipped;
+  shortcuts += char(0x08);
+  shortcuts += char(0x08);
+  return shortcuts;
 }
 
 QByteArray sampleTheme(const QByteArray& accent = "#7aa2f7") {
@@ -233,6 +286,7 @@ private slots:
   void valveKeyValuesRejectsMalformedInput();
   void valveKeyValuesRejectsExcessiveNesting();
   void steamScannerImportsLibrariesAndCustomArtwork();
+  void steamScannerImportsNonSteamShortcuts();
   void steamScannerRejectsLandscapeCoverFallbackAndImportsAchievements();
   void steamScannerSurvivesMissingLibrariesAndBrokenManifests();
   void steamModelPersistsFavoritesAndHiddenState();
@@ -564,6 +618,44 @@ void CoreTests::steamScannerImportsLibrariesAndCustomArtwork() {
   QCOMPARE(result.games.at(0).playtimeMinutes, 125);
   QVERIFY(result.games.at(0).coverPath.endsWith(QStringLiteral("10p.png")));
   QCOMPARE(result.games.at(1).appId, QStringLiteral("20"));
+  QVERIFY(result.warnings.isEmpty());
+}
+
+void CoreTests::steamScannerImportsNonSteamShortcuts() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root = directory.path() + QStringLiteral("/Steam");
+  const QString second = directory.path() + QStringLiteral("/Second Library");
+  createSteamFixture(root, second);
+
+  const QString icon = directory.path() + QStringLiteral("/soulframe-icon.png");
+  writeFile(icon, "icon");
+  writeFile(root + QStringLiteral("/userdata/42/config/shortcuts.vdf"),
+            sampleShortcutsVdf(icon.toUtf8()));
+  writeFile(root + QStringLiteral("/userdata/42/config/grid/3236138358p.png"), "shortcut cover");
+  writeFile(root + QStringLiteral("/userdata/42/config/localconfig.vdf"),
+            "\"UserLocalConfigStore\" { \"Software\" { \"Valve\" { \"Steam\" { \"apps\" { "
+            "\"10\" { \"LastPlayed\" \"1700000000\" \"Playtime\" \"125\" } "
+            "\"3236138358\" { \"LastPlayed\" \"1690000000\" \"Playtime\" \"954\" } } } } } }\n");
+
+  ValveKeyValues parsed;
+  QVERIFY(ValveKeyValuesParser::parseBinaryFile(
+      root + QStringLiteral("/userdata/42/config/shortcuts.vdf"), &parsed));
+  QCOMPARE(parsed.object(QStringLiteral("shortcuts"))->object(QStringLiteral("0"))
+               ->value(QStringLiteral("AppName")),
+           QStringLiteral("Soulframe"));
+
+  const SteamScanResult result = SteamScanner::scan({root});
+  QCOMPARE(result.games.size(), 3);
+  const auto shortcut = std::find_if(result.games.cbegin(), result.games.cend(), [](const auto& game) {
+    return game.appId == QStringLiteral("3236138358");
+  });
+  QVERIFY(shortcut != result.games.cend());
+  QCOMPARE(shortcut->title, QStringLiteral("Soulframe"));
+  QCOMPARE(shortcut->installDirectory, QStringLiteral("/games/Soulframe"));
+  QCOMPARE(shortcut->playtimeMinutes, 954);
+  QCOMPARE(shortcut->lastPlayed, 1700000001);
+  QVERIFY(shortcut->coverPath.endsWith(QStringLiteral("3236138358p.png")));
   QVERIFY(result.warnings.isEmpty());
 }
 
@@ -1050,6 +1142,10 @@ void CoreTests::steamLauncherBuildsSafeUrls() {
            QUrl(QStringLiteral("steam://nav/games/details/440")));
   QCOMPARE(SteamLauncher::installUrl(QStringLiteral("440")),
            QUrl(QStringLiteral("steam://install/440")));
+  QCOMPARE(SteamLauncher::launchUrl(QStringLiteral("3236138358")),
+           QUrl(QStringLiteral("steam://rungameid/13899108412974694400")));
+  QCOMPARE(SteamLauncher::launchUrl(QStringLiteral("13899108412974694400")),
+           QUrl(QStringLiteral("steam://rungameid/13899108412974694400")));
   QVERIFY(SteamLauncher::launchUrl(QStringLiteral("440;touch /tmp/nope")).isEmpty());
   QVERIFY(SteamLauncher::installUrl(QStringLiteral("440;touch /tmp/nope")).isEmpty());
 }
