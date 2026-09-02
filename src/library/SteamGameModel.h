@@ -77,6 +77,7 @@ private:
   void loadDatabase();
   void loadSourceState();
   void applyScan(const SteamScanResult& result);
+  void reportScan(const SteamScanResult& result);
   void rebuildWatchPaths(const SteamScanResult& result);
   void setStatus(const QString& status, const QString& error = {});
   void requestMissingCovers();
@@ -100,7 +101,9 @@ private:
   QTimer m_rescanTimer;
   bool m_scanning = false;
   bool m_rescanPending = false;
+  bool m_explicitRefresh = false;
   bool m_steamDetected = false;
+  SteamScanResult m_appliedScan;
   QString m_statusText;
   QString m_errorText;
   QStringList m_detectedPaths;

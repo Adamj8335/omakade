@@ -63,7 +63,8 @@ SteamGameModel::SteamGameModel(const QString& databasePath, AppSettings* setting
       m_settings(settings) {
   m_rescanTimer.setSingleShot(true);
   m_rescanTimer.setInterval(700);
-  connect(&m_rescanTimer, &QTimer::timeout, this, &SteamGameModel::refresh);
+  connect(&m_rescanTimer, &QTimer::timeout, this,
+          [this] { refreshFromRoots(SteamScanner::discoverSteamRoots()); });
   connect(&m_fileWatcher, &QFileSystemWatcher::fileChanged, &m_rescanTimer,
           qOverload<>(&QTimer::start));
   connect(&m_fileWatcher, &QFileSystemWatcher::directoryChanged, &m_rescanTimer,
@@ -74,7 +75,8 @@ SteamGameModel::SteamGameModel(const QString& databasePath, AppSettings* setting
     emit scanningChanged();
     if (m_rescanPending) {
       m_rescanPending = false;
-      QTimer::singleShot(0, this, &SteamGameModel::refresh);
+      QTimer::singleShot(0, this,
+                         [this] { refreshFromRoots(SteamScanner::discoverSteamRoots()); });
     }
   });
 
@@ -206,7 +208,10 @@ void SteamGameModel::toggleHidden(int row) {
   emit dataChanged(index(row), index(row), {GameRoles::Hidden});
 }
 
-void SteamGameModel::refresh() { refreshFromRoots(SteamScanner::discoverSteamRoots()); }
+void SteamGameModel::refresh() {
+  m_explicitRefresh = true;
+  refreshFromRoots(SteamScanner::discoverSteamRoots());
+}
 
 void SteamGameModel::reloadAchievementSummary(const QString& appId) {
   if (!m_database.isOpen()) {
@@ -530,6 +535,22 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
     setStatus(QStringLiteral("Scan finished but the library database is unavailable"), m_errorText);
     return;
   }
+  if (result == m_appliedScan) {
+    // Steam rewrites manifests and libraryfolders.vdf constantly while it downloads. When the
+    // scan resolves to the same library, leave the database, model, and cover state alone so
+    // the grid does not reset and failed covers are not re-requested every few seconds.
+    m_lastScan = QDateTime::currentSecsSinceEpoch();
+    QSqlQuery touch(m_database);
+    touch.exec(QStringLiteral(
+        "UPDATE source_state SET last_scan = strftime('%s', 'now') WHERE source = 'steam'"));
+    if (m_explicitRefresh) {
+      m_explicitRefresh = false;
+      m_failedCovers.clear();
+      requestMissingCovers();
+    }
+    reportScan(result);
+    return;
+  }
 
   if (!m_database.transaction()) {
     setStatus(QStringLiteral("Could not update the library"), m_database.lastError().text());
@@ -640,11 +661,17 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
   }
 
   loadDatabase();
+  m_appliedScan = result;
+  m_explicitRefresh = false;
   m_detectedPaths = detectedPaths;
   m_lastScan = QDateTime::currentSecsSinceEpoch();
   m_failedCovers.clear();
   requestMissingCovers();
   rebuildWatchPaths(result);
+  reportScan(result);
+}
+
+void SteamGameModel::reportScan(const SteamScanResult& result) {
   if (!result.warnings.isEmpty()) {
     setStatus(
         QStringLiteral("Imported %1 installed game(s) with warnings").arg(result.games.size()),
