@@ -817,25 +817,12 @@ after the 1.3.0 release:
   as markup
 - Re-runnable release workflow and a pinned Arch base image for CI
 
-Found in the post-1.3.0 sweep and deferred from 1.3.1:
+Found in the post-1.3.0 sweep and still open after the 1.4 fixes:
 
-- Unified model lookups are O(N) per role for linked games; precompute group and key
-  maps in `rebuildRows` so a search keystroke stays cheap with many links
-- The theme watcher watches `~/.config` and `~/.local/state` themselves and blocks on
-  `hyprctl` during reload; watch only the Omarchy subdirectories and query Hyprland
-  asynchronously
 - Steam artwork resolution lists the `grid/` directory three times per game; read it once
   per scan
-- Cover cache pruning removes files still referenced by the library with no re-request
-  until the next scan
-- Negative IGDB lookups are never cached, so games without a mapping re-request on every
-  details open
-- Controller polling runs at 125 Hz with no pad connected
 - Both keyring lookups run at startup even when no Steam ID or IGDB client ID is set
 - Scanning state, the Rescan button, and the empty-state copy only reflect Steam
-- Window re-activation forces focus back to the grid even when a toolbar control had it
-- Text fields lack `Accessible.name`
-- The cached-cover write-back in `loadDatabase` runs one autocommit per game
 
 ## Explicitly deferred
 
