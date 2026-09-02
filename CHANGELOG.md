@@ -28,6 +28,10 @@
 - Remembered when IGDB has no entry for a game instead of asking on every visit.
 - Left focus where it was when the window is re-activated, named every text field for
   assistive technology, and wrote cached cover paths in one transaction.
+- Showed scanning state, disabled Rescan, and worded the empty library for every source's
+  scan instead of only Steam's.
+- Listed each Steam custom-artwork folder once per scan instead of three times per game.
+- Left the keyring alone at startup until a Steam ID or IGDB client ID is configured.
 
 ## 1.3.1
 

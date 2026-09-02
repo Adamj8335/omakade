@@ -817,12 +817,7 @@ after the 1.3.0 release:
   as markup
 - Re-runnable release workflow and a pinned Arch base image for CI
 
-Found in the post-1.3.0 sweep and still open after the 1.4 fixes:
-
-- Steam artwork resolution lists the `grid/` directory three times per game; read it once
-  per scan
-- Both keyring lookups run at startup even when no Steam ID or IGDB client ID is set
-- Scanning state, the Rescan button, and the empty-state copy only reflect Steam
+Everything found in the post-1.3.0 sweep has been fixed in 1.3.1 or 1.4.
 
 ## Explicitly deferred
 
