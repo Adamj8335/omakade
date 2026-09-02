@@ -857,13 +857,8 @@ bool UnifiedGameModel::openArtworkDatabase(const QString& path) {
           "source, runner, app_id))"))) {
     return false;
   }
-  int schemaVersion = 0;
-  if (query.exec(QStringLiteral("PRAGMA user_version")) && query.next()) {
-    schemaVersion = query.value(0).toInt();
-  }
-  if (schemaVersion < 6 && !query.exec(QStringLiteral("PRAGMA user_version = 6"))) {
-    return false;
-  }
+  // SteamGameModel owns PRAGMA user_version for the shared database. The organization tables
+  // above are created idempotently, so nothing here depends on a version stamp.
   loadArtworkOverrides();
   loadLinks();
   loadLaunchActivity();
