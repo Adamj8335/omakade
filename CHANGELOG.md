@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0
+
+### Streaming
+
+- Added optional Sunshine app export: Omakade next to Steam Big Picture in Moonlight, and one
+  app per installed game with its cover. Other Sunshine apps are left untouched and a
+  one-time backup sits next to `apps.json`.
+- Added a Restart Sunshine action in Settings, since Sunshine reads its app list at startup.
+- Added `omakade --play Source:runner:id` and `omakade --quit`, which reach the running
+  window or launch from the cached library without opening one.
+- Opened fullscreen when Sunshine starts Omakade for a Moonlight client.
+
 ## 1.3.1
 
 - Left the library, database, and cover requests alone when a Steam rescan finds the same

@@ -38,6 +38,8 @@ Omakade includes:
 - Explicit linking for games installed through multiple sources
 - ProtonDB and PCGamingWiki shortcuts with actionable launch errors
 - Keyboard, mouse, and controller navigation
+- Optional Sunshine app export so Moonlight can start Omakade or any installed
+  game, plus `--play` and `--quit` commands
 
 ![Omakade game details showing playtime, IGDB insights, and Steam achievements](docs/assets/game-details.webp)
 
@@ -100,6 +102,26 @@ RetroArch games come from its configured playlists. Omakade uses local
 RetroArch thumbnails and runtime logs, then launches each game with its assigned
 core. Entries without a core association remain visible and explain how to fix
 launching after you press Play.
+
+### Stream with Sunshine and Moonlight
+
+Omarchy installs Sunshine from its menu and ships Moonlight. Once Sunshine is
+running, open Omakade's Settings and enable **Omakade in Moonlight** to add
+Omakade to Sunshine's app list next to Steam Big Picture, or **One app per
+installed game** to add every installed game with its cover. Sunshine reads the
+list when it starts, so press **Restart Sunshine** after a change. Omakade
+leaves the other Sunshine apps alone and keeps a one-time backup next to
+`apps.json`.
+
+Starting Omakade from Moonlight opens it fullscreen on the streamed display.
+Starting a game from Moonlight launches it through its own launcher, the same
+as pressing Play. The same entry points work from a terminal or a keybinding:
+
+```bash
+omakade --play Steam::620          # Source:runner:id, the runner is often empty
+omakade --play Heroic:legendary:Sugar
+omakade --quit
+```
 
 ## Build
 
