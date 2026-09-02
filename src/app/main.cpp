@@ -4,6 +4,8 @@
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
+#include "launch/PlayRequest.h"
+#include "streaming/SunshineIntegration.h"
 #include "library/FaugusGameModel.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
@@ -78,6 +80,10 @@ int main(int argc, char* argv[]) {
   const QString screenshotPath =
       optionValue(application.arguments(), QStringLiteral("--render-screenshot"));
   const QString renderSize = optionValue(application.arguments(), QStringLiteral("--render-size"));
+  // `--play Source:runner:id` launches one library game, through the running window when
+  // there is one, and `--quit` closes the running window. Sunshine app entries use both.
+  const QString playKey = optionValue(application.arguments(), QStringLiteral("--play"));
+  const bool quitRequest = application.arguments().contains(QStringLiteral("--quit"));
   const bool renderMode = !screenshotPath.isEmpty();
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
   const bool navigationTest =
@@ -93,8 +99,14 @@ int main(int argc, char* argv[]) {
   if (benchmarkMode) {
     qInfo() << "Theme ready in" << startupTimer.elapsed() << "ms";
   }
+  if (quitRequest) {
+    return SingleInstance::sendCommand({}, "quit") ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
   SingleInstance singleInstance;
-  if (!smokeTest && !renderMode && !navigationTest && !singleInstance.claimOrNotify()) {
+  const QByteArray instanceCommand =
+      playKey.isEmpty() ? QByteArray("activate") : QByteArray("play ") + playKey.toUtf8();
+  if (!smokeTest && !renderMode && !navigationTest &&
+      !singleInstance.claimOrNotify(instanceCommand)) {
     return EXIT_SUCCESS;
   }
   const QString settingsPath =
@@ -156,6 +168,16 @@ int main(int argc, char* argv[]) {
   applySourcePreferences();
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
                    applySourcePreferences);
+  if (!playKey.isEmpty()) {
+    // No window is running, so launch from the cached library without showing one.
+    GameLauncher headlessLauncher;
+    QString error;
+    if (!PlayRequest::perform(unifiedGames, headlessLauncher, LaunchKey::parse(playKey), &error)) {
+      qCritical().noquote() << error;
+      return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+  }
   LibraryFilterModel library;
   library.setSourceModel(&unifiedGames);
   if (uninstalledLayoutTest) {
@@ -231,6 +253,12 @@ int main(int argc, char* argv[]) {
         std::make_unique<GameInsightsService>(steamLibrary->databasePath(), &preferences);
   }
   GameLauncher launcher;
+  std::unique_ptr<SunshineIntegration> sunshine;
+  if (steamLibrary != nullptr) {
+    sunshine = std::make_unique<SunshineIntegration>(&unifiedGames, &preferences);
+    sunshine->setIconSource(
+        QStringLiteral(":/icons/resources/icons/io.github.tsouth89.Omakade.svg"));
+  }
 
   QObject::connect(&controller, &ControllerInput::keyRequested, &application,
                    [&application](int key, int modifiers) {
@@ -264,6 +292,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamAccount"), steamAccount.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Insights"), gameInsights.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("Sunshine"), sunshine.get());
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"),
                                            (demoMode || stressMode) && !ownedLayoutTest);
   engine.rootContext()->setContextProperty(QStringLiteral("StartupMilliseconds"),
@@ -290,6 +319,11 @@ int main(int argc, char* argv[]) {
   }
 
   auto* rootWindow = qobject_cast<QWindow*>(engine.rootObjects().constFirst());
+  if (rootWindow != nullptr && qEnvironmentVariableIsSet("SUNSHINE_APP_ID") && !renderMode &&
+      !navigationTest && !smokeTest) {
+    // Sunshine launched Omakade for a Moonlight client, so fill the streamed display.
+    rootWindow->showFullScreen();
+  }
   if (auto* quickWindow = qobject_cast<QQuickWindow*>(rootWindow)) {
     const QStringList dimensions = renderSize.split(QLatin1Char('x'));
     if ((renderMode || navigationTest) && dimensions.size() == 2) {
@@ -798,6 +832,18 @@ int main(int argc, char* argv[]) {
                        rootWindow->requestActivate();
                      }
                    });
+  QObject* rootObject = engine.rootObjects().constFirst();
+  QObject::connect(&singleInstance, &SingleInstance::playRequested, &application,
+                   [&unifiedGames, &launcher, rootObject](const QString& key) {
+                     QString error;
+                     const bool okay = PlayRequest::perform(unifiedGames, launcher,
+                                                            LaunchKey::parse(key), &error);
+                     QMetaObject::invokeMethod(
+                         rootObject, "showToast",
+                         Q_ARG(QVariant, okay ? QStringLiteral("Launching from Sunshine") : error));
+                   });
+  QObject::connect(&singleInstance, &SingleInstance::quitRequested, &application,
+                   &QCoreApplication::quit);
 
   if (steamLibrary != nullptr && preferences.steamEnabled()) {
     QTimer::singleShot(0, steamLibrary, &SteamGameModel::refresh);

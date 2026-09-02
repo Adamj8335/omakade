@@ -6,13 +6,21 @@
 
 #include <unistd.h>
 
+QString SingleInstance::defaultServerName() {
+  return QStringLiteral("omakade-%1").arg(getuid());
+}
+
 SingleInstance::SingleInstance(const QString& serverName, QObject* parent)
-    : QObject(parent),
-      m_serverName(serverName.isEmpty() ? QStringLiteral("omakade-%1").arg(getuid()) : serverName) {
+    : QObject(parent), m_serverName(serverName.isEmpty() ? defaultServerName() : serverName) {
   connect(&m_server, &QLocalServer::newConnection, this, [this] {
     while (QLocalSocket* socket = m_server.nextPendingConnection()) {
       connect(socket, &QLocalSocket::readyRead, this, [this, socket] {
-        if (socket->readAll().contains("activate")) {
+        const QByteArray command = socket->readAll().trimmed();
+        if (command.startsWith("play ")) {
+          emit playRequested(QString::fromUtf8(command.mid(5)).trimmed());
+        } else if (command == "quit") {
+          emit quitRequested();
+        } else if (command.contains("activate")) {
           emit activationRequested();
         }
         socket->disconnectFromServer();
@@ -22,20 +30,26 @@ SingleInstance::SingleInstance(const QString& serverName, QObject* parent)
   });
 }
 
-bool SingleInstance::claimOrNotify() {
+bool SingleInstance::sendCommand(const QString& serverName, const QByteArray& command) {
+  QLocalSocket socket;
+  socket.connectToServer(serverName.isEmpty() ? defaultServerName() : serverName,
+                         QIODevice::WriteOnly);
+  if (!socket.waitForConnected(120)) {
+    return false;
+  }
+  socket.write(command);
+  socket.flush();
+  socket.waitForBytesWritten(120);
+  return true;
+}
+
+bool SingleInstance::claimOrNotify(const QByteArray& command) {
   if (m_server.listen(m_serverName)) {
     return true;
   }
-
-  QLocalSocket socket;
-  socket.connectToServer(m_serverName, QIODevice::WriteOnly);
-  if (socket.waitForConnected(120)) {
-    socket.write("activate");
-    socket.flush();
-    socket.waitForBytesWritten(120);
+  if (sendCommand(m_serverName, command)) {
     return false;
   }
-
   if (m_server.serverError() != QAbstractSocket::AddressInUseError) {
     // An unwritable runtime directory must not leave the user with no window at all.
     qWarning() << "Running without single-instance activation:" << m_server.errorString();

@@ -4,6 +4,7 @@
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
+#include "launch/PlayRequest.h"
 #include "launch/SteamLauncher.h"
 #include "library/FaugusGameModel.h"
 #include "library/GameRoles.h"
@@ -23,12 +24,17 @@
 #include "sources/retroarch/RetroArchScanner.h"
 #include "sources/steam/SteamScanner.h"
 #include "sources/steam/ValveKeyValues.h"
+#include "streaming/SunshineIntegration.h"
 #include "theme/OmarchyTheme.h"
 
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QScopeGuard>
 #include <QSignalSpy>
 #include <QSqlDatabase>
@@ -276,6 +282,9 @@ private slots:
   void igdbInsightsLoadFromOfflineCache();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
+  void launchKeysRoundTripAndResolveInstallations();
+  void singleInstanceForwardsPlayAndQuitCommands();
+  void sunshineIntegrationWritesOnlyItsOwnEntries();
   void secondInstanceRequestsActivation();
   void virtualControllerConnectsAndMapsPrimaryButton();
   void thousandGameSearchStaysResponsive();
@@ -1973,6 +1982,154 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   QVERIFY(!reloaded.faugusEnabled());
   QVERIFY(!reloaded.retroArchEnabled());
   QVERIFY(reloaded.closeAfterLaunch());
+}
+
+void CoreTests::launchKeysRoundTripAndResolveInstallations() {
+  const LaunchKey heroic = LaunchKey::parse(QStringLiteral("Heroic:legendary:Sugar"));
+  QVERIFY(heroic.isValid());
+  QCOMPARE(heroic.source, QStringLiteral("Heroic"));
+  QCOMPARE(heroic.runner, QStringLiteral("legendary"));
+  QCOMPARE(heroic.appId, QStringLiteral("Sugar"));
+  QCOMPARE(heroic.toString(), QStringLiteral("Heroic:legendary:Sugar"));
+  // RetroArch ids are content paths, so everything after the second colon belongs to the id.
+  const LaunchKey retro = LaunchKey::parse(QStringLiteral("RetroArch::/roms/Game: Two (USA).zip"));
+  QCOMPARE(retro.runner, QString{});
+  QCOMPARE(retro.appId, QStringLiteral("/roms/Game: Two (USA).zip"));
+  QVERIFY(!LaunchKey::parse(QStringLiteral("Steam")).isValid());
+  QVERIFY(!LaunchKey::parse(QStringLiteral("Steam:620")).isValid());
+  QVERIFY(!LaunchKey::parse(QStringLiteral("::620")).isValid());
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  MockGameModel games(nullptr, 3, true);
+  UnifiedGameModel unified(directory.path() + QStringLiteral("/library.sqlite3"));
+  unified.addSourceModel(&games);
+  int row = -1;
+  const QVariantMap found =
+      PlayRequest::findInstallation(unified, LaunchKey::parse(QStringLiteral("demo::demo-1")), &row);
+  QCOMPARE(row, 1);
+  QCOMPARE(found.value(QStringLiteral("appId")).toString(), QStringLiteral("demo-1"));
+  QCOMPARE(found.value(QStringLiteral("title")).toString(),
+           unified.data(unified.index(1, 0), GameRoles::Title).toString());
+  QVERIFY(PlayRequest::findInstallation(unified, LaunchKey::parse(QStringLiteral("Demo::nope")),
+                                        &row)
+              .isEmpty());
+  QCOMPARE(row, -1);
+
+  GameLauncher launcher;
+  QString error;
+  QVERIFY(!PlayRequest::perform(unified, launcher, LaunchKey::parse(QStringLiteral("Steam::demo-0")),
+                                &error));
+  QVERIFY(error.contains(QStringLiteral("not installed")));
+  QVERIFY(!PlayRequest::perform(unified, launcher, LaunchKey::parse(QStringLiteral("Demo::demo-1")),
+                                &error));
+  QCOMPARE(error, QStringLiteral("Demo games cannot be launched yet."));
+  QVERIFY(!PlayRequest::perform(unified, launcher, LaunchKey::parse(QStringLiteral("bad")), &error));
+  QVERIFY(error.contains(QStringLiteral("Steam::620")));
+}
+
+void CoreTests::singleInstanceForwardsPlayAndQuitCommands() {
+  const QString name = QStringLiteral("omakade-test-") + QUuid::createUuid().toString();
+  QVERIFY(!SingleInstance::sendCommand(name, "quit"));
+  SingleInstance primary(name);
+  QVERIFY(primary.claimOrNotify());
+  QSignalSpy plays(&primary, &SingleInstance::playRequested);
+  QSignalSpy quits(&primary, &SingleInstance::quitRequested);
+  QSignalSpy activations(&primary, &SingleInstance::activationRequested);
+
+  QVERIFY(SingleInstance::sendCommand(name, "play Steam::620"));
+  QTRY_COMPARE_WITH_TIMEOUT(plays.size(), 1, 1000);
+  QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("Steam::620"));
+  SingleInstance secondary(name);
+  QVERIFY(!secondary.claimOrNotify("play RetroArch::/roms/a b.zip"));
+  QTRY_COMPARE_WITH_TIMEOUT(plays.size(), 1, 1000);
+  QCOMPARE(plays.takeFirst().at(0).toString(), QStringLiteral("RetroArch::/roms/a b.zip"));
+  QVERIFY(SingleInstance::sendCommand(name, "quit"));
+  QTRY_COMPARE_WITH_TIMEOUT(quits.size(), 1, 1000);
+  QCOMPARE(activations.size(), 0);
+}
+
+void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
+  QCOMPARE(SunshineIntegration::shellQuote(QStringLiteral("it's")), QStringLiteral("'it'\\''s'"));
+  QCOMPARE(SunshineIntegration::commandPrefix(true),
+           QStringLiteral("flatpak-spawn --host omakade"));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString appsPath = directory.path() + QStringLiteral("/apps.json");
+  const QByteArray stock = R"({
+    "env": {"PATH": "$(PATH):$(HOME)/.local/bin"},
+    "apps": [
+        {"name": "Desktop", "image-path": "desktop.png"},
+        {"name": "Steam Big Picture", "cmd": "", "detached": ["setsid steam steam://open/bigpicture"],
+         "image-path": "steam.png", "prep-cmd": [{"do": "", "undo": "setsid steam steam://close/bigpicture"}]}
+    ]
+})";
+  writeFile(appsPath, stock);
+  const auto readApps = [&appsPath]() -> QJsonObject {
+    QFile file(appsPath);
+    if (!file.open(QIODevice::ReadOnly)) {
+      return {};
+    }
+    return QJsonDocument::fromJson(file.readAll()).object();
+  };
+
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  MockGameModel games(nullptr, 3, true);
+  UnifiedGameModel unified(directory.path() + QStringLiteral("/library.sqlite3"));
+  unified.addSourceModel(&games);
+  SunshineIntegration sunshine(&unified, &settings, appsPath,
+                               directory.path() + QStringLiteral("/images"));
+  QVERIFY(sunshine.detected());
+  QVERIFY(!sunshine.restartNeeded());
+  QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 2);
+
+  // The uninstalled first demo game stays out; the two installed ones become apps.
+  settings.setSunshineGameApps(true);
+  QJsonObject document = readApps();
+  QJsonArray apps = document.value(QStringLiteral("apps")).toArray();
+  QCOMPARE(apps.size(), 4);
+  QCOMPARE(apps.at(0).toObject().value(QStringLiteral("name")).toString(),
+           QStringLiteral("Desktop"));
+  QCOMPARE(apps.at(1).toObject().value(QStringLiteral("prep-cmd")).toArray().size(), 1);
+  QCOMPARE(document.value(QStringLiteral("env")).toObject().value(QStringLiteral("PATH")).toString(),
+           QStringLiteral("$(PATH):$(HOME)/.local/bin"));
+  const QJsonObject firstGame = apps.at(2).toObject();
+  QCOMPARE(firstGame.value(QStringLiteral("omakade")).toString(), QStringLiteral("Demo::demo-1"));
+  QCOMPARE(firstGame.value(QStringLiteral("cmd")).toString(), QString{});
+  QCOMPARE(firstGame.value(QStringLiteral("detached")).toArray().at(0).toString(),
+           QStringLiteral("omakade --play 'Demo::demo-1'"));
+  QVERIFY(!firstGame.contains(QStringLiteral("image-path")));
+  QCOMPARE(sunshine.exportedGames(), 2);
+  QVERIFY(sunshine.restartNeeded());
+  QVERIFY(QFileInfo::exists(appsPath + QStringLiteral(".omakade-backup")));
+
+  settings.setSunshineOmakadeApp(true);
+  apps = readApps().value(QStringLiteral("apps")).toArray();
+  QCOMPARE(apps.size(), 5);
+  const QJsonObject omakade = apps.at(2).toObject();
+  QCOMPARE(omakade.value(QStringLiteral("name")).toString(), QStringLiteral("Omakade"));
+  QCOMPARE(omakade.value(QStringLiteral("detached")).toArray().at(0).toString(),
+           QStringLiteral("omakade"));
+  QCOMPARE(omakade.value(QStringLiteral("prep-cmd"))
+               .toArray()
+               .at(0)
+               .toObject()
+               .value(QStringLiteral("undo"))
+               .toString(),
+           QStringLiteral("omakade --quit"));
+
+  // A second sync with nothing changed leaves the file alone.
+  QVERIFY(sunshine.sync());
+  QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 5);
+
+  settings.setSunshineGameApps(false);
+  settings.setSunshineOmakadeApp(false);
+  apps = readApps().value(QStringLiteral("apps")).toArray();
+  QCOMPARE(apps.size(), 2);
+  QCOMPARE(apps.at(1).toObject().value(QStringLiteral("name")).toString(),
+           QStringLiteral("Steam Big Picture"));
+  QCOMPARE(sunshine.exportedGames(), 0);
 }
 
 void CoreTests::secondInstanceRequestsActivation() {
