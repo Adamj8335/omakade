@@ -97,8 +97,10 @@ FocusScope {
             asynchronous: true
             cache: false
             fillMode: Image.PreserveAspectCrop
-            sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
-            sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
+            // Round the decode size up to 64px steps so window resizes and tiling changes do
+            // not reload every visible cover on each step.
+            sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio) / 64) * 64
+            sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio) / 64) * 64
             opacity: status === Image.Ready ? 1 : 0
             Behavior on opacity {
                 enabled: !Preferences.reducedMotion
@@ -158,6 +160,7 @@ FocusScope {
             Text {
                 width: parent.width
                 text: root.title.toUpperCase()
+                textFormat: Text.PlainText
                 color: Theme.brightForeground
                 font.family: Theme.fontFamily
                 font.pixelSize: Math.max(12, cover.width * 0.078)
@@ -245,6 +248,8 @@ FocusScope {
         Text {
             width: parent.width
             text: root.title
+            // Titles come from launcher data, so never let one render as markup.
+            textFormat: Text.PlainText
             color: Theme.foreground
             font.family: Theme.fontFamily
             font.pixelSize: 13
@@ -257,17 +262,23 @@ FocusScope {
             spacing: 7
 
             Text {
+                width: Math.min(implicitWidth, Math.max(0, parent.width - subtitleDot.width
+                                                            - subtitleHours.width
+                                                            - parent.spacing * 2))
+                elide: Text.ElideRight
                 text: root.subtitle
                 color: Theme.mutedText
                 font.family: Theme.fontFamily
                 font.pixelSize: 10
             }
             Text {
+                id: subtitleDot
                 text: "·"
                 color: root.alpha(Theme.foreground, 0.32)
                 font.pixelSize: 10
             }
             Text {
+                id: subtitleHours
                 text: root.hours + "h"
                 color: Theme.mutedText
                 font.family: Theme.fontFamily

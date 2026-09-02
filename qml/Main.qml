@@ -75,6 +75,17 @@ ApplicationWindow {
         }
     }
 
+    // Arrow keys from a keyboard take the same spatial path controller directions do. Text
+    // inputs accept Left and Right themselves, so only keys they let through arrive here.
+    function handleArrowKey(container, event) {
+        if (event.key !== Qt.Key_Up && event.key !== Qt.Key_Down
+                && event.key !== Qt.Key_Left && event.key !== Qt.Key_Right) {
+            return
+        }
+        root.focusSpatial(container, event.key)
+        event.accepted = true
+    }
+
     function focusSpatial(container, key) {
         if (!container) {
             return false
@@ -415,7 +426,7 @@ ApplicationWindow {
         nameFilters: ["Images (*.jpg *.jpeg *.png *.webp)"]
         onAccepted: {
             if (Library.setCustomCover(root.selectedIndex, selectedFile)) {
-                root.selectedGame = Library.get(root.selectedIndex)
+                root.refreshAfterOrganization()
                 root.showToast("Cover updated")
             } else {
                 root.showToast("That image could not be used")
@@ -484,7 +495,7 @@ ApplicationWindow {
             } else if (root.detailOpen && detailsLoader.item
                        && detailsLoader.item.collectionEditorOpen) {
                 // The window shortcut sees Escape before the details page does.
-                detailsLoader.item.collectionEditorOpen = false
+                detailsLoader.item.closeCollectionEditor()
             } else if (root.detailOpen) {
                 root.closeDetails()
             } else if (searchField.text.length > 0) {
@@ -1123,6 +1134,12 @@ ApplicationWindow {
         id: detailsLoader
         anchors.fill: parent
         active: root.detailOpen
+        Keys.onPressed: function(event) {
+            if (item && !root.linkDialogOpen && !root.diagnosticsOpen
+                    && !root.collectionDeleteOpen) {
+                root.handleArrowKey(item, event)
+            }
+        }
         opacity: root.detailOpen ? 1 : 0
         asynchronous: false
 
@@ -1140,7 +1157,8 @@ ApplicationWindow {
             onBackRequested: root.closeDetails()
             onFavoriteRequested: {
                 Library.toggleFavorite(root.selectedIndex)
-                root.selectedGame = Library.get(root.selectedIndex)
+                // The favorite filter can drop or move the row, so find the game again by identity.
+                root.refreshAfterOrganization()
             }
             onPlayRequested: root.playSelected()
             onManageRequested: root.manageSelected()
@@ -1164,7 +1182,7 @@ ApplicationWindow {
             onCoverRequested: coverDialog.open()
             onCoverResetRequested: {
                 if (Library.resetCustomCover(root.selectedIndex)) {
-                    root.selectedGame = Library.get(root.selectedIndex)
+                    root.refreshAfterOrganization()
                     root.showToast("Original cover restored")
                 }
             }
@@ -1196,7 +1214,7 @@ ApplicationWindow {
                         && Library.setCollectionMembership(root.selectedIndex, name, true)) {
                     root.refreshAfterOrganization()
                     root.showToast("Added to " + name)
-                    detailsLoader.item.collectionEditorOpen = false
+                    detailsLoader.item.closeCollectionEditor()
                 } else {
                     root.showToast("That collection already exists or is invalid")
                 }
@@ -1210,6 +1228,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: root.linkDialogOpen
         z: 25
+        Keys.onPressed: function(event) { root.handleArrowKey(linkDialogOverlay, event) }
         color: root.alpha(Theme.darkerBackground, 0.72)
         onVisibleChanged: {
             if (visible) {
@@ -1329,6 +1348,7 @@ ApplicationWindow {
                         Text {
                             width: parent.width
                             text: modelData.title
+                            textFormat: Text.PlainText
                             color: Theme.brightForeground
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
@@ -1375,8 +1395,10 @@ ApplicationWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 26
-        width: toastText.implicitWidth + 34
+        width: Math.min(toastText.implicitWidth + 34, parent.width - 48)
         height: 42
+        // Above the settings panel and dialogs so confirmations stay readable.
+        z: 40
         radius: Math.max(6, Theme.cornerRadius)
         color: root.alpha(Theme.background, 0.94)
         border.color: root.alpha(Theme.accent, 0.5)
@@ -1391,6 +1413,9 @@ ApplicationWindow {
         Text {
             id: toastText
             anchors.centerIn: parent
+            width: toast.width - 34
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
             text: toast.message
             color: Theme.foreground
             font.family: Theme.fontFamily
@@ -1409,6 +1434,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: root.diagnosticsOpen
         z: 20
+        Keys.onPressed: function(event) { root.handleArrowKey(settingsOverlay, event) }
         color: root.alpha(Theme.darkerBackground, 0.72)
         onVisibleChanged: {
             if (visible) {
@@ -1646,7 +1672,11 @@ ApplicationWindow {
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Steam ID (17 digits, starts with 7656119)"
-                        text: SteamAccount ? SteamAccount.steamId : ""
+                        // Copy the saved value in instead of binding so a keyring lookup
+                        // finishing mid-edit cannot overwrite what is being typed.
+                        readonly property string savedText: SteamAccount ? SteamAccount.steamId : ""
+                        onSavedTextChanged: if (!activeFocus) text = savedText
+                        Component.onCompleted: text = savedText
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
@@ -1773,7 +1803,9 @@ ApplicationWindow {
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Twitch developer client ID"
-                        text: Insights ? Insights.clientId : ""
+                        readonly property string savedText: Insights ? Insights.clientId : ""
+                        onSavedTextChanged: if (!activeFocus) text = savedText
+                        Component.onCompleted: text = savedText
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
@@ -1946,6 +1978,7 @@ ApplicationWindow {
         anchors.fill: parent
         visible: root.collectionDeleteOpen
         z: 35
+        Keys.onPressed: function(event) { root.handleArrowKey(collectionDeleteOverlay, event) }
         color: root.alpha(Theme.darkerBackground, 0.76)
         onVisibleChanged: {
             if (visible) {
@@ -2083,7 +2116,7 @@ ApplicationWindow {
             if (root.detailOpen && !root.diagnosticsOpen && !root.linkDialogOpen
                     && !root.collectionDeleteOpen) {
                 Library.toggleFavorite(root.selectedIndex)
-                root.selectedGame = Library.get(root.selectedIndex)
+                root.refreshAfterOrganization()
             } else if (!root.detailOpen && root.navigationContainer() === null
                        && libraryView.gridFocused && libraryView.currentIndex >= 0) {
                 Library.toggleFavorite(libraryView.currentIndex)

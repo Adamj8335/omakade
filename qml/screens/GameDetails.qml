@@ -14,6 +14,14 @@ Item {
     required property var installations
     required property var selectedInstallation
     property bool collectionEditorOpen: false
+
+    // Closing the editor hides the focused field, so hand focus back to the button that
+    // opened it and drop the draft instead of showing it again next time.
+    function closeCollectionEditor() {
+        collectionEditorOpen = false
+        collectionField.clear()
+        newCollectionButton.forceActiveFocus()
+    }
     property bool navigationEnabled: true
     signal backRequested()
     signal favoriteRequested()
@@ -54,8 +62,7 @@ Item {
 
     Keys.onEscapePressed: function(event) {
         if (root.collectionEditorOpen) {
-            root.collectionEditorOpen = false
-            collectionField.clear()
+            root.closeCollectionEditor()
         } else {
             root.backRequested()
         }
@@ -105,8 +112,8 @@ Item {
         asynchronous: true
         cache: false
         fillMode: Image.PreserveAspectCrop
-        sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
-        sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
+        sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio) / 64) * 64
+        sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio) / 64) * 64
         opacity: status === Image.Ready ? 0.48 : 0
     }
 
@@ -173,8 +180,8 @@ Item {
                         asynchronous: true
                         cache: false
                         fillMode: Image.PreserveAspectCrop
-                        sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio))
-                        sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio))
+                        sourceSize.width: Math.ceil(width * Math.max(1, Screen.devicePixelRatio) / 64) * 64
+                        sourceSize.height: Math.ceil(height * Math.max(1, Screen.devicePixelRatio) / 64) * 64
                         opacity: status === Image.Ready ? 1 : 0
                     }
 
@@ -248,6 +255,7 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: root.game.title || "Unknown game"
+                    textFormat: Text.PlainText
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: Math.max(28, Math.min(54, root.width * 0.045))
@@ -267,10 +275,12 @@ Item {
                         font.weight: Font.DemiBold
                     }
                     Text {
+                        visible: root.game.year > 0
                         text: "·"
                         color: root.alpha(Theme.foreground, 0.4)
                     }
                     Text {
+                        visible: root.game.year > 0
                         text: root.game.year || ""
                         color: Theme.mutedText
                         font.family: Theme.fontFamily
@@ -429,7 +439,11 @@ Item {
                             id: tagsField
                             Layout.fillWidth: true
                             placeholderText: "Co-op, cozy, difficult"
-                            text: root.game.tags ? root.game.tags.join(", ") : ""
+                            // Copy the saved tags in instead of binding so an achievement
+                            // refresh or rescan mid-edit cannot overwrite what is being typed.
+                            readonly property string savedText: root.game.tags ? root.game.tags.join(", ") : ""
+                            onSavedTextChanged: if (!activeFocus) text = savedText
+                            Component.onCompleted: text = savedText
                             color: Theme.foreground
                             placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                             font.family: Theme.fontFamily
@@ -549,10 +563,7 @@ Item {
                         GlassButton {
                             compact: true
                             text: "CANCEL"
-                            onClicked: {
-                                root.collectionEditorOpen = false
-                                collectionField.clear()
-                            }
+                            onClicked: root.closeCollectionEditor()
                         }
                     }
                 }
@@ -950,6 +961,7 @@ Item {
                                         Text {
                                             Layout.fillWidth: true
                                             text: hidden && !unlocked ? "Hidden achievement" : title
+                                            textFormat: Text.PlainText
                                             color: unlocked ? Theme.brightForeground : Theme.foreground
                                             font.family: Theme.fontFamily
                                             font.pixelSize: 11
@@ -959,6 +971,7 @@ Item {
                                         Text {
                                             Layout.fillWidth: true
                                             text: hidden && !unlocked ? "Unlock to reveal details" : description
+                                            textFormat: Text.PlainText
                                             color: Theme.mutedText
                                             font.family: Theme.fontFamily
                                             font.pixelSize: 9
