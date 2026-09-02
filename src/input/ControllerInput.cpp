@@ -31,7 +31,12 @@ void ControllerInput::start() {
   if (m_sdlReady || m_initWatcher.isRunning()) {
     return;
   }
-  m_initWatcher.setFuture(QtConcurrent::run([] { return SDL_Init(SDL_INIT_GAMEPAD); }));
+  m_initWatcher.setFuture(QtConcurrent::run([] {
+    // SDL would otherwise catch SIGTERM and SIGINT and turn them into SDL quit events that
+    // nothing here reads, so pkill, logout, and service stops could never close Omakade.
+    SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+    return SDL_Init(SDL_INIT_GAMEPAD);
+  }));
 }
 
 ControllerInput::~ControllerInput() {
