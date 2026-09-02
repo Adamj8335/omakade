@@ -46,6 +46,46 @@
 #include <SDL3/SDL.h>
 
 namespace {
+// A launcher-style source that, like Lutris or Heroic, has no Installed role at all.
+class LauncherOnlyModel final : public QAbstractListModel {
+public:
+  explicit LauncherOnlyModel(QString title, QObject* parent = nullptr)
+      : QAbstractListModel(parent), m_title(std::move(title)) {}
+  [[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override {
+    return parent.isValid() ? 0 : 1;
+  }
+  [[nodiscard]] QVariant data(const QModelIndex& index, int role) const override {
+    if (!index.isValid()) {
+      return {};
+    }
+    switch (role) {
+    case GameRoles::Title:
+      return m_title;
+    case GameRoles::Source:
+      return QStringLiteral("Lutris");
+    case GameRoles::AppId:
+      return QStringLiteral("celeste");
+    case GameRoles::Runner:
+      return QString{};
+    case GameRoles::Hidden:
+    case GameRoles::Favorite:
+      return false;
+    default:
+      return {};
+    }
+  }
+  [[nodiscard]] QHash<int, QByteArray> roleNames() const override {
+    return {{GameRoles::Title, "title"},
+            {GameRoles::Source, "source"},
+            {GameRoles::AppId, "appId"},
+            {GameRoles::Runner, "runner"},
+            {GameRoles::Hidden, "hidden"}};
+  }
+
+private:
+  QString m_title;
+};
+
 void writeFile(const QString& path, const QByteArray& contents) {
   QDir().mkpath(QFileInfo(path).absolutePath());
   QFile file(path);
@@ -2085,17 +2125,22 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   MockGameModel games(nullptr, 3, true);
   UnifiedGameModel unified(directory.path() + QStringLiteral("/library.sqlite3"));
   unified.addSourceModel(&games);
+  // Same title as the second demo game, from a source without an Installed role.
+  const QString sharedTitle = unified.data(unified.index(1, 0), GameRoles::Title).toString();
+  LauncherOnlyModel lutris(sharedTitle);
+  unified.addSourceModel(&lutris);
   SunshineIntegration sunshine(&unified, &settings, appsPath,
                                directory.path() + QStringLiteral("/images"));
   QVERIFY(sunshine.detected());
   QVERIFY(!sunshine.restartNeeded());
   QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 2);
 
-  // The uninstalled first demo game stays out; the two installed ones become apps.
+  // The uninstalled first demo game stays out; the two installed demo games and the
+  // launcher game (no Installed role) become apps.
   settings.setSunshineGameApps(true);
   QJsonObject document = readApps();
   QJsonArray apps = document.value(QStringLiteral("apps")).toArray();
-  QCOMPARE(apps.size(), 4);
+  QCOMPARE(apps.size(), 5);
   QCOMPARE(apps.at(0).toObject().value(QStringLiteral("name")).toString(),
            QStringLiteral("Desktop"));
   QCOMPARE(apps.at(1).toObject().value(QStringLiteral("prep-cmd")).toArray().size(), 1);
@@ -2107,13 +2152,21 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   QCOMPARE(firstGame.value(QStringLiteral("detached")).toArray().at(0).toString(),
            QStringLiteral("omakade --play 'Demo::demo-1'"));
   QVERIFY(!firstGame.contains(QStringLiteral("image-path")));
-  QCOMPARE(sunshine.exportedGames(), 2);
+  // Two stores share a title, so both names carry their source.
+  QCOMPARE(firstGame.value(QStringLiteral("name")).toString(), sharedTitle + QStringLiteral(" (Demo)"));
+  const QJsonObject lutrisGame = apps.at(4).toObject();
+  QCOMPARE(lutrisGame.value(QStringLiteral("name")).toString(),
+           sharedTitle + QStringLiteral(" (Lutris)"));
+  QCOMPARE(lutrisGame.value(QStringLiteral("omakade")).toString(), QStringLiteral("Lutris::celeste"));
+  QCOMPARE(apps.at(3).toObject().value(QStringLiteral("name")).toString(),
+           unified.data(unified.index(2, 0), GameRoles::Title).toString());
+  QCOMPARE(sunshine.exportedGames(), 3);
   QVERIFY(sunshine.restartNeeded());
   QVERIFY(QFileInfo::exists(appsPath + QStringLiteral(".omakade-backup")));
 
   settings.setSunshineOmakadeApp(true);
   apps = readApps().value(QStringLiteral("apps")).toArray();
-  QCOMPARE(apps.size(), 5);
+  QCOMPARE(apps.size(), 6);
   const QJsonObject omakade = apps.at(2).toObject();
   QCOMPARE(omakade.value(QStringLiteral("name")).toString(), QStringLiteral("Omakade"));
   QCOMPARE(omakade.value(QStringLiteral("detached")).toArray().at(0).toString(),
@@ -2128,7 +2181,7 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
 
   // A second sync with nothing changed leaves the file alone.
   QVERIFY(sunshine.sync());
-  QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 5);
+  QCOMPARE(readApps().value(QStringLiteral("apps")).toArray().size(), 6);
 
   settings.setSunshineGameApps(false);
   settings.setSunshineOmakadeApp(false);
