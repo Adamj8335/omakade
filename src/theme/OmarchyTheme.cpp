@@ -20,22 +20,6 @@ QString defaultStateHome() { return QDir::homePath() + QStringLiteral("/.local/s
 
 QString defaultConfigHome() { return QDir::homePath() + QStringLiteral("/.config"); }
 
-QJsonObject hyprlandOption(const QString& option) {
-  const QString executable = QStandardPaths::findExecutable(QStringLiteral("hyprctl"));
-  if (executable.isEmpty() || qEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
-    return {};
-  }
-
-  QProcess process;
-  process.start(executable, {QStringLiteral("getoption"), option, QStringLiteral("-j")});
-  if (!process.waitForFinished(300) || process.exitCode() != 0) {
-    return {};
-  }
-
-  const QJsonDocument document = QJsonDocument::fromJson(process.readAllStandardOutput());
-  return document.isObject() ? document.object() : QJsonObject{};
-}
-
 double linearChannel(double channel) {
   channel /= 255.0;
   return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
