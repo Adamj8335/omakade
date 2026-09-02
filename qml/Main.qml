@@ -558,7 +558,9 @@ ApplicationWindow {
     }
 
     onActiveChanged: {
-        if (active && root.navigationContainer() === null && !searchField.activeFocus) {
+        // Only give the grid focus when nothing has it, so alt-tabbing back does not pull
+        // focus away from a toolbar control or an empty-state button.
+        if (active && root.navigationContainer() === null && !root.activeFocusItem) {
             Qt.callLater(libraryView.focusGrid)
         }
     }
@@ -1305,6 +1307,7 @@ ApplicationWindow {
                 id: linkSearch
                 Layout.fillWidth: true
                 placeholderText: "Search installed games"
+                Accessible.name: placeholderText
                 color: Theme.foreground
                 font.family: Theme.fontFamily
                 onTextChanged: root.linkResults = Library.linkCandidates(root.selectedIndex, text)
@@ -1785,6 +1788,7 @@ ApplicationWindow {
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Steam ID (17 digits, starts with 7656119)"
+                        Accessible.name: "Steam ID"
                         // Copy the saved value in instead of binding so a keyring lookup
                         // finishing mid-edit cannot overwrite what is being typed.
                         readonly property string savedText: SteamAccount ? SteamAccount.steamId : ""
@@ -1816,6 +1820,7 @@ ApplicationWindow {
                         id: apiKeyField
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
+                        Accessible.name: "Steam Web API key"
                         placeholderText: SteamAccount && SteamAccount.hasApiKey
                                          ? "API key stored securely" : "Steam Web API key"
                         color: Theme.foreground
@@ -1916,6 +1921,7 @@ ApplicationWindow {
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
                         placeholderText: "Twitch developer client ID"
+                        Accessible.name: placeholderText
                         readonly property string savedText: Insights ? Insights.clientId : ""
                         onSavedTextChanged: if (!activeFocus) text = savedText
                         Component.onCompleted: text = savedText
@@ -1944,6 +1950,7 @@ ApplicationWindow {
                         id: igdbSecretField
                         property bool controllerNavigation: false
                         Layout.fillWidth: true
+                        Accessible.name: "Twitch developer client secret"
                         placeholderText: Insights && Insights.hasClientSecret
                                          ? "Client secret stored securely" : "Twitch developer client secret"
                         color: Theme.foreground

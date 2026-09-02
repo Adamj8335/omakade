@@ -439,6 +439,7 @@ Item {
                             id: tagsField
                             Layout.fillWidth: true
                             placeholderText: "Co-op, cozy, difficult"
+                            Accessible.name: "Tags"
                             // Copy the saved tags in instead of binding so an achievement
                             // refresh or rescan mid-edit cannot overwrite what is being typed.
                             readonly property string savedText: root.game.tags ? root.game.tags.join(", ") : ""
@@ -532,6 +533,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.maximumWidth: 360
                             placeholderText: "New collection"
+                            Accessible.name: placeholderText
                             color: Theme.foreground
                             placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                             font.family: Theme.fontFamily
