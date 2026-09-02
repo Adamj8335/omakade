@@ -192,8 +192,17 @@ void AchievementModel::load(const QString& appId) {
   }
   endResetModel();
   emit summaryChanged();
-  pruneCache();
+  // Walking every cached icon on each details open is slow; only prune when the tracked
+  // size says the cache may be over its limit. Downloads prune again when they finish.
+  if (m_cacheBytes > cacheLimitBytes()) {
+    pruneCache();
+  }
   requestMissingIcons();
+}
+
+qint64 AchievementModel::cacheLimitBytes() const {
+  const int limitMb = m_settings == nullptr ? 1024 : m_settings->artworkCacheLimitMb();
+  return static_cast<qint64>(limitMb) * 1024 * 1024;
 }
 
 void AchievementModel::clearCache() {
@@ -364,8 +373,7 @@ void AchievementModel::sortAchievements() {
 }
 
 void AchievementModel::pruneCache() {
-  const int limitMb = m_settings == nullptr ? 1024 : m_settings->artworkCacheLimitMb();
-  const qint64 limit = static_cast<qint64>(limitMb) * 1024 * 1024;
+  const qint64 limit = cacheLimitBytes();
   struct CachedFile {
     QString path;
     QDateTime modified;
