@@ -1,4 +1,5 @@
 #include "achievements/AchievementModel.h"
+#include "achievements/RetroAchievementsService.h"
 #include "achievements/SteamAccountService.h"
 #include "app/AppSettings.h"
 #include "app/SingleInstance.h"
@@ -346,6 +347,7 @@ int main(int argc, char* argv[]) {
   }
   std::unique_ptr<SteamAccountService> steamAccount;
   std::unique_ptr<GameInsightsService> gameInsights;
+  std::unique_ptr<RetroAchievementsService> retroAchievements;
   if (steamLibrary != nullptr) {
     steamAccount =
         std::make_unique<SteamAccountService>(steamLibrary->databasePath(), &preferences);
@@ -357,6 +359,15 @@ int main(int argc, char* argv[]) {
                      &SteamGameModel::reloadOwnedGames);
     gameInsights =
         std::make_unique<GameInsightsService>(steamLibrary->databasePath(), &preferences);
+  }
+  if (retroArchLibrary != nullptr) {
+    retroAchievements = std::make_unique<RetroAchievementsService>(steamLibrary->databasePath(),
+                                                                    &preferences);
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsUpdated,
+                     &achievements,
+                     [&achievements](const QString& gameId) { achievements.load(gameId); });
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsUpdated,
+                     retroArchLibrary, &RetroArchGameModel::reloadAchievementSummary);
   }
   GameLauncher launcher;
   std::unique_ptr<SunshineIntegration> sunshine;
@@ -399,6 +410,8 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
   engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamAccount"), steamAccount.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("RetroAchievements"),
+                                           retroAchievements.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Insights"), gameInsights.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Sunshine"), sunshine.get());
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"),

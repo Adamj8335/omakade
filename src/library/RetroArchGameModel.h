@@ -31,6 +31,7 @@ public:
   Q_INVOKABLE void toggleHidden(int row);
   Q_INVOKABLE void refresh();
   [[nodiscard]] bool scanning() const { return m_scanning; }
+  Q_INVOKABLE void reloadAchievementSummary(const QString& gameId);
   void refreshFromRoots(const QStringList& roots);
 
 signals:
@@ -41,6 +42,8 @@ private:
     RetroArchGameRecord retroArch;
     bool favorite = false;
     bool hidden = false;
+    int achievementsUnlocked = 0;
+    int achievementsTotal = 0;
     QColor accentStart;
     QColor accentEnd;
   };
