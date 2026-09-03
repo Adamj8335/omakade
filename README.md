@@ -19,7 +19,10 @@ into one quiet, cover-focused home that follows the active Omarchy theme.
 > Omakade is an independent community project. It is not an official Omarchy
 > application.
 
-## Current release
+## Current main branch
+
+The latest tagged release is 1.4.0. This section follows `main` and may include
+changes listed under Unreleased in the changelog.
 
 Omakade includes:
 

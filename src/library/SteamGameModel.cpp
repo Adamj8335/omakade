@@ -547,14 +547,16 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
     setStatus(QStringLiteral("Scan finished but the library database is unavailable"), m_errorText);
     return;
   }
+  const qint64 scanTimestamp = QDateTime::currentSecsSinceEpoch();
   if (result == m_appliedScan) {
     // Steam rewrites manifests and libraryfolders.vdf constantly while it downloads. When the
     // scan resolves to the same library, leave the database, model, and cover state alone so
     // the grid does not reset and failed covers are not re-requested every few seconds.
-    m_lastScan = QDateTime::currentSecsSinceEpoch();
+    m_lastScan = scanTimestamp;
     QSqlQuery touch(m_database);
-    touch.exec(QStringLiteral(
-        "UPDATE source_state SET last_scan = strftime('%s', 'now') WHERE source = 'steam'"));
+    touch.prepare(QStringLiteral("UPDATE source_state SET last_scan = ? WHERE source = 'steam'"));
+    touch.addBindValue(scanTimestamp);
+    touch.exec();
     if (m_explicitRefresh) {
       m_explicitRefresh = false;
       m_failedCovers.clear();
@@ -661,8 +663,9 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
   }
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('steam', "
-      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "?, ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
       "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(scanTimestamp);
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
   query.addBindValue(detectedPaths.isEmpty() ? QStringLiteral("")
                                              : detectedPaths.join(QLatin1Char('\n')));
@@ -678,7 +681,7 @@ void SteamGameModel::applyScan(const SteamScanResult& result) {
   m_appliedScan = result;
   m_explicitRefresh = false;
   m_detectedPaths = detectedPaths;
-  m_lastScan = QDateTime::currentSecsSinceEpoch();
+  m_lastScan = scanTimestamp;
   m_failedCovers.clear();
   requestMissingCovers();
   rebuildWatchPaths(result);
