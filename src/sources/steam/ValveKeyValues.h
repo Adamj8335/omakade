@@ -17,4 +17,8 @@ public:
                                   QString* error = nullptr);
   [[nodiscard]] static bool parseFile(const QString& path, ValveKeyValues* result,
                                       QString* error = nullptr);
+  [[nodiscard]] static bool parseBinary(const QByteArray& contents, ValveKeyValues* result,
+                                        QString* error = nullptr);
+  [[nodiscard]] static bool parseBinaryFile(const QString& path, ValveKeyValues* result,
+                                            QString* error = nullptr);
 };
