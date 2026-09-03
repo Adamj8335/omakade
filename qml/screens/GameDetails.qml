@@ -740,10 +740,14 @@ Item {
                     }
 
                     GridLayout {
+                        id: insightsGrid
                         Layout.fillWidth: true
                         visible: insightsSection.metrics.length > 0
-                        columns: insightsSection.metrics.length === 4 && detailsContent.width < 620
-                                 ? 2 : Math.max(1, insightsSection.metrics.length)
+                        readonly property real minimumMetricWidth: 130
+                        columns: Math.max(1, Math.min(
+                                              insightsSection.metrics.length,
+                                              Math.floor((detailsContent.width + columnSpacing)
+                                                         / (minimumMetricWidth + columnSpacing))))
                         columnSpacing: 10
                         rowSpacing: 10
 
@@ -753,7 +757,7 @@ Item {
                             Rectangle {
                                 required property var modelData
                                 Layout.fillWidth: true
-                                Layout.minimumWidth: 130
+                                Layout.minimumWidth: insightsGrid.minimumMetricWidth
                                 Layout.maximumWidth: 340
                                 Layout.preferredHeight: 72
                                 radius: Math.max(5, Theme.cornerRadius)
