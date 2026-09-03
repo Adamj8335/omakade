@@ -159,7 +159,8 @@ Item {
             id: coverSidebar
             anchors.top: parent.top
             anchors.left: parent.left
-            width: Math.max(0, Math.min((detailsArea.height - reservedControlHeight) / 1.5,
+            width: Math.max(0, Math.min(root.width * 0.28,
+                                        (detailsArea.height - reservedControlHeight) / 1.5,
                                         detailsArea.width * 0.44))
             spacing: 8
             readonly property real reservedControlHeight:
@@ -386,7 +387,6 @@ Item {
                               ? "INSTALL IN STEAM" : "PLAY"
                         iconText: root.selectedInstallation.installed === false ? "↓" : "▶"
                         primary: true
-                        Layout.fillWidth: true
                         onClicked: root.playRequested()
                         Component.onCompleted: forceActiveFocus()
                     }
@@ -394,7 +394,6 @@ Item {
                     GlassButton {
                         text: root.game.favorite ? "FAVORITE" : "ADD FAVORITE"
                         iconText: root.game.favorite ? "♥" : "♡"
-                        Layout.fillWidth: true
                         onClicked: root.favoriteRequested()
                     }
 
@@ -405,13 +404,11 @@ Item {
                                  || root.selectedInstallation.source === "Faugus"
                                  || root.selectedInstallation.source === "RetroArch"
                         text: "MANAGE IN " + (root.selectedInstallation.source || "LAUNCHER").toUpperCase()
-                        Layout.fillWidth: true
                         onClicked: root.manageRequested()
                     }
 
                     GlassButton {
                         text: root.game.hidden ? "UNHIDE" : "HIDE"
-                        Layout.fillWidth: true
                         onClicked: root.hiddenRequested()
                     }
                 }
