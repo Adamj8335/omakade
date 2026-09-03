@@ -378,6 +378,8 @@ Item {
                 }
 
                 GridLayout {
+                    id: gameActions
+                    objectName: "gameActions"
                     Layout.fillWidth: true
                     columns: detailsContent.width < 620 ? 2 : 4
                     columnSpacing: 10
@@ -395,12 +397,16 @@ Item {
                     }
 
                     GlassButton {
+                        id: favoriteButton
+                        objectName: "favoriteButton"
                         text: root.game.favorite ? "FAVORITE" : "ADD FAVORITE"
                         iconText: root.game.favorite ? "♥" : "♡"
                         onClicked: root.favoriteRequested()
                     }
 
                     GlassButton {
+                        id: manageButton
+                        objectName: "manageButton"
                         visible: root.selectedInstallation.source === "Steam"
                                  || root.selectedInstallation.source === "Lutris"
                                  || root.selectedInstallation.source === "Heroic"
@@ -414,6 +420,8 @@ Item {
                     }
 
                     GlassButton {
+                        id: hideButton
+                        objectName: "hideButton"
                         text: root.game.hidden ? "UNHIDE" : "HIDE"
                         onClicked: root.hiddenRequested()
                     }
@@ -871,9 +879,6 @@ Item {
                             property Item controllerUpTarget:
                                 insightRefreshButton.visible && insightRefreshButton.enabled
                                 ? insightRefreshButton : newCollectionButton
-                            property Item controllerDownTarget:
-                                achievementRefreshButton.visible && achievementRefreshButton.enabled
-                                ? achievementRefreshButton : null
                             property Item controllerRightTarget:
                                 achievementRefreshButton.visible && achievementRefreshButton.enabled
                                 ? achievementRefreshButton : null
@@ -887,10 +892,8 @@ Item {
                             id: achievementRefreshButton
                             objectName: "achievementRefreshButton"
                             property Item controllerUpTarget:
-                                achievementSortButton.visible && achievementSortButton.enabled
-                                ? achievementSortButton
-                                : insightRefreshButton.visible && insightRefreshButton.enabled
-                                  ? insightRefreshButton : newCollectionButton
+                                insightRefreshButton.visible && insightRefreshButton.enabled
+                                ? insightRefreshButton : newCollectionButton
                             property Item controllerLeftTarget:
                                 achievementSortButton.visible && achievementSortButton.enabled
                                 ? achievementSortButton : null
@@ -969,9 +972,6 @@ Item {
                                 Accessible.name: title
                                 Accessible.role: Accessible.ListItem
                                 Accessible.focused: activeFocus
-                                property Item controllerUpTarget:
-                                    index < achievementGrid.columns
-                                    ? achievementRefreshButton : null
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 260
                                 Layout.preferredHeight: 82

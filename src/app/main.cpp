@@ -707,15 +707,71 @@ int main(int argc, char* argv[]) {
                       QTimer::singleShot(100, quickWindow, [quickWindow, &application, &controller, fail] {
                         auto* play =
                             quickWindow->findChild<QQuickItem*>(QStringLiteral("playButton"));
+                        auto* favorite =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("favoriteButton"));
+                        auto* manage =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("manageButton"));
+                        auto* hide =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("hideButton"));
+                        auto* gameActions =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("gameActions"));
                         if (!quickWindow->property("detailOpen").toBool() || play == nullptr ||
-                            !play->hasActiveFocus()) {
+                            favorite == nullptr || manage == nullptr || hide == nullptr ||
+                            gameActions == nullptr || !play->hasActiveFocus()) {
                           fail(QStringLiteral("Game details did not focus Play"));
+                          return;
+                        }
+                        controller.focusDirectionRequested(Qt::Key_Right);
+                        if (!favorite->hasActiveFocus()) {
+                          fail(QStringLiteral(
+                              "Controller Right did not move from Play to Favorite"));
+                          return;
+                        }
+                        controller.focusDirectionRequested(Qt::Key_Left);
+                        if (!play->hasActiveFocus()) {
+                          fail(QStringLiteral(
+                              "Controller Left did not return from Favorite to Play"));
+                          return;
+                        }
+                        if (gameActions->property("columns").toInt() == 2) {
+                          controller.focusDirectionRequested(Qt::Key_Down);
+                          if (!manage->hasActiveFocus()) {
+                            fail(
+                                QStringLiteral("Controller Down did not move from Play to Manage"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          if (!hide->hasActiveFocus()) {
+                            fail(QStringLiteral(
+                                "Controller Right did not move from Manage to Hide"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Up);
+                          if (!favorite->hasActiveFocus()) {
+                            fail(
+                                QStringLiteral("Controller Up did not move from Hide to Favorite"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                        } else {
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          if (!hide->hasActiveFocus()) {
+                            fail(QStringLiteral("Controller Right did not traverse game actions"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                        }
+                        if (!play->hasActiveFocus()) {
+                          fail(QStringLiteral("Controller could not reverse through game actions"));
                           return;
                         }
                         controller.keyRequested(Qt::Key_Up, Qt::NoModifier);
                         QTimer::singleShot(
-                            50, quickWindow,
-                            [quickWindow, &application, &controller, play, fail] {
+                            50, quickWindow, [quickWindow, &application, &controller, play, fail] {
                               QQuickItem* movedUp = quickWindow->activeFocusItem();
                               if (movedUp == nullptr) {
                                 fail(QStringLiteral("Keyboard Up cleared detail focus"));
@@ -836,11 +892,18 @@ int main(int argc, char* argv[]) {
                                                       "sorting"));
                                                   return;
                                                 }
-                                                controller.focusDirectionRequested(Qt::Key_Down);
+                                                controller.focusDirectionRequested(Qt::Key_Right);
                                                 if (!achievementRefresh->hasActiveFocus()) {
                                                   fail(QStringLiteral(
-                                                      "Controller Down did not reach Steam "
+                                                      "Controller Right did not reach Steam "
                                                       "achievement refresh"));
+                                                  return;
+                                                }
+                                                controller.focusDirectionRequested(Qt::Key_Left);
+                                                if (!achievementSort->hasActiveFocus()) {
+                                                  fail(QStringLiteral("Controller Left did not "
+                                                                      "return to achievement "
+                                                                      "sorting"));
                                                   return;
                                                 }
                                                 const qreal initialContentY =
@@ -850,11 +913,14 @@ int main(int argc, char* argv[]) {
                                                 QQuickItem* firstAchievement =
                                                     quickWindow->activeFocusItem();
                                                 if (firstAchievement == nullptr ||
-                                                    firstAchievement->objectName() !=
-                                                        QStringLiteral("achievementCard0")) {
+                                                    !firstAchievement->objectName().startsWith(
+                                                        QStringLiteral("achievementCard"))) {
                                                   fail(QStringLiteral(
-                                                      "Controller Down did not enter the "
-                                                      "achievement list"));
+                                                           "Controller Down did not enter the "
+                                                           "achievement list; focused %1")
+                                                           .arg(firstAchievement
+                                                                    ? firstAchievement->objectName()
+                                                                    : QStringLiteral("nothing")));
                                                   return;
                                                 }
                                                 controller.focusDirectionRequested(Qt::Key_Down);

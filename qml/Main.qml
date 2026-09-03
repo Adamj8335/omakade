@@ -34,6 +34,16 @@ ApplicationWindow {
     readonly property int ownedGameCount: SteamAccount
                                           ? SteamAccount.ownedGameCount
                                           : OwnedGameCountOverride
+    readonly property Item sourceRowEndButton:
+        ryujinxSourceButton.visible && ryujinxSourceButton.enabled ? ryujinxSourceButton
+      : pcsx2SourceButton.visible && pcsx2SourceButton.enabled ? pcsx2SourceButton
+      : retroArchSourceButton.visible && retroArchSourceButton.enabled ? retroArchSourceButton
+      : faugusSourceButton.visible && faugusSourceButton.enabled ? faugusSourceButton
+      : heroicSourceButton.visible && heroicSourceButton.enabled ? heroicSourceButton
+      : lutrisSourceButton.visible && lutrisSourceButton.enabled ? lutrisSourceButton
+      : battleNetSourceButton.visible && battleNetSourceButton.enabled ? battleNetSourceButton
+      : steamSourceButton.visible && steamSourceButton.enabled ? steamSourceButton
+      : allSourcesButton
 
     function isWithin(item, container) {
         while (item) {
@@ -154,6 +164,13 @@ ApplicationWindow {
         }
         const currentCenter = current.mapToItem(container, current.width / 2,
                                                 current.height / 2)
+        const currentLeft = currentCenter.x - current.width / 2
+        const currentRight = currentCenter.x + current.width / 2
+        const currentTop = currentCenter.y - current.height / 2
+        const currentBottom = currentCenter.y + current.height / 2
+        // Use rectangle edges to decide direction. Comparing centers alone treats a wider button
+        // on the next row as being to the right of the current button when the two actually
+        // overlap horizontally.
         let best = null
         let bestScore = Number.MAX_VALUE
         let candidate = current.nextItemInFocusChain(true)
@@ -166,23 +183,36 @@ ApplicationWindow {
                                                    candidate.height / 2)
                 const dx = center.x - currentCenter.x
                 const dy = center.y - currentCenter.y
+                const candidateLeft = center.x - candidate.width / 2
+                const candidateRight = center.x + candidate.width / 2
+                const candidateTop = center.y - candidate.height / 2
+                const candidateBottom = center.y + candidate.height / 2
                 let primary = 0
                 let cross = 0
+                let crossGap = 0
                 if (key === Qt.Key_Up) {
-                    primary = -dy
+                    primary = currentTop - candidateBottom
                     cross = Math.abs(dx)
+                    crossGap = Math.max(0, Math.max(currentLeft, candidateLeft)
+                                           - Math.min(currentRight, candidateRight))
                 } else if (key === Qt.Key_Down) {
-                    primary = dy
+                    primary = candidateTop - currentBottom
                     cross = Math.abs(dx)
+                    crossGap = Math.max(0, Math.max(currentLeft, candidateLeft)
+                                           - Math.min(currentRight, candidateRight))
                 } else if (key === Qt.Key_Left) {
-                    primary = -dx
+                    primary = currentLeft - candidateRight
                     cross = Math.abs(dy)
+                    crossGap = Math.max(0, Math.max(currentTop, candidateTop)
+                                           - Math.min(currentBottom, candidateBottom))
                 } else if (key === Qt.Key_Right) {
-                    primary = dx
+                    primary = candidateLeft - currentRight
                     cross = Math.abs(dy)
+                    crossGap = Math.max(0, Math.max(currentTop, candidateTop)
+                                           - Math.min(currentBottom, candidateBottom))
                 }
-                if (primary > 3) {
-                    const score = primary + cross * 2.5
+                if (primary >= -1) {
+                    const score = Math.max(0, primary) + crossGap * 2.5 + cross * 0.01
                     if (score < bestScore) {
                         best = candidate
                         bestScore = score
@@ -740,6 +770,7 @@ ApplicationWindow {
                     GlassButton {
                         id: allModeButton
                         objectName: "allModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "ALL"
                         compact: true
                         selected: Library.mode === 0
@@ -751,6 +782,7 @@ ApplicationWindow {
                     GlassButton {
                         id: favoritesModeButton
                         objectName: "favoritesModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "FAVORITES"
                         compact: true
                         selected: Library.mode === 1
@@ -762,6 +794,7 @@ ApplicationWindow {
                     GlassButton {
                         id: recentModeButton
                         objectName: "recentModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "RECENT"
                         compact: true
                         selected: Library.mode === 2
@@ -773,6 +806,7 @@ ApplicationWindow {
                     GlassButton {
                         id: hiddenModeButton
                         objectName: "hiddenModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "HIDDEN"
                         compact: true
                         visible: !DemoMode
@@ -884,7 +918,7 @@ ApplicationWindow {
                 GlassButton {
                     id: narrowHiddenModeButton
                     objectName: "narrowHiddenModeButton"
-                    property Item controllerDownTarget: retroArchSourceButton
+                    property Item controllerDownTarget: root.sourceRowEndButton
                     text: "HIDDEN"
                     compact: true
                     visible: !DemoMode
