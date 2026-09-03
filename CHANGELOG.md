@@ -8,6 +8,50 @@
   games added to Steam, and launched them with the 64-bit shortcut ID Steam
   expects.
 
+## 1.4.0
+
+### Sunshine and Moonlight
+
+- Added optional Sunshine app export for Omakade and individual installed games, including
+  cover art, while preserving existing Sunshine apps and keeping a one-time backup.
+- Added a Restart Sunshine action in Settings.
+- Added `omakade --play Source:runner:id` and `omakade --quit` for Sunshine app entries and
+  other integrations.
+- Used the installed Omakade executable for native Sunshine entries and waited for a fresh
+  library scan when a game starts before the cache is ready.
+- Opened Omakade fullscreen on Sunshine's streamed display for Moonlight sessions and used
+  each game's normal launcher.
+
+### Library and organization
+
+- Replaced the Status, Collection, and Tag filter cycles with picker lists that open on the
+  current value and work with keyboard, mouse, and controller.
+- Kept the grid and details on the correct game during unchanged Steam rescans, filtered
+  edits, and cover changes.
+- Preserved unfinished text in tags and credential fields when background refreshes finish.
+- Reported private Steam profiles correctly and showed scanning state for every library
+  source.
+
+### Navigation and interface
+
+- Made keyboard arrows use the same spatial navigation as controllers in game details,
+  Settings, and dialogs, without taking arrow keys from text fields.
+- Moved focus to Clear Filters when the last visible game leaves a filtered grid and returned
+  focus to the collection button when its editor closes.
+- Kept focus in place when the window is reactivated and added accessible names to text fields.
+- Rendered titles as plain text, kept toasts inside the window, shortened long card subtitles,
+  and avoided unnecessary cover reloads while resizing.
+
+### Performance and reliability
+
+- Sped up linked-game searches, Steam artwork scans, controller detection, and theme updates.
+- Pruned unused covers first, retried covers removed by the cache limit, and remembered IGDB
+  misses instead of requesting them repeatedly.
+- Delayed keyring access until credentials are configured and reduced unnecessary database
+  and cover work during unchanged scans.
+- Kept running when the single-instance socket is unavailable and restored normal SIGTERM,
+  logout, and service-stop behavior.
+
 ## 1.3.0
 
 ### Steam

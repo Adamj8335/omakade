@@ -71,6 +71,9 @@ private:
   QVector<QAbstractItemModel*> m_models;
   QSet<QString> m_disabledSources;
   QVector<SourceRow> m_rows;
+  // Rebuilt with m_rows so linked-game lookups never walk every source model per role.
+  QHash<QString, SourceRow> m_rowForKey;
+  QHash<QString, QVector<SourceRow>> m_rowsForGroup;
   QSqlDatabase m_database;
   QString m_connectionName;
   QString m_databasePath;

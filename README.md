@@ -38,6 +38,8 @@ Omakade includes:
 - Explicit linking for games installed through multiple sources
 - ProtonDB and PCGamingWiki shortcuts with actionable launch errors
 - Keyboard, mouse, and controller navigation
+- Optional Sunshine app export so Moonlight can start Omakade or any installed
+  game, plus `--play` and `--quit` commands
 
 ![Omakade game details showing playtime, IGDB insights, and Steam achievements](docs/assets/game-details.webp)
 
@@ -64,22 +66,22 @@ verify the package, and install it. If Omakade is already installed, `pacman -U`
 upgrades it in place without removing your settings or library data:
 
 ```bash
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.3.0/omakade-1.3.0-1-x86_64.pkg.tar.zst
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.3.0/SHA256SUMS
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.4.0/omakade-1.4.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.4.0/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.3.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.4.0-1-x86_64.pkg.tar.zst
 ```
 
 ### Install or upgrade from a browser download
 
 1. Open the [latest release](https://github.com/tsouth89/omakade/releases/latest).
-2. Under **Assets**, download `omakade-1.3.0-1-x86_64.pkg.tar.zst` and
+2. Under **Assets**, download `omakade-1.4.0-1-x86_64.pkg.tar.zst` and
    `SHA256SUMS` into the same folder.
 3. Open a terminal in that folder and run:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.3.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.4.0-1-x86_64.pkg.tar.zst
 ```
 
 Launch Omakade from the application launcher or run `omakade` in a terminal.
@@ -100,6 +102,26 @@ RetroArch games come from its configured playlists. Omakade uses local
 RetroArch thumbnails and runtime logs, then launches each game with its assigned
 core. Entries without a core association remain visible and explain how to fix
 launching after you press Play.
+
+### Stream with Sunshine and Moonlight
+
+Omarchy installs Sunshine from its menu and ships Moonlight. Once Sunshine is
+running, open Omakade's Settings and enable **Omakade in Moonlight** to add
+Omakade to Sunshine's app list next to Steam Big Picture, or **One app per
+installed game** to add every installed game with its cover. Sunshine reads the
+list when it starts, so press **Restart Sunshine** after a change. Omakade
+leaves the other Sunshine apps alone and keeps a one-time backup next to
+`apps.json`.
+
+Starting Omakade from Moonlight opens it fullscreen on the streamed display.
+Starting a game from Moonlight launches it through its own launcher, the same
+as pressing Play. The same entry points work from a terminal or a keybinding:
+
+```bash
+omakade --play Steam::620          # Source:runner:id, the runner is often empty
+omakade --play Heroic:legendary:Sugar
+omakade --quit
+```
 
 ## Build
 

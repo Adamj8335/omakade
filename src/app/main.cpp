@@ -4,6 +4,8 @@
 #include "app/SingleInstance.h"
 #include "input/ControllerInput.h"
 #include "launch/GameLauncher.h"
+#include "launch/PlayRequest.h"
+#include "streaming/SunshineIntegration.h"
 #include "library/FaugusGameModel.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
@@ -29,6 +31,7 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -52,6 +55,48 @@ QString optionValue(const QStringList& arguments, const QString& name) {
     }
   }
   return {};
+}
+
+void runEmptyFilterFocusTest(QQuickWindow* window, QGuiApplication* application) {
+  const auto fail = [application](const QString& message) {
+    qCritical().noquote() << message;
+    application->exit(EXIT_FAILURE);
+  };
+  auto* library = qobject_cast<QAbstractItemModel*>(
+      qmlContext(window)->contextProperty(QStringLiteral("Library")).value<QObject*>());
+  if (library == nullptr) {
+    fail(QStringLiteral("Navigation test could not find the library model"));
+    return;
+  }
+  bool statusChanged = false;
+  const bool invoked = QMetaObject::invokeMethod(
+      library, "setCompletionStatus", Q_RETURN_ARG(bool, statusChanged), Q_ARG(int, 0),
+      Q_ARG(QString, QStringLiteral("backlog")));
+  library->setProperty("completionFilter", QStringLiteral("backlog"));
+  if (!invoked || !statusChanged || library->rowCount() != 1) {
+    fail(QStringLiteral("Navigation test could not prepare one filtered game"));
+    return;
+  }
+  QMetaObject::invokeMethod(window, "openGame", Q_ARG(QVariant, QVariant(0)));
+  QTimer::singleShot(80, window, [window, library, application, fail] {
+    auto* details = window->findChild<QQuickItem*>(QStringLiteral("gameDetails"));
+    if (details == nullptr || !window->property("detailOpen").toBool()) {
+      fail(QStringLiteral("Navigation test could not open the filtered game"));
+      return;
+    }
+    QMetaObject::invokeMethod(details, "completionStatusRequested",
+                              Q_ARG(QString, QStringLiteral("completed")));
+    QTimer::singleShot(100, window, [window, library, application, fail] {
+      auto* emptyClear = window->findChild<QQuickItem*>(QStringLiteral("emptyClearButton"));
+      if (library->rowCount() != 0 || emptyClear == nullptr || !emptyClear->isVisible() ||
+          !emptyClear->hasActiveFocus()) {
+        fail(QStringLiteral("Removing the last filtered game did not focus Clear Filters"));
+        return;
+      }
+      library->setProperty("completionFilter", QString{});
+      application->quit();
+    });
+  });
 }
 } // namespace
 
@@ -78,6 +123,10 @@ int main(int argc, char* argv[]) {
   const QString screenshotPath =
       optionValue(application.arguments(), QStringLiteral("--render-screenshot"));
   const QString renderSize = optionValue(application.arguments(), QStringLiteral("--render-size"));
+  // `--play Source:runner:id` launches one library game, through the running window when
+  // there is one, and `--quit` closes the running window. Sunshine app entries use both.
+  const QString playKey = optionValue(application.arguments(), QStringLiteral("--play"));
+  const bool quitRequest = application.arguments().contains(QStringLiteral("--quit"));
   const bool renderMode = !screenshotPath.isEmpty();
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
   const bool navigationTest =
@@ -93,8 +142,16 @@ int main(int argc, char* argv[]) {
   if (benchmarkMode) {
     qInfo() << "Theme ready in" << startupTimer.elapsed() << "ms";
   }
+  if (quitRequest) {
+    return SingleInstance::sendCommand({}, "quit") ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
   SingleInstance singleInstance;
-  if (!smokeTest && !renderMode && !navigationTest && !singleInstance.claimOrNotify()) {
+  const QByteArray instanceCommand =
+      !playKey.isEmpty()                 ? QByteArray("play ") + playKey.toUtf8()
+      : SunshineIntegration::streaming() ? QByteArray("activate stream")
+                                         : QByteArray("activate");
+  if (!smokeTest && !renderMode && !navigationTest &&
+      !singleInstance.claimOrNotify(instanceCommand)) {
     return EXIT_SUCCESS;
   }
   const QString settingsPath =
@@ -132,6 +189,9 @@ int main(int argc, char* argv[]) {
     retroArchGames = std::make_unique<RetroArchGameModel>(steamLibrary->databasePath());
     retroArchLibrary = retroArchGames.get();
   }
+  if (navigationTest) {
+    libraryDatabasePath = QStringLiteral(":memory:");
+  }
   UnifiedGameModel unifiedGames(libraryDatabasePath);
   unifiedGames.addSourceModel(games.get());
   if (lutrisGames != nullptr) {
@@ -156,6 +216,46 @@ int main(int argc, char* argv[]) {
   applySourcePreferences();
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
                    applySourcePreferences);
+  if (!playKey.isEmpty()) {
+    // No window is running, so launch without showing one. A Sunshine request can arrive before
+    // a fresh process has finished rebuilding a missing or stale library cache, so retry after the
+    // requested source's asynchronous refresh.
+    GameLauncher headlessLauncher;
+    const LaunchKey key = LaunchKey::parse(playKey);
+    QString error;
+    if (PlayRequest::findInstallation(unifiedGames, key, nullptr).isEmpty() && key.isValid()) {
+      bool refreshStarted = false;
+      if (key.source.compare(QStringLiteral("Steam"), Qt::CaseInsensitive) == 0 &&
+          steamLibrary != nullptr && preferences.steamEnabled()) {
+        steamLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Lutris"), Qt::CaseInsensitive) == 0 &&
+                 lutrisLibrary != nullptr && preferences.lutrisEnabled()) {
+        lutrisLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Heroic"), Qt::CaseInsensitive) == 0 &&
+                 heroicLibrary != nullptr && preferences.heroicEnabled()) {
+        heroicLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) == 0 &&
+                 faugusLibrary != nullptr && preferences.faugusEnabled()) {
+        faugusLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("RetroArch"), Qt::CaseInsensitive) == 0 &&
+                 retroArchLibrary != nullptr && preferences.retroArchEnabled()) {
+        retroArchLibrary->refresh();
+        refreshStarted = true;
+      }
+      if (refreshStarted) {
+        PlayRequest::waitForInstallation(unifiedGames, key, 15000);
+      }
+    }
+    if (!PlayRequest::perform(unifiedGames, headlessLauncher, key, &error)) {
+      qCritical().noquote() << error;
+      return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+  }
   LibraryFilterModel library;
   library.setSourceModel(&unifiedGames);
   if (uninstalledLayoutTest) {
@@ -231,6 +331,12 @@ int main(int argc, char* argv[]) {
         std::make_unique<GameInsightsService>(steamLibrary->databasePath(), &preferences);
   }
   GameLauncher launcher;
+  std::unique_ptr<SunshineIntegration> sunshine;
+  if (steamLibrary != nullptr) {
+    sunshine = std::make_unique<SunshineIntegration>(&unifiedGames, &preferences);
+    sunshine->setIconSource(
+        QStringLiteral(":/icons/resources/icons/io.github.tsouth89.Omakade.svg"));
+  }
 
   QObject::connect(&controller, &ControllerInput::keyRequested, &application,
                    [&application](int key, int modifiers) {
@@ -264,6 +370,7 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamAccount"), steamAccount.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Insights"), gameInsights.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("Sunshine"), sunshine.get());
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"),
                                            (demoMode || stressMode) && !ownedLayoutTest);
   engine.rootContext()->setContextProperty(QStringLiteral("StartupMilliseconds"),
@@ -290,12 +397,50 @@ int main(int argc, char* argv[]) {
   }
 
   auto* rootWindow = qobject_cast<QWindow*>(engine.rootObjects().constFirst());
+  if (rootWindow != nullptr && qEnvironmentVariableIsSet("SUNSHINE_APP_ID") && !renderMode &&
+      !navigationTest && !smokeTest) {
+    // Sunshine launched Omakade for a Moonlight client, so fill the streamed display.
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    QStringList screenNames;
+    screenNames.reserve(screens.size());
+    for (const QScreen* screen : screens) {
+      screenNames.append(screen->name());
+    }
+    const int screenIndex = SunshineIntegration::outputScreenIndex(
+        SunshineIntegration::configuredOutputName(), screenNames);
+    if (screenIndex >= 0) {
+      rootWindow->setScreen(screens.at(screenIndex));
+    }
+    rootWindow->showFullScreen();
+  }
   if (auto* quickWindow = qobject_cast<QQuickWindow*>(rootWindow)) {
     const QStringList dimensions = renderSize.split(QLatin1Char('x'));
     if ((renderMode || navigationTest) && dimensions.size() == 2) {
       quickWindow->resize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
     }
     if (renderMode) {
+      // `--render-overlay=settings|picker` opens an overlay so visual checks can cover it.
+      const QString overlay =
+          optionValue(application.arguments(), QStringLiteral("--render-overlay"));
+      if (overlay == QStringLiteral("settings")) {
+        quickWindow->setProperty("diagnosticsOpen", true);
+        QTimer::singleShot(400, quickWindow, [quickWindow] {
+          // Scroll to the end so the lower sections land in the capture.
+          auto* scroll = quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
+          QObject* flickable =
+              scroll == nullptr ? nullptr : scroll->property("contentItem").value<QObject*>();
+          if (flickable != nullptr) {
+            flickable->setProperty("contentY", flickable->property("contentHeight").toReal() -
+                                                   scroll->height());
+          }
+        });
+      } else if (overlay == QStringLiteral("picker")) {
+        QMetaObject::invokeMethod(
+            quickWindow, "openFilterPicker", Q_ARG(QVariant, QStringLiteral("collection")),
+            Q_ARG(QVariant, QVariant(QStringList{QStringLiteral("Couch co-op"),
+                                                 QStringLiteral("Cozy evenings"),
+                                                 QStringLiteral("Finish this year")})));
+      }
       QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
         const QImage screenshot = quickWindow->grabWindow();
         if (screenshot.isNull() || !screenshot.save(screenshotPath)) {
@@ -509,58 +654,54 @@ int main(int argc, char* argv[]) {
                           fail(QStringLiteral("Game details did not focus Play"));
                           return;
                         }
-                        const QPointF initial =
-                            play->mapToScene(QPointF(play->width() / 2, play->height() / 2));
-                        controller.focusDirectionRequested(Qt::Key_Up);
+                        controller.keyRequested(Qt::Key_Up, Qt::NoModifier);
                         QTimer::singleShot(
                             50, quickWindow,
-                            [quickWindow, &application, &controller, initial, fail] {
+                            [quickWindow, &application, &controller, play, fail] {
                               QQuickItem* movedUp = quickWindow->activeFocusItem();
                               if (movedUp == nullptr) {
-                                fail(QStringLiteral("Controller Up cleared detail focus"));
+                                fail(QStringLiteral("Keyboard Up cleared detail focus"));
                                 return;
                               }
-                              const QPointF up = movedUp->mapToScene(
-                                  QPointF(movedUp->width() / 2, movedUp->height() / 2));
-                              if (up.y() >= initial.y() - 3) {
+                              if (movedUp == play) {
                                 fail(QStringLiteral(
-                                    "Controller Up did not move up on game details"));
+                                    "Keyboard Up did not move focus on game details"));
                                 return;
                               }
-                              controller.focusDirectionRequested(Qt::Key_Down);
+                              controller.keyRequested(Qt::Key_Down, Qt::NoModifier);
                               QTimer::singleShot(
                                   50, quickWindow,
-                                  [quickWindow, &application, &controller, up, fail] {
+                                  [quickWindow, &application, &controller, movedUp, fail] {
                                     QQuickItem* movedDown = quickWindow->activeFocusItem();
                                     if (movedDown == nullptr) {
-                                      fail(QStringLiteral("Controller Down cleared detail focus"));
+                                      fail(QStringLiteral("Keyboard Down cleared detail focus"));
                                       return;
                                     }
                                     const QPointF down = movedDown->mapToScene(
                                         QPointF(movedDown->width() / 2, movedDown->height() / 2));
-                                    if (down.y() <= up.y() + 3) {
+                                    if (movedDown == movedUp) {
                                       fail(QStringLiteral(
-                                          "Controller Down did not move down on game details"));
+                                          "Keyboard Down did not move focus on game details"));
                                       return;
                                     }
-                                    controller.focusDirectionRequested(Qt::Key_Right);
+                                    controller.keyRequested(Qt::Key_Right, Qt::NoModifier);
                                     QTimer::singleShot(
                                         50, quickWindow,
                                         [quickWindow, &application, &controller, down, fail] {
                                           QQuickItem* movedRight = quickWindow->activeFocusItem();
                                           if (movedRight == nullptr) {
                                             fail(QStringLiteral(
-                                                "Controller Right cleared detail focus"));
+                                                "Keyboard Right cleared detail focus"));
                                             return;
                                           }
                                           const QPointF right = movedRight->mapToScene(QPointF(
                                               movedRight->width() / 2, movedRight->height() / 2));
                                           if (right.x() <= down.x() + 3) {
-                                            fail(QStringLiteral("Controller Right did not move "
+                                            fail(QStringLiteral("Keyboard Right did not move "
                                                                 "right on game details"));
                                             return;
                                           }
-                                          controller.focusDirectionRequested(Qt::Key_Left);
+                                          controller.keyRequested(Qt::Key_Left, Qt::NoModifier);
                                           QTimer::singleShot(
                                               50, quickWindow,
                                               [quickWindow, &application, &controller, right,
@@ -569,7 +710,7 @@ int main(int argc, char* argv[]) {
                                                     quickWindow->activeFocusItem();
                                                 if (movedLeft == nullptr) {
                                                   fail(QStringLiteral(
-                                                      "Controller Left cleared detail focus"));
+                                                      "Keyboard Left cleared detail focus"));
                                                   return;
                                                 }
                                                 const QPointF left = movedLeft->mapToScene(
@@ -577,8 +718,8 @@ int main(int argc, char* argv[]) {
                                                             movedLeft->height() / 2));
                                                 if (left.x() >= right.x() - 3) {
                                                   fail(QStringLiteral(
-                                                      "Controller Left did not move left on "
-                                                      "game details"));
+                                                      "Keyboard Left did not move left on game "
+                                                      "details"));
                                                   return;
                                                 }
                                                 auto* newCollection =
@@ -762,20 +903,47 @@ int main(int argc, char* argv[]) {
                                                                             Qt::NoModifier);
                                                                         QTimer::singleShot(
                                                                             50, quickWindow,
-                                                                            [grid, &application,
-                                                                             fail] {
-                                                                              if (!grid->hasActiveFocus()) {
-                                                                                fail(QStringLiteral(
-                                                                                    "Keyboard F6 "
-                                                                                    "did "
-                                                                                    "not return to "
-                                                                                    "the "
-                                                                                    "library "
-                                                                                    "grid"));
-                                                                                return;
-                                                                              }
-                                                                              application.quit();
-                                                                            });
+                                                                            [grid, quickWindow, &application, &controller, fail] {
+  if (!grid->hasActiveFocus()) {
+    fail(QStringLiteral("Keyboard F6 did not return to the library grid"));
+    return;
+  }
+  // The organize filters open a picker list. Return opens it on the current value and
+  // Escape closes it and hands focus back to the button.
+  auto* statusFilter =
+      quickWindow->findChild<QQuickItem*>(QStringLiteral("statusFilterButton"));
+  auto* picker =
+      quickWindow->findChild<QQuickItem*>(QStringLiteral("filterPickerOverlay"));
+  if (statusFilter == nullptr || picker == nullptr) {
+    fail(QStringLiteral("Navigation test could not find the filter picker"));
+    return;
+  }
+  statusFilter->forceActiveFocus();
+  controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
+  QTimer::singleShot(
+      80, quickWindow, [quickWindow, statusFilter, picker, &application, &controller, fail] {
+        bool focusInsidePicker = false;
+        for (QQuickItem* item = quickWindow->activeFocusItem(); item != nullptr;
+             item = item->parentItem()) {
+          focusInsidePicker = focusInsidePicker || item == picker;
+        }
+        if (!quickWindow->property("filterPickerOpen").toBool() || !picker->isVisible() ||
+            !focusInsidePicker) {
+          fail(QStringLiteral("Return did not open the status filter picker with focus"));
+          return;
+        }
+        controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
+        QTimer::singleShot(80, quickWindow, [quickWindow, statusFilter, &application, fail] {
+          if (quickWindow->property("filterPickerOpen").toBool() ||
+              !statusFilter->hasActiveFocus()) {
+            fail(QStringLiteral("Escape did not close the filter picker and restore focus"));
+            return;
+          }
+          runEmptyFilterFocusTest(quickWindow, &application);
+        });
+      });
+});
+
                                                                       });
                                                                 });
                                                           });
@@ -792,12 +960,29 @@ int main(int argc, char* argv[]) {
     }
   }
   QObject::connect(&singleInstance, &SingleInstance::activationRequested, &application,
-                   [rootWindow] {
-                     if (rootWindow != nullptr) {
-                       rootWindow->show();
-                       rootWindow->requestActivate();
+                   [rootWindow](bool fullscreen) {
+                     if (rootWindow == nullptr) {
+                       return;
                      }
+                     if (fullscreen) {
+                       rootWindow->showFullScreen();
+                     } else {
+                       rootWindow->show();
+                     }
+                     rootWindow->requestActivate();
                    });
+  QObject* rootObject = engine.rootObjects().constFirst();
+  QObject::connect(&singleInstance, &SingleInstance::playRequested, &application,
+                   [&unifiedGames, &launcher, rootObject](const QString& key) {
+                     QString error;
+                     const bool okay = PlayRequest::perform(unifiedGames, launcher,
+                                                            LaunchKey::parse(key), &error);
+                     QMetaObject::invokeMethod(
+                         rootObject, "showToast",
+                         Q_ARG(QVariant, okay ? QStringLiteral("Launching from Sunshine") : error));
+                   });
+  QObject::connect(&singleInstance, &SingleInstance::quitRequested, &application,
+                   &QCoreApplication::quit);
 
   if (steamLibrary != nullptr && preferences.steamEnabled()) {
     QTimer::singleShot(0, steamLibrary, &SteamGameModel::refresh);

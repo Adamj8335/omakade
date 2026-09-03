@@ -77,9 +77,17 @@ GameInsightsService::GameInsightsService(const QString& databasePath, AppSetting
   connect(&m_secretWatcher, &QFutureWatcher<InsightsSecretResult>::finished, this,
           &GameInsightsService::finishSecretOperation);
   if (m_settings != nullptr) {
-    connect(m_settings, &AppSettings::igdbClientIdChanged, this, &GameInsightsService::changed);
+    connect(m_settings, &AppSettings::igdbClientIdChanged, this, [this] {
+      if (!clientId().isEmpty() && !m_hasClientSecret && !m_busy) {
+        beginSecretOperation(SecretAction::Detect);
+      }
+      emit changed();
+    });
   }
-  beginSecretOperation(SecretAction::Detect);
+  // Without a client ID there is nothing to look up, so skip the keyring at startup.
+  if (!clientId().isEmpty()) {
+    beginSecretOperation(SecretAction::Detect);
+  }
 }
 
 GameInsightsService::~GameInsightsService() {
@@ -145,7 +153,8 @@ void GameInsightsService::loadSteam(const QString& appId) {
   }
   const bool cached = loadCache(appId);
   if (cached) {
-    m_statusText = QStringLiteral("Cached IGDB data");
+    m_statusText = m_insight.gameId > 0 ? QStringLiteral("Cached IGDB data")
+                                        : QStringLiteral("IGDB has no entry for this game");
   } else if (!configured()) {
     m_statusText = QStringLiteral("Connect IGDB in settings for game insights");
   }
@@ -335,6 +344,16 @@ void GameInsightsService::finishRequest(QNetworkReply* reply) {
   } else if (kind == RequestKind::Mapping) {
     qint64 gameId = 0;
     if (!IgdbApi::parseSteamMapping(contents, &gameId, &error)) {
+      if (contents.trimmed() == "[]") {
+        // Remember the miss so this game does not ask IGDB again on every visit.
+        m_insight = {};
+        m_updatedAt = QDateTime::currentSecsSinceEpoch();
+        persist();
+        m_busy = false;
+        m_statusText = QStringLiteral("IGDB has no entry for this game");
+        emit changed();
+        return;
+      }
       fail(error);
     } else {
       m_insight = {};

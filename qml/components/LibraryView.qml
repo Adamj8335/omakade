@@ -30,6 +30,11 @@ Item {
     function focusGrid() {
         if (grid.count > 0) {
             grid.forceActiveFocus()
+        } else if (!root.scanning && root.filtersActive) {
+            // Keyboard focus needs somewhere to land when the last visible game leaves the grid.
+            Qt.callLater(emptyClearButton.forceActiveFocus)
+        } else if (!root.scanning) {
+            Qt.callLater(emptyRescanButton.forceActiveFocus)
         }
     }
 
@@ -300,7 +305,7 @@ Item {
         }
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: root.scanning ? "Scanning Steam" : root.emptyTitle
+            text: root.scanning ? "Scanning libraries" : root.emptyTitle
             color: Theme.foreground
             font.family: Theme.fontFamily
             font.pixelSize: 16
@@ -314,6 +319,8 @@ Item {
             font.pixelSize: 11
         }
         GlassButton {
+            id: emptyClearButton
+            objectName: "emptyClearButton"
             anchors.horizontalCenter: parent.horizontalCenter
             visible: !root.scanning && root.filtersActive
             text: "CLEAR FILTERS"
@@ -321,6 +328,7 @@ Item {
             onClicked: root.clearFiltersRequested()
         }
         GlassButton {
+            id: emptyRescanButton
             anchors.horizontalCenter: parent.horizontalCenter
             visible: !root.scanning && !root.filtersActive
             text: "RESCAN"

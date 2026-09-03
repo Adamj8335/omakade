@@ -120,7 +120,20 @@ SteamAccountService::SteamAccountService(const QString& databasePath, AppSetting
   loadOwnedGameCount();
   connect(&m_secretWatcher, &QFutureWatcher<SteamSecretResult>::finished, this,
           &SteamAccountService::finishSecretOperation);
-  beginSecretOperation(SecretAction::Detect);
+  if (steamId().isEmpty()) {
+    // Nobody has set up a Steam connection, so leave the keyring alone until they do. On a
+    // locked keyring the lookup would otherwise prompt at every start.
+    setStatus(QStringLiteral("local"), QStringLiteral("Using Steam's local achievement cache"));
+  } else {
+    beginSecretOperation(SecretAction::Detect);
+  }
+  if (m_settings != nullptr) {
+    connect(m_settings, &AppSettings::steamIdChanged, this, [this] {
+      if (!steamId().isEmpty() && !m_hasApiKey && !m_busy) {
+        beginSecretOperation(SecretAction::Detect);
+      }
+    });
+  }
 }
 
 SteamAccountService::~SteamAccountService() {
@@ -525,10 +538,15 @@ void SteamAccountService::handleApiReply(QNetworkReply* reply) {
   }
   const bool tooLarge =
       reply->property("responseTooLarge").toBool() || contents.size() > kMaximumApiResponseBytes;
-  const SteamApiState responseState = tooLarge
-                                          ? SteamApiState::RemoteError
-                                          : SteamAchievementApi::classifyHttpResponse(
-                                                status, reply->error() != QNetworkReply::NoError);
+  SteamApiState responseState = tooLarge
+                                    ? SteamApiState::RemoteError
+                                    : SteamAchievementApi::classifyHttpResponse(
+                                          status, reply->error() != QNetworkReply::NoError);
+  if (kind == QStringLiteral("player") && responseState == SteamApiState::InvalidKey &&
+      SteamAchievementApi::isPrivateProfileResponse(contents)) {
+    // Steam answers HTTP 403 for profiles whose game details are private. The key is fine.
+    responseState = SteamApiState::PrivateProfile;
+  }
   if (kind == QStringLiteral("player")) {
     m_api.player = contents;
   } else if (kind == QStringLiteral("schema")) {

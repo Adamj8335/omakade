@@ -92,6 +92,7 @@ private:
   void requestIcon(int row);
   void sortAchievements();
   void pruneCache();
+  [[nodiscard]] qint64 cacheLimitBytes() const;
   void updateCacheBytes();
 
   QVector<Achievement> m_achievements;

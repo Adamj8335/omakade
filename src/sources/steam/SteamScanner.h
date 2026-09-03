@@ -43,6 +43,7 @@ struct SteamScanResult {
   QStringList warnings;
   QStringList unreadableManifests;
   bool incomplete = false;
+  bool operator==(const SteamScanResult&) const = default;
 };
 
 class SteamScanner final {
