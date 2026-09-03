@@ -8,6 +8,7 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QHash>
 #include <QImage>
@@ -15,6 +16,7 @@
 #include <QJsonDocument>
 #include <QPainter>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
@@ -93,6 +95,47 @@ SunshineIntegration::~SunshineIntegration() {
 }
 
 bool SunshineIntegration::streaming() { return qEnvironmentVariableIsSet("SUNSHINE_APP_ID"); }
+
+QString SunshineIntegration::configuredOutputName(const QString& configPath) {
+  QString path = configPath;
+  if (path.isEmpty()) {
+    const QString native = QDir::homePath() + QStringLiteral("/.config/sunshine/sunshine.conf");
+    const QString flatpak = QDir::homePath() + QStringLiteral("/.var/app/") +
+                            QLatin1String(kFlatpakId) + QStringLiteral("/config/sunshine.conf");
+    path = QFileInfo::exists(native) ? native : flatpak;
+  }
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return {};
+  }
+  const QRegularExpression expression(
+      QStringLiteral("(?m)^\\s*output_name\\s*=\\s*([^#\\r\\n]+)"));
+  const QRegularExpressionMatch match = expression.match(QString::fromUtf8(file.readAll()));
+  if (!match.hasMatch()) {
+    return {};
+  }
+  QString output = match.captured(1).trimmed();
+  if (output.size() >= 2 &&
+      ((output.startsWith(QLatin1Char('"')) && output.endsWith(QLatin1Char('"'))) ||
+       (output.startsWith(QLatin1Char('\'')) && output.endsWith(QLatin1Char('\''))))) {
+    output = output.mid(1, output.size() - 2).trimmed();
+  }
+  return output;
+}
+
+int SunshineIntegration::outputScreenIndex(const QString& configuredOutput,
+                                            const QStringList& screenNames) {
+  if (screenNames.isEmpty()) {
+    return -1;
+  }
+  bool numeric = false;
+  const int index = configuredOutput.toInt(&numeric);
+  if (numeric && index >= 0 && index < screenNames.size()) {
+    return index;
+  }
+  const int named = screenNames.indexOf(configuredOutput);
+  return named >= 0 ? named : 0;
+}
 
 void SunshineIntegration::detect() {
   const QString nativeDir = QDir::homePath() + QStringLiteral("/.config/sunshine");

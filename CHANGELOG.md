@@ -9,7 +9,8 @@
 - Added a Restart Sunshine action in Settings.
 - Added `omakade --play Source:runner:id` and `omakade --quit` for Sunshine app entries and
   other integrations.
-- Opened Omakade fullscreen for Moonlight sessions and used each game's normal launcher.
+- Opened Omakade fullscreen on Sunshine's streamed display for Moonlight sessions and used
+  each game's normal launcher.
 
 ### Library and organization
 

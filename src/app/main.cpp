@@ -31,6 +31,7 @@
 #include <QQuickItem>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -369,6 +370,17 @@ int main(int argc, char* argv[]) {
   if (rootWindow != nullptr && qEnvironmentVariableIsSet("SUNSHINE_APP_ID") && !renderMode &&
       !navigationTest && !smokeTest) {
     // Sunshine launched Omakade for a Moonlight client, so fill the streamed display.
+    const QList<QScreen*> screens = QGuiApplication::screens();
+    QStringList screenNames;
+    screenNames.reserve(screens.size());
+    for (const QScreen* screen : screens) {
+      screenNames.append(screen->name());
+    }
+    const int screenIndex = SunshineIntegration::outputScreenIndex(
+        SunshineIntegration::configuredOutputName(), screenNames);
+    if (screenIndex >= 0) {
+      rootWindow->setScreen(screens.at(screenIndex));
+    }
     rootWindow->showFullScreen();
   }
   if (auto* quickWindow = qobject_cast<QQuickWindow*>(rootWindow)) {

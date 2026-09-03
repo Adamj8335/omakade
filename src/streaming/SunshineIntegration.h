@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVector>
 
@@ -65,6 +66,11 @@ public:
   Q_INVOKABLE void restartSunshine();
 
   [[nodiscard]] static QString serviceUnit();
+  // Sunshine and Qt enumerate Wayland outputs in the same connector order. Honor an
+  // explicit Sunshine output, or use its default first output when none is configured.
+  [[nodiscard]] static QString configuredOutputName(const QString& configPath = {});
+  [[nodiscard]] static int outputScreenIndex(const QString& configuredOutput,
+                                             const QStringList& screenNames);
   [[nodiscard]] static QString shellQuote(const QString& value);
   [[nodiscard]] static QString commandPrefix(bool flatpakSunshine);
   [[nodiscard]] static bool isOmakadeEntry(const QJsonObject& entry);

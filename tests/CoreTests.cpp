@@ -2109,6 +2109,16 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
 
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
+  const QString sunshineConfig = directory.path() + QStringLiteral("/sunshine.conf");
+  writeFile(sunshineConfig, "output_name = 'DP-2' # streamed monitor\n");
+  QCOMPARE(SunshineIntegration::configuredOutputName(sunshineConfig), QStringLiteral("DP-2"));
+  const QStringList screens{QStringLiteral("HDMI-A-1"), QStringLiteral("DP-2")};
+  QCOMPARE(SunshineIntegration::outputScreenIndex(QStringLiteral("DP-2"), screens), 1);
+  QCOMPARE(SunshineIntegration::outputScreenIndex(QStringLiteral("0"), screens), 0);
+  QCOMPARE(SunshineIntegration::outputScreenIndex(QString{}, screens), 0);
+  QCOMPARE(SunshineIntegration::outputScreenIndex(QStringLiteral("missing"), screens), 0);
+  QCOMPARE(SunshineIntegration::outputScreenIndex(QStringLiteral("9"), screens), 0);
+  QCOMPARE(SunshineIntegration::outputScreenIndex(QString{}, {}), -1);
   const QString appsPath = directory.path() + QStringLiteral("/apps.json");
   const QByteArray stock = R"({
     "env": {"PATH": "$(PATH):$(HOME)/.local/bin"},
