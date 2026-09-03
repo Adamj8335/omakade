@@ -26,6 +26,9 @@ namespace PlayRequest {
 // linked game. Hidden games are included so a Sunshine entry keeps working.
 [[nodiscard]] QVariantMap findInstallation(const UnifiedGameModel& games, const LaunchKey& key,
                                            int* row);
+// Waits briefly for an asynchronous source refresh to make a requested installation available.
+// Sunshine can start a game before a fresh Omakade process has finished scanning its library.
+bool waitForInstallation(UnifiedGameModel& games, const LaunchKey& key, int timeoutMs);
 // Launches the matching installation through the owning platform and records the launch.
 // Returns false and fills `error` when the game is missing, not installed, or fails.
 bool perform(UnifiedGameModel& games, GameLauncher& launcher, const LaunchKey& key,

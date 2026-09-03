@@ -9,6 +9,8 @@
 - Added a Restart Sunshine action in Settings.
 - Added `omakade --play Source:runner:id` and `omakade --quit` for Sunshine app entries and
   other integrations.
+- Used the installed Omakade executable for native Sunshine entries and waited for a fresh
+  library scan when a game starts before the cache is ready.
 - Opened Omakade fullscreen on Sunshine's streamed display for Moonlight sessions and used
   each game's normal launcher.
 

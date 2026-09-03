@@ -217,10 +217,40 @@ int main(int argc, char* argv[]) {
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
                    applySourcePreferences);
   if (!playKey.isEmpty()) {
-    // No window is running, so launch from the cached library without showing one.
+    // No window is running, so launch without showing one. A Sunshine request can arrive before
+    // a fresh process has finished rebuilding a missing or stale library cache, so retry after the
+    // requested source's asynchronous refresh.
     GameLauncher headlessLauncher;
+    const LaunchKey key = LaunchKey::parse(playKey);
     QString error;
-    if (!PlayRequest::perform(unifiedGames, headlessLauncher, LaunchKey::parse(playKey), &error)) {
+    if (PlayRequest::findInstallation(unifiedGames, key, nullptr).isEmpty() && key.isValid()) {
+      bool refreshStarted = false;
+      if (key.source.compare(QStringLiteral("Steam"), Qt::CaseInsensitive) == 0 &&
+          steamLibrary != nullptr && preferences.steamEnabled()) {
+        steamLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Lutris"), Qt::CaseInsensitive) == 0 &&
+                 lutrisLibrary != nullptr && preferences.lutrisEnabled()) {
+        lutrisLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Heroic"), Qt::CaseInsensitive) == 0 &&
+                 heroicLibrary != nullptr && preferences.heroicEnabled()) {
+        heroicLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Faugus"), Qt::CaseInsensitive) == 0 &&
+                 faugusLibrary != nullptr && preferences.faugusEnabled()) {
+        faugusLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("RetroArch"), Qt::CaseInsensitive) == 0 &&
+                 retroArchLibrary != nullptr && preferences.retroArchEnabled()) {
+        retroArchLibrary->refresh();
+        refreshStarted = true;
+      }
+      if (refreshStarted) {
+        PlayRequest::waitForInstallation(unifiedGames, key, 15000);
+      }
+    }
+    if (!PlayRequest::perform(unifiedGames, headlessLauncher, key, &error)) {
       qCritical().noquote() << error;
       return EXIT_FAILURE;
     }

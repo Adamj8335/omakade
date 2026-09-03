@@ -3,6 +3,9 @@
 #include "launch/GameLauncher.h"
 #include "library/UnifiedGameModel.h"
 
+#include <QEventLoop>
+#include <QTimer>
+
 LaunchKey LaunchKey::parse(const QString& text) {
   const QString trimmed = text.trimmed();
   const qsizetype first = trimmed.indexOf(QLatin1Char(':'));
@@ -53,6 +56,31 @@ QVariantMap PlayRequest::findInstallation(const UnifiedGameModel& games, const L
     }
   }
   return {};
+}
+
+bool PlayRequest::waitForInstallation(UnifiedGameModel& games, const LaunchKey& key,
+                                      int timeoutMs) {
+  if (!key.isValid()) {
+    return false;
+  }
+  if (!findInstallation(games, key, nullptr).isEmpty()) {
+    return true;
+  }
+
+  QEventLoop loop;
+  QTimer timeout;
+  timeout.setSingleShot(true);
+  const auto retry = [&] {
+    if (!findInstallation(games, key, nullptr).isEmpty()) {
+      loop.quit();
+    }
+  };
+  QObject::connect(&games, &QAbstractItemModel::modelReset, &loop, retry);
+  QObject::connect(&games, &QAbstractItemModel::rowsInserted, &loop, retry);
+  QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+  timeout.start(qMax(0, timeoutMs));
+  loop.exec();
+  return !findInstallation(games, key, nullptr).isEmpty();
 }
 
 bool PlayRequest::perform(UnifiedGameModel& games, GameLauncher& launcher, const LaunchKey& key,

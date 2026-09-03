@@ -183,8 +183,11 @@ QString SunshineIntegration::shellQuote(const QString& value) {
 
 QString SunshineIntegration::commandPrefix(bool flatpakSunshine) {
   // Flatpak Sunshine runs commands inside its sandbox, so reach the host binary explicitly.
-  return flatpakSunshine ? QStringLiteral("flatpak-spawn --host omakade")
-                         : QStringLiteral("omakade");
+  if (flatpakSunshine) {
+    return QStringLiteral("flatpak-spawn --host omakade");
+  }
+  const QString executable = QStandardPaths::findExecutable(QStringLiteral("omakade"));
+  return executable.isEmpty() ? QStringLiteral("omakade") : shellQuote(executable);
 }
 
 bool SunshineIntegration::isOmakadeEntry(const QJsonObject& entry) {

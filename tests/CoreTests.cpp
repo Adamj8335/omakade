@@ -42,6 +42,7 @@
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 #include <QUrl>
 #include <QUuid>
 
@@ -90,6 +91,47 @@ public:
 private:
   QString m_title;
   QString m_coverPath;
+};
+
+class DelayedSteamModel final : public QAbstractListModel {
+public:
+  [[nodiscard]] int rowCount(const QModelIndex& parent = QModelIndex()) const override {
+    return !parent.isValid() && m_available ? 1 : 0;
+  }
+  [[nodiscard]] QVariant data(const QModelIndex& index, int role) const override {
+    if (!m_available || !index.isValid() || index.row() != 0) {
+      return {};
+    }
+    switch (role) {
+    case GameRoles::Title:
+      return QStringLiteral("Portal 2");
+    case GameRoles::Source:
+      return QStringLiteral("Steam");
+    case GameRoles::Runner:
+      return QString{};
+    case GameRoles::AppId:
+      return QStringLiteral("620");
+    case GameRoles::Installed:
+      return true;
+    default:
+      return {};
+    }
+  }
+  [[nodiscard]] QHash<int, QByteArray> roleNames() const override {
+    return {{GameRoles::Title, "title"},
+            {GameRoles::Source, "source"},
+            {GameRoles::Runner, "runner"},
+            {GameRoles::AppId, "appId"},
+            {GameRoles::Installed, "installed"}};
+  }
+  void publish() {
+    beginInsertRows({}, 0, 0);
+    m_available = true;
+    endInsertRows();
+  }
+
+private:
+  bool m_available = false;
 };
 
 void writeFile(const QString& path, const QByteArray& contents) {
@@ -2069,6 +2111,17 @@ void CoreTests::launchKeysRoundTripAndResolveInstallations() {
               .isEmpty());
   QCOMPARE(row, -1);
 
+  DelayedSteamModel delayedSource;
+  UnifiedGameModel delayedUnified(QStringLiteral(":memory:"));
+  delayedUnified.addSourceModel(&delayedSource);
+  const LaunchKey delayedKey = LaunchKey::parse(QStringLiteral("Steam::620"));
+  QTimer::singleShot(20, &delayedSource, [&delayedSource] { delayedSource.publish(); });
+  QVERIFY(PlayRequest::waitForInstallation(delayedUnified, delayedKey, 1000));
+  QCOMPARE(PlayRequest::findInstallation(delayedUnified, delayedKey, &row)
+               .value(QStringLiteral("title"))
+               .toString(),
+           QStringLiteral("Portal 2"));
+
   GameLauncher launcher;
   QString error;
   QVERIFY(!PlayRequest::perform(unified, launcher, LaunchKey::parse(QStringLiteral("Steam::demo-0")),
@@ -2106,6 +2159,9 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   QCOMPARE(SunshineIntegration::shellQuote(QStringLiteral("it's")), QStringLiteral("'it'\\''s'"));
   QCOMPARE(SunshineIntegration::commandPrefix(true),
            QStringLiteral("flatpak-spawn --host omakade"));
+  const QString nativePrefix = SunshineIntegration::commandPrefix(false);
+  QVERIFY(nativePrefix == QStringLiteral("omakade") ||
+          nativePrefix.endsWith(QStringLiteral("/omakade'")));
 
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
@@ -2173,7 +2229,7 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   QCOMPARE(firstGame.value(QStringLiteral("omakade")).toString(), QStringLiteral("Demo::demo-1"));
   QCOMPARE(firstGame.value(QStringLiteral("cmd")).toString(), QString{});
   QCOMPARE(firstGame.value(QStringLiteral("detached")).toArray().at(0).toString(),
-           QStringLiteral("omakade --play 'Demo::demo-1'"));
+           SunshineIntegration::commandPrefix(false) + QStringLiteral(" --play 'Demo::demo-1'"));
   QVERIFY(!firstGame.contains(QStringLiteral("image-path")));
   // Two stores share a title, so both names carry their source.
   QCOMPARE(firstGame.value(QStringLiteral("name")).toString(), sharedTitle + QStringLiteral(" (Demo)"));
@@ -2197,14 +2253,14 @@ void CoreTests::sunshineIntegrationWritesOnlyItsOwnEntries() {
   const QJsonObject omakade = apps.at(2).toObject();
   QCOMPARE(omakade.value(QStringLiteral("name")).toString(), QStringLiteral("Omakade"));
   QCOMPARE(omakade.value(QStringLiteral("detached")).toArray().at(0).toString(),
-           QStringLiteral("omakade"));
+           nativePrefix);
   QCOMPARE(omakade.value(QStringLiteral("prep-cmd"))
                .toArray()
                .at(0)
                .toObject()
                .value(QStringLiteral("undo"))
                .toString(),
-           QStringLiteral("omakade --quit"));
+           nativePrefix + QStringLiteral(" --quit"));
 
   // A second sync with nothing changed leaves the file alone, even though Sunshine's own
   // formatting differs from Qt's.
