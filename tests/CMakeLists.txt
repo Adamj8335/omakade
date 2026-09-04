@@ -78,6 +78,21 @@ foreach(benchmark_case IN ITEMS text empty missing nonpositive)
   )
 endforeach()
 
+add_test(NAME omakade_cli_rejects_missing_play_value COMMAND omakade --play)
+add_test(NAME omakade_cli_rejects_missing_screenshot_path COMMAND omakade --render-screenshot)
+add_test(NAME omakade_cli_rejects_invalid_render_size
+  COMMAND omakade --smoke-test --render-size=wide
+)
+set_tests_properties(
+  omakade_cli_rejects_missing_play_value
+  omakade_cli_rejects_missing_screenshot_path
+  omakade_cli_rejects_invalid_render_size
+  PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+    WILL_FAIL TRUE
+    TIMEOUT 5
+)
+
 add_test(NAME omakade_couch_thousand_game_navigation
   COMMAND omakade --couch --stress-test --couch-navigation-test --render-size=1920x1080
 )
@@ -154,6 +169,30 @@ foreach(couch_case IN ITEMS 720p 1440p ultrawide 4k)
     TIMEOUT 30
   )
 endforeach()
+
+foreach(couch_overlay IN ITEMS couch-search couch-browse couch-settings-bottom)
+  string(REPLACE "-" "_" couch_overlay_test ${couch_overlay})
+  add_test(NAME omakade_${couch_overlay_test}_4k_render
+    COMMAND omakade --couch --owned-layout-test
+            --render-overlay=${couch_overlay}
+            --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-${couch_overlay}-4k.png
+            --render-size=3840x2160
+  )
+  set_tests_properties(omakade_${couch_overlay_test}_4k_render PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+    TIMEOUT 30
+  )
+endforeach()
+
+add_test(NAME omakade_couch_detail_4k_render
+  COMMAND omakade --couch --uninstalled-layout-test
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-detail-4k.png
+          --render-size=3840x2160
+)
+set_tests_properties(omakade_couch_detail_4k_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
 
 add_test(NAME omakade_couch_render_200_percent
   COMMAND omakade --couch

@@ -13,8 +13,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <functional>
-
 namespace {
 QString defaultStateHome() {
   const QString xdgStateHome = qEnvironmentVariable("XDG_STATE_HOME");
@@ -123,12 +121,12 @@ void OmarchyTheme::reload() {
 }
 
 QString OmarchyTheme::currentRoot() const {
-  const QString stateRoot = m_stateHome + QStringLiteral("/omarchy/current");
+  QString stateRoot = m_stateHome + QStringLiteral("/omarchy/current");
   if (QFileInfo::exists(stateRoot + QStringLiteral("/theme/colors.toml"))) {
     return stateRoot;
   }
 
-  const QString configRoot = m_configHome + QStringLiteral("/omarchy/current");
+  QString configRoot = m_configHome + QStringLiteral("/omarchy/current");
   if (QFileInfo::exists(configRoot + QStringLiteral("/theme/colors.toml"))) {
     return configRoot;
   }
@@ -353,8 +351,7 @@ void OmarchyTheme::refreshHyprlandMetrics() {
   if (executable.isEmpty() || qEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE").isEmpty()) {
     return;
   }
-  const auto query = [this, executable](const QString& option,
-                                        std::function<bool(const QJsonObject&)> apply) {
+  const auto query = [this, executable](const QString& option, const auto& apply) {
     auto* process = new QProcess(this);
     connect(process, &QProcess::finished, this,
             [this, process, apply](int exitCode, QProcess::ExitStatus status) {

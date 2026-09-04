@@ -17,7 +17,7 @@ Item {
     property bool collectionEditorOpen: false
     property bool couchMode: false
     readonly property real uiScale: couchMode
-                                    ? Math.max(1, Math.min(1.25,
+                                    ? Math.max(1, Math.min(2.4,
                                                           Math.min(width / 1920,
                                                                    height / 1080) * 1.18))
                                     : 1
@@ -54,7 +54,7 @@ Item {
     }
 
     function revealFocusedItem(item) {
-        const flickable = detailsScroll.contentItem
+        const flickable = detailsScroll.navigationFlickable
         if (!item || !flickable) {
             return
         }
@@ -268,6 +268,7 @@ Item {
         ScrollView {
             id: detailsScroll
             objectName: "detailsScroll"
+            readonly property var navigationFlickable: contentItem
             readonly property real navigationContentY: contentItem ? contentItem.contentY : 0
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -290,7 +291,7 @@ Item {
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
                     font.pixelSize: root.couchMode
-                                    ? Math.max(42, Math.min(68, width * 0.075))
+                                    ? Math.max(42, Math.min(68, width * 0.075)) * root.uiScale
                                     : Math.max(28, Math.min(54, width * 0.07))
                     font.weight: Font.Bold
                     wrapMode: Text.Wrap

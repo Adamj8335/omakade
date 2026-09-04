@@ -405,9 +405,33 @@ ApplicationWindow {
         }
     }
 
-    function setCouchMode(enabled) {
+    function focusCurrentSurface() {
+        const container = root.navigationContainer()
+        const current = root.activeFocusItem
+        if (container && root.isWithin(current, container)
+                && current.visible && current.enabled) {
+            root.revealNavigationItem(container, current)
+        } else if (container) {
+            root.focusWithin(container, true)
+        } else {
+            root.focusLibrary()
+        }
+    }
+
+    function updateCouchMode(enabled, remember) {
         if (root.couchMode === enabled) {
             return
+        }
+        if (!enabled) {
+            if (root.couchTextEntryOpen) {
+                root.closeCouchTextEntry(false)
+            }
+            if (couchLibraryView.searchOpen) {
+                couchLibraryView.closeSearch(false)
+            }
+            if (couchLibraryView.browseOpen) {
+                couchLibraryView.closeBrowse()
+            }
         }
         if (enabled) {
             couchLibraryView.currentIndex = libraryView.currentIndex
@@ -416,9 +440,21 @@ ApplicationWindow {
             libraryView.currentIndex = couchLibraryView.currentIndex
         }
         root.couchMode = enabled
-        Preferences.couchModeEnabled = enabled
+        if (remember) {
+            Preferences.couchModeEnabled = enabled
+        }
         root.visibility = enabled ? Window.FullScreen : root.desktopVisibility
-        Qt.callLater(root.focusLibrary)
+        Qt.callLater(root.focusCurrentSurface)
+    }
+
+    function setCouchMode(enabled) {
+        root.updateCouchMode(enabled, true)
+    }
+
+    // A Sunshine activation is session-scoped. It must not change the preferred startup
+    // mode just because an already-running desktop window receives the request.
+    function activateCouchMode() {
+        root.updateCouchMode(true, false)
     }
 
     function toggleCouchMode() {
@@ -1654,6 +1690,7 @@ ApplicationWindow {
                 model: root.linkResults
 
                 delegate: Button {
+                    id: candidateDelegate
                     required property var modelData
                     required property int index
                     width: candidateList.width
@@ -1703,11 +1740,12 @@ ApplicationWindow {
 
                     background: Rectangle {
                         radius: Math.max(5, Theme.cornerRadius)
-                        color: parent.down || parent.hovered || parent.activeFocus
+                        color: candidateDelegate.down || candidateDelegate.hovered
+                               || candidateDelegate.activeFocus
                                ? root.alpha(Theme.foreground, 0.09)
                                : root.alpha(Theme.foreground, 0.04)
-                        border.width: parent.activeFocus ? 2 : 1
-                        border.color: parent.activeFocus
+                        border.width: candidateDelegate.activeFocus ? 2 : 1
+                        border.color: candidateDelegate.activeFocus
                                       ? Theme.accent
                                       : root.alpha(Theme.foreground, 0.14)
                     }
@@ -1887,15 +1925,16 @@ ApplicationWindow {
         Rectangle {
             id: settingsPanel
             anchors.centerIn: parent
-            readonly property real uiScale: root.couchMode
-                                                ? Math.max(1, Math.min(1.35,
-                                                                      root.height / 900))
-                                                : 1
-            width: Math.min(root.couchMode ? 1280 : 610,
+            readonly property real layoutScale: root.couchMode
+                                                    ? Math.max(1, Math.min(2,
+                                                                          root.height / 1080))
+                                                    : 1
+            readonly property real uiScale: root.couchMode ? 1.25 * layoutScale : 1
+            width: Math.min(root.couchMode ? 1280 * layoutScale : 610,
                             parent.width - (root.couchMode ? 96 : 48))
-            height: Math.min(root.couchMode ? 900 : 760,
+            height: Math.min(root.couchMode ? 900 * layoutScale : 760,
                              parent.height - (root.couchMode ? 72 : 48))
-            radius: Math.max(root.couchMode ? 14 : 8, Theme.cornerRadius)
+            radius: Math.max(root.couchMode ? 14 * layoutScale : 8, Theme.cornerRadius)
             color: root.alpha(Theme.background, 0.98)
             border.color: root.alpha(Theme.foreground, 0.2)
 
@@ -1906,8 +1945,8 @@ ApplicationWindow {
                 objectName: "settingsScroll"
                 readonly property real navigationContentY: contentItem ? contentItem.contentY : 0
                 anchors.fill: parent
-                anchors.margins: root.couchMode ? 42 : 28
-                anchors.bottomMargin: root.couchMode ? 70 : 28
+                anchors.margins: root.couchMode ? 42 * settingsPanel.layoutScale : 28
+                anchors.bottomMargin: root.couchMode ? 70 * settingsPanel.layoutScale : 28
                 rightPadding: 18
                 contentWidth: availableWidth
 

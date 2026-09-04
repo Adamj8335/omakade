@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 
 Item {
     id: root
@@ -82,7 +81,6 @@ Item {
         cacheBuffer: height * 0.25
         reuseItems: true
         focus: true
-        currentIndex: count > 0 ? Math.min(currentIndex, count - 1) : -1
         property real wheelTargetY: contentY
 
         NumberAnimation {
@@ -227,8 +225,12 @@ Item {
         }
 
         onCountChanged: {
-            if (count > 0 && currentIndex < 0) {
+            if (count === 0) {
+                currentIndex = -1
+            } else if (currentIndex < 0) {
                 currentIndex = 0
+            } else if (currentIndex >= count) {
+                currentIndex = count - 1
             }
         }
     }
