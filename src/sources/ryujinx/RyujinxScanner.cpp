@@ -15,6 +15,7 @@
 
 namespace {
 constexpr qint64 kMaximumJsonBytes = 16 * 1024 * 1024;
+constexpr qint64 kMaximumPlaytimeSeconds = 1'000'000LL * 24 * 60 * 60;
 
 const QStringList& gameExtensions() {
   static const QStringList extensions = {QStringLiteral(".xci"), QStringLiteral(".nsp"),
@@ -34,6 +35,74 @@ bool isGameFile(const QString& fileName) {
 bool validTitleId(const QString& value) {
   static const QRegularExpression valid(QStringLiteral("^[0-9A-Fa-f]{16}$"));
   return valid.match(value).hasMatch();
+}
+
+bool isUpdateTitleId(const QString& value) {
+  return validTitleId(value) && value.endsWith(QStringLiteral("800"), Qt::CaseInsensitive);
+}
+
+qint64 playtimeSeconds(const QJsonValue& value) {
+  if (value.isDouble()) {
+    const double seconds = value.toDouble();
+    return seconds > 0 && seconds <= static_cast<double>(kMaximumPlaytimeSeconds)
+               ? static_cast<qint64>(seconds)
+               : 0;
+  }
+  if (!value.isString()) {
+    return 0;
+  }
+  // .NET TimeSpan's invariant form is [days.]HH:MM:SS[.fraction].
+  static const QRegularExpression timeSpan(
+      QStringLiteral("^(?:(\\d{1,6})\\.)?(\\d{1,2}):([0-5]\\d):([0-5]\\d)(?:\\.\\d{1,7})?$"));
+  const QRegularExpressionMatch match = timeSpan.match(value.toString().trimmed());
+  if (!match.hasMatch()) {
+    return 0;
+  }
+  const qint64 days = match.captured(1).isEmpty() ? 0 : match.captured(1).toLongLong();
+  const qint64 hours = match.captured(2).toLongLong();
+  if (hours > 23) {
+    return 0;
+  }
+  return days * 24 * 60 * 60 + hours * 60 * 60 + match.captured(3).toLongLong() * 60 +
+         match.captured(4).toLongLong();
+}
+
+QString normalizedPackagePath(QString path, const QString& root) {
+  path = path.trimmed();
+  if (path.startsWith(QStringLiteral("~/"))) {
+    path.replace(0, 1, QDir::homePath());
+  }
+  if (path.isEmpty()) {
+    return {};
+  }
+  return QDir::cleanPath(QFileInfo(path).isAbsolute() ? path : QDir(root).absoluteFilePath(path));
+}
+
+void collectConfiguredPackagePaths(const QJsonValue& value, const QString& root,
+                                   QSet<QString>* paths) {
+  if (value.isString()) {
+    const QString path = normalizedPackagePath(value.toString(), root);
+    if (!path.isEmpty()) {
+      paths->insert(path);
+    }
+    return;
+  }
+  if (value.isArray()) {
+    for (const QJsonValue& child : value.toArray()) {
+      collectConfiguredPackagePaths(child, root, paths);
+    }
+    return;
+  }
+  if (!value.isObject()) {
+    return;
+  }
+  const QJsonObject object = value.toObject();
+  for (const QString& key : {QStringLiteral("path"), QStringLiteral("paths"),
+                             QStringLiteral("selected")}) {
+    if (object.contains(key)) {
+      collectConfiguredPackagePaths(object.value(key), root, paths);
+    }
+  }
 }
 
 // Strips update/DLC markers: "Game [0100...][v0].nsp" -> "0100...".
@@ -73,6 +142,7 @@ QStringList RyujinxScanner::discoverRoots() {
   QStringList candidates = {
       home + QStringLiteral("/.config/Ryujinx"),
       home + QStringLiteral("/.var/app/io.github.ryubing.Ryujinx/config/Ryujinx"),
+      home + QStringLiteral("/.var/app/org.ryujinx.Ryujinx/config/Ryujinx"),
   };
   candidates.removeDuplicates();
 
@@ -120,7 +190,13 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
         gameDirectories.append(directory);
       }
     }
-    const bool flatpak = root.contains(QStringLiteral("/.var/app/io.github.ryubing.Ryujinx/"));
+    const bool flatpak = root.contains(QStringLiteral("/.var/app/io.github.ryubing.Ryujinx/")) ||
+                         root.contains(QStringLiteral("/.var/app/org.ryujinx.Ryujinx/"));
+    const QString flatpakAppId =
+        root.contains(QStringLiteral("/.var/app/org.ryujinx.Ryujinx/"))
+            ? QStringLiteral("org.ryujinx.Ryujinx")
+        : flatpak ? QStringLiteral("io.github.ryubing.Ryujinx")
+                  : QStringLiteral("");
 
     // Real installs: games/<titleId>/gui is a directory containing metadata.json
     // ("title", "timespan_played", "last_played_utc", plus the legacy
@@ -128,6 +204,7 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
     QHash<QString, QString> displayTitles;
     QHash<QString, qint64> playtimeFor;
     QHash<QString, qint64> lastPlayedFor;
+    QSet<QString> configuredAddOnPaths;
     const QDir gamesDirectory(root + QStringLiteral("/games"));
     const QFileInfoList titleDirectories =
         gamesDirectory.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
@@ -135,6 +212,22 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
       const QString titleId = entry.fileName().toUpper();
       if (!validTitleId(titleId)) {
         continue;
+      }
+      for (const QString& fileName : {QStringLiteral("updates.json"),
+                                      QStringLiteral("dlc.json")}) {
+        QFile packageConfig(entry.filePath() + QLatin1Char('/') + fileName);
+        if (!packageConfig.open(QIODevice::ReadOnly) ||
+            packageConfig.size() > kMaximumJsonBytes) {
+          continue;
+        }
+        const QJsonDocument packageDocument =
+            QJsonDocument::fromJson(packageConfig.readAll(), &parseError);
+        if (parseError.error == QJsonParseError::NoError) {
+          collectConfiguredPackagePaths(packageDocument.isArray()
+                                            ? QJsonValue(packageDocument.array())
+                                            : QJsonValue(packageDocument.object()),
+                                        root, &configuredAddOnPaths);
+        }
       }
       const QString guiPath = entry.filePath() + QStringLiteral("/gui");
       QFile metadataFile(guiPath + QStringLiteral("/metadata.json"));
@@ -147,13 +240,12 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
           if (!customTitle.isEmpty()) {
             displayTitles.insert(titleId, customTitle);
           }
-          // Newer fields: timespan_played (seconds) and last_played_utc (ISO-8601).
-          qint64 seconds =
-              static_cast<qint64>(metadata.value(QStringLiteral("timespan_played")).toDouble(0));
+          // Newer fields: timespan_played (.NET TimeSpan) and last_played_utc (ISO-8601).
+          qint64 seconds = playtimeSeconds(metadata.value(QStringLiteral("timespan_played")));
           QString lastPlayedIso = metadata.value(QStringLiteral("last_played_utc")).toString();
           // Legacy fallbacks for older installs.
           if (seconds <= 0) {
-            seconds = static_cast<qint64>(metadata.value(QStringLiteral("time_played")).toDouble(0));
+            seconds = playtimeSeconds(metadata.value(QStringLiteral("time_played")));
           }
           if (lastPlayedIso.isEmpty()) {
             lastPlayedIso = metadata.value(QStringLiteral("last_played")).toString();
@@ -223,9 +315,10 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
       }
       QDirIterator romIterator(expanded, QDir::Files, QDirIterator::Subdirectories);
       while (romIterator.hasNext()) {
-        const QString filePath = romIterator.next();
+        const QString filePath = QDir::cleanPath(romIterator.next());
         const QString fileName = QFileInfo(filePath).fileName();
-        if (!isGameFile(fileName) || seenPaths.contains(filePath)) {
+        if (!isGameFile(fileName) || seenPaths.contains(filePath) ||
+            configuredAddOnPaths.contains(filePath)) {
           continue;
         }
         QString titleId = titleIdFromFilename(fileName);
@@ -235,6 +328,10 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
           if (validTitleId(parentName)) {
             titleId = parentName.toUpper();
           }
+        }
+        if (fileName.endsWith(QStringLiteral(".nsp"), Qt::CaseInsensitive) &&
+            isUpdateTitleId(titleId)) {
+          continue;
         }
         QString title = cleanGameName(fileName);
         if (!titleId.isEmpty() && displayTitles.contains(titleId)) {
@@ -260,7 +357,8 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
             .coverPath = titleId.isEmpty() ? QString{} : coverFor(root, titleId),
             .playtimeSeconds = playtimeFor.value(titleId, 0),
             .lastPlayed = lastPlayedFor.value(titleId, 0),
-            .flatpak = flatpak});
+            .flatpak = flatpak,
+            .flatpakAppId = flatpakAppId});
         seenPaths.insert(filePath);
         seenGameIds.insert(recordKey);
       }

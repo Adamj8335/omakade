@@ -53,6 +53,7 @@ signals:
   void busyChanged();
   void statusChanged();
   void achievementsUpdated(const QString& gameId);
+  void achievementsCleared();
 
 private:
   enum class SecretAction { Detect, Store, Remove, LookupForRefresh };

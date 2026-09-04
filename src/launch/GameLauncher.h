@@ -25,7 +25,9 @@ public:
                                                       const QString& corePath, bool flatpak);
   [[nodiscard]] static LaunchCommand pcsx2Command(const QString& id, bool isElf, bool flatpak);
   [[nodiscard]] static LaunchCommand ryujinxCommand(const QString& id,
-                                                    const QString& nativeExecutable);
+                                                    const QString& nativeExecutable,
+                                                    const QString& flatpakAppId =
+                                                        QStringLiteral("io.github.ryubing.Ryujinx"));
   [[nodiscard]] static LaunchCommand battleNetCommand(const QString& id, const QString& prefix,
                                                       const QString& runner, bool flatpak);
   Q_INVOKABLE bool launch(const QString& source, const QString& id, bool flatpak = false,
@@ -45,7 +47,8 @@ private:
   bool launchRetroArch(const QString& contentPath, const QString& corePath, bool flatpak,
                        bool manageOnly);
   bool launchPcsx2(const QString& id, bool isElf, bool flatpak, bool manageOnly);
-  bool launchRyujinx(const QString& id, bool flatpak, bool manageOnly);
+  bool launchRyujinx(const QString& id, bool flatpak, const QString& flatpakAppId,
+                     bool manageOnly);
   bool launchBattleNet(const QString& id, const QString& prefix, const QString& runner,
                        bool flatpak, bool manageOnly);
   [[nodiscard]] QString flatpakError(const QString& appId, const QString& launcherName) const;

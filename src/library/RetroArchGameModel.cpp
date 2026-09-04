@@ -235,20 +235,40 @@ void RetroArchGameModel::reloadAchievementSummary(const QString& gameId) {
       "SELECT unlocked, total FROM achievement_summary WHERE app_id = ? AND source = "
       "'retroachievements'"));
   query.addBindValue(gameId);
-  if (!query.exec() || !query.next()) {
+  if (!query.exec()) {
     return;
   }
+  const bool found = query.next();
+  const int unlocked = found ? query.value(0).toInt() : 0;
+  const int total = found ? query.value(1).toInt() : 0;
   for (int row = 0; row < m_games.size(); ++row) {
     Game& game = m_games[row];
     if (game.retroArch.gameId != gameId) {
       continue;
     }
-    game.achievementsUnlocked = query.value(0).toInt();
-    game.achievementsTotal = query.value(1).toInt();
+    game.achievementsUnlocked = unlocked;
+    game.achievementsTotal = total;
     emit dataChanged(
         index(row), index(row),
         {GameRoles::Progress, GameRoles::AchievementsUnlocked, GameRoles::AchievementsTotal});
     return;
+  }
+}
+
+void RetroArchGameModel::clearAchievementSummaries() {
+  if (m_games.isEmpty()) {
+    return;
+  }
+  bool changed = false;
+  for (Game& game : m_games) {
+    changed = changed || game.achievementsUnlocked != 0 || game.achievementsTotal != 0;
+    game.achievementsUnlocked = 0;
+    game.achievementsTotal = 0;
+  }
+  if (changed) {
+    emit dataChanged(index(0), index(m_games.size() - 1),
+                     {GameRoles::Progress, GameRoles::AchievementsUnlocked,
+                      GameRoles::AchievementsTotal});
   }
 }
 

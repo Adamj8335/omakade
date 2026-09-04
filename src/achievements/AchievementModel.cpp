@@ -141,6 +141,7 @@ void AchievementModel::load(const QString& appId) {
   m_unlocked = 0;
   m_total = 0;
   bool confirmedEmpty = false;
+  QString summarySource;
 
   if (m_database.isOpen()) {
     QSqlQuery summary(m_database);
@@ -150,7 +151,10 @@ void AchievementModel::load(const QString& appId) {
     if (summary.exec() && summary.next()) {
       m_unlocked = summary.value(0).toInt();
       m_total = summary.value(1).toInt();
-      confirmedEmpty = m_total == 0 && summary.value(2).toString() == QStringLiteral("steam-web");
+      summarySource = summary.value(2).toString();
+      confirmedEmpty = m_total == 0 &&
+                       (summarySource == QStringLiteral("steam-web") ||
+                        summarySource == QStringLiteral("retroachievements"));
     }
 
     QSqlQuery query(m_database);
@@ -180,7 +184,9 @@ void AchievementModel::load(const QString& appId) {
   sortAchievements();
 
   if (confirmedEmpty) {
-    m_statusText = QStringLiteral("This game has no Steam achievements.");
+    m_statusText = summarySource == QStringLiteral("retroachievements")
+                       ? QStringLiteral("This game has no RetroAchievements.")
+                       : QStringLiteral("This game has no Steam achievements.");
   } else if (m_total == 0) {
     m_statusText =
         QStringLiteral("No achievement data is cached yet. Use Refresh above to fetch it.");

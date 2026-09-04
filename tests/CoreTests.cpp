@@ -463,7 +463,7 @@ void createRyujinxFixture(const QString& root, const QString& romDirectory) {
   writeFile(romDirectory + QStringLiteral("/Zelda [0100abcd12345678][v0].nsp"), "rom");
   // Real layout: gui is a directory containing metadata.json.
   writeFile(root + QStringLiteral("/games/0100ABCD12345678/gui/metadata.json"),
-            "{\"title\":\"Custom Title\",\"timespan_played\":3600,"
+            "{\"title\":\"Custom Title\",\"timespan_played\":\"01:00:00\","
             "\"last_played_utc\":\"2026-08-30T19:45:10Z\"}");
 }
 
@@ -534,6 +534,7 @@ private slots:
   void pcsx2UnifiedFilterShowsGames();
   void pcsx2LauncherBuildsSafeCommands();
   void ryujinxScannerImportsRomsMetadataAndPlaytime();
+  void ryujinxScannerSkipsConfiguredAddOnsAndUpdates();
   void ryujinxModelIsRepeatableAndPreservesLocalState();
   void malformedRyujinxDataDoesNotReplaceCachedGames();
   void ryujinxLauncherBuildsSafeCommands();
@@ -553,6 +554,7 @@ private slots:
   void retroAchievementsApiBuildsUrlsAndParsesResponses();
   void retroArchModelReadsCachedRetroAchievementsSummary();
   void retroAchievementsServiceClearsCacheOnAccountSwitch();
+  void retroAchievementsServiceBlocksAccountSwitchWhileBusy();
   void stressLibraryContainsOneThousandGames();
   void settingsPersistReducedMotionAndCacheLimit();
   void launchKeysRoundTripAndResolveInstallations();
@@ -1197,6 +1199,21 @@ void CoreTests::achievementModelLoadsLocalSteamCache() {
   achievements.setSortMode(1);
   QCOMPARE(achievements.data(achievements.index(0), AchievementModel::TitleRole).toString(),
            QStringLiteral("First Win"));
+  {
+    QSqlDatabase update = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), updateConnection);
+    update.setDatabaseName(database);
+    QVERIFY(update.open());
+    QSqlQuery query(update);
+    QVERIFY(query.exec(QStringLiteral(
+        "UPDATE achievement_summary SET unlocked = 0, total = 0, source = "
+        "'retroachievements' WHERE app_id = '10'")));
+    QVERIFY(query.exec(QStringLiteral("DELETE FROM achievements WHERE app_id = '10'")));
+    update.close();
+  }
+  QSqlDatabase::removeDatabase(updateConnection);
+  achievements.load(QStringLiteral("10"));
+  QCOMPARE(achievements.total(), 0);
+  QCOMPARE(achievements.statusText(), QStringLiteral("This game has no RetroAchievements."));
 
   QVERIFY(AchievementModel::acceptsIconUrl(QUrl(QStringLiteral(
       "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/10/icon.jpg"))));
@@ -2513,6 +2530,9 @@ void CoreTests::battleNetLauncherBuildsSafeCommands() {
   QVERIFY(!GameLauncher::battleNetCommand(QStringLiteral("../escape"), prefix,
                                           QStringLiteral("wine"), false)
                .isValid());
+  QVERIFY(!GameLauncher::battleNetCommand(QStringLiteral("wow"), prefix,
+                                          QStringLiteral("unknown"), false)
+               .isValid());
 }
 
 void CoreTests::launcherReportsInvalidAndStaleTargets() {
@@ -2528,6 +2548,29 @@ void CoreTests::launcherReportsInvalidAndStaleTargets() {
   QVERIFY(!launcher.launch(QStringLiteral("Battle.net"), QStringLiteral("wow;rm"), false,
                            QStringLiteral("wine"), {}, QStringLiteral("/tmp/omakade-bnet")));
   QCOMPARE(launcher.lastError(), QStringLiteral("This game has an invalid Battle.net target."));
+
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString prefix = directory.path() + QStringLiteral("/prefix");
+  createBattleNetFixture(prefix);
+  const QByteArray previousPath = qgetenv("PATH");
+  const bool pathWasSet = qEnvironmentVariableIsSet("PATH");
+  const auto restorePath = qScopeGuard([previousPath, pathWasSet] {
+    if (pathWasSet) {
+      qputenv("PATH", previousPath);
+    } else {
+      qunsetenv("PATH");
+    }
+  });
+  qputenv("PATH", directory.path().toUtf8());
+  QVERIFY(!launcher.launch(QStringLiteral("Battle.net"), QStringLiteral("wow"), false,
+                           QStringLiteral("bottles"), {}, prefix));
+  QCOMPARE(launcher.lastError(), QStringLiteral("Bottles is not installed."));
+  QVERIFY(!launcher.launch(QStringLiteral("Battle.net"), QStringLiteral("wow"), false,
+                           QStringLiteral("proton"), {}, prefix));
+  QCOMPARE(launcher.lastError(),
+           QStringLiteral("umu-launcher is not installed. Install it to launch Battle.net games "
+                          "from Proton."));
 }
 
 void CoreTests::igdbApiBuildsSafeQueriesAndParsesInsights() {
@@ -2786,6 +2829,24 @@ void CoreTests::retroAchievementsApiBuildsUrlsAndParsesResponses() {
            6);
   QCOMPARE(RetroAchievementsApi::bestConsoleMatch(gameBoyFamily, QStringLiteral("Game Boy")), 4);
   QCOMPARE(RetroAchievementsApi::bestConsoleMatch(gameBoyFamily, QStringLiteral("PlayStation")), 0);
+  const QVector<RetroAchievementsConsoleRecord> headlineSystems = {
+      {.id = 7, .name = QStringLiteral("NES/Famicom")},
+      {.id = 3, .name = QStringLiteral("SNES/Super Famicom")},
+      {.id = 1, .name = QStringLiteral("Mega Drive")},
+      {.id = 8, .name = QStringLiteral("Famicom Disk System")},
+  };
+  QCOMPARE(RetroAchievementsApi::bestConsoleMatch(
+               headlineSystems, QStringLiteral("Nintendo Entertainment System")),
+           7);
+  QCOMPARE(RetroAchievementsApi::bestConsoleMatch(
+               headlineSystems, QStringLiteral("Super Nintendo Entertainment System")),
+           3);
+  QCOMPARE(RetroAchievementsApi::bestConsoleMatch(headlineSystems,
+                                                   QStringLiteral("Genesis/Mega Drive")),
+           1);
+  QCOMPARE(RetroAchievementsApi::bestConsoleMatch(
+               headlineSystems, QStringLiteral("Nintendo - Famicom Disk System")),
+           8);
 
   QVector<RetroAchievementsHashRecord> games;
   QVERIFY(RetroAchievementsApi::parseGameList(
@@ -2891,6 +2952,26 @@ void CoreTests::retroArchModelReadsCachedRetroAchievementsSummary() {
   QCOMPARE(dataChangedSpy.count(), 1);
   QCOMPARE(model.data(row, GameRoles::AchievementsUnlocked).toInt(), 10);
   QCOMPARE(model.data(row, GameRoles::Progress).toInt(), 100);
+
+  model.clearAchievementSummaries();
+  QCOMPARE(dataChangedSpy.count(), 2);
+  QCOMPARE(model.data(row, GameRoles::AchievementsUnlocked).toInt(), 0);
+  QCOMPARE(model.data(row, GameRoles::AchievementsTotal).toInt(), 0);
+
+  model.reloadAchievementSummary(QStringLiteral("rg-1"));
+  QCOMPARE(model.data(row, GameRoles::AchievementsUnlocked).toInt(), 10);
+  {
+    QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+    database.setDatabaseName(databasePath);
+    QVERIFY(database.open());
+    QSqlQuery query(database);
+    QVERIFY(query.exec(QStringLiteral("DELETE FROM achievement_summary WHERE app_id = 'rg-1'")));
+    database.close();
+  }
+  QSqlDatabase::removeDatabase(connection);
+  model.reloadAchievementSummary(QStringLiteral("rg-1"));
+  QCOMPARE(model.data(row, GameRoles::AchievementsUnlocked).toInt(), 0);
+  QCOMPARE(model.data(row, GameRoles::AchievementsTotal).toInt(), 0);
 }
 
 void CoreTests::retroAchievementsServiceClearsCacheOnAccountSwitch() {
@@ -2940,7 +3021,9 @@ void CoreTests::retroAchievementsServiceClearsCacheOnAccountSwitch() {
 
   // Switching to a different account must not leave account A's cached progress behind for
   // account B to silently reuse.
+  QSignalSpy achievementsClearedSpy(&service, &RetroAchievementsService::achievementsCleared);
   service.setUsername(QStringLiteral("accountB"));
+  QCOMPARE(achievementsClearedSpy.count(), 1);
 
   {
     QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
@@ -2958,6 +3041,21 @@ void CoreTests::retroAchievementsServiceClearsCacheOnAccountSwitch() {
     database.close();
   }
   QSqlDatabase::removeDatabase(connection);
+}
+
+void CoreTests::retroAchievementsServiceBlocksAccountSwitchWhileBusy() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  AppSettings settings(directory.path() + QStringLiteral("/config.toml"));
+  settings.setRetroAchievementsUsername(QStringLiteral("accountA"));
+  RetroAchievementsService service(directory.path() + QStringLiteral("/library.sqlite3"),
+                                   &settings);
+  QVERIFY(service.busy());
+
+  service.setUsername(QStringLiteral("accountB"));
+  QCOMPARE(service.username(), QStringLiteral("accountA"));
+  QVERIFY(service.statusText().contains(QStringLiteral("still busy")));
+  QTRY_VERIFY_WITH_TIMEOUT(!service.busy(), 2000);
 }
 
 void CoreTests::stressLibraryContainsOneThousandGames() {
@@ -3488,10 +3586,65 @@ void CoreTests::ryujinxScannerImportsRomsMetadataAndPlaytime() {
   QVERIFY(!result.games.constFirst().flatpak);
 }
 
-void CoreTests::ryujinxModelIsRepeatableAndPreservesLocalState() {
+void CoreTests::ryujinxScannerSkipsConfiguredAddOnsAndUpdates() {
   QTemporaryDir directory;
   QVERIFY(directory.isValid());
   const QString root = directory.path() + QStringLiteral("/ryujinx");
+  const QString roms = directory.path() + QStringLiteral("/switch-roms");
+  const QString base = roms + QStringLiteral("/Game [0100ABCD12346000].nsp");
+  const QString configuredUpdate =
+      roms + QStringLiteral("/Game Update [0100ABCD12346000][v65536].nsp");
+  const QString configuredDlc = roms + QStringLiteral("/Game DLC [0100ABCD12347001].nsp");
+  const QString titleIdUpdate = roms + QStringLiteral("/Game Patch [0100ABCD12346800].nsp");
+  const QString combinedCartridge = roms + QStringLiteral("/Game Bundle [0100ABCD12347800].xci");
+  const QString unclassifiedPackage =
+      roms + QStringLiteral("/Bonus Pack [0100ABCD12347002].nsp");
+  writeFile(root + QStringLiteral("/Config.json"),
+            QStringLiteral("{\"version\":70,\"game_dirs\":[\"%1\"]}").arg(roms).toUtf8());
+  writeFile(base, "base");
+  writeFile(configuredUpdate, "update");
+  writeFile(configuredDlc, "dlc");
+  writeFile(titleIdUpdate, "update");
+  writeFile(combinedCartridge, "combined");
+  writeFile(unclassifiedPackage, "ambiguous");
+  writeFile(root + QStringLiteral("/games/0100ABCD12346000/updates.json"),
+            QStringLiteral("{\"paths\":[\"%1\"],\"selected\":\"%1\"}")
+                .arg(configuredUpdate)
+                .toUtf8());
+  writeFile(root + QStringLiteral("/games/0100ABCD12346000/dlc.json"),
+            QStringLiteral("[{\"path\":\"%1\"}]").arg(configuredDlc).toUtf8());
+  writeFile(root + QStringLiteral("/games/0100ABCD12346000/gui/metadata.json"),
+            "{\"timespan_played\":\"1.06:00:00.5000000\"}");
+  writeFile(root + QStringLiteral("/games/0100ABCD12347002/gui/metadata.json"),
+            "{\"time_played\":42}");
+
+  const RyujinxScanResult result = RyujinxScanner::scan({root});
+  QVERIFY(!result.incomplete);
+  QCOMPARE(result.games.size(), 3);
+  QStringList paths;
+  for (const RyujinxGameRecord& game : result.games) {
+    paths.append(game.path);
+  }
+  QVERIFY(paths.contains(base));
+  QVERIFY(paths.contains(combinedCartridge));
+  QVERIFY(paths.contains(unclassifiedPackage));
+  QVERIFY(!paths.contains(configuredUpdate));
+  QVERIFY(!paths.contains(configuredDlc));
+  QVERIFY(!paths.contains(titleIdUpdate));
+  for (const RyujinxGameRecord& game : result.games) {
+    if (game.path == base) {
+      QCOMPARE(game.playtimeSeconds, qint64(108000));
+    } else if (game.path == unclassifiedPackage) {
+      QCOMPARE(game.playtimeSeconds, qint64(42));
+    }
+  }
+}
+
+void CoreTests::ryujinxModelIsRepeatableAndPreservesLocalState() {
+  QTemporaryDir directory;
+  QVERIFY(directory.isValid());
+  const QString root =
+      directory.path() + QStringLiteral("/.var/app/org.ryujinx.Ryujinx/config/Ryujinx");
   const QString roms = directory.path() + QStringLiteral("/switch-roms");
   const QString database = directory.path() + QStringLiteral("/omakade.sqlite3");
   createRyujinxFixture(root, roms);
@@ -3502,6 +3655,8 @@ void CoreTests::ryujinxModelIsRepeatableAndPreservesLocalState() {
   QCOMPARE(model.detectedPaths(), QStringList({root}));
   QVERIFY(model.lastScan() > 0);
   QCOMPARE(model.data(model.index(0), GameRoles::Source).toString(), QStringLiteral("Ryujinx"));
+  QCOMPARE(model.data(model.index(0), GameRoles::Runner).toString(),
+           QStringLiteral("org.ryujinx.Ryujinx"));
   model.toggleFavorite(0);
   model.toggleHidden(0);
   model.refreshFromRoots({root});
@@ -3511,6 +3666,8 @@ void CoreTests::ryujinxModelIsRepeatableAndPreservesLocalState() {
   RyujinxGameModel reloaded(database);
   QCOMPARE(reloaded.rowCount(), 1);
   QVERIFY(reloaded.data(reloaded.index(0), GameRoles::Favorite).toBool());
+  QCOMPARE(reloaded.data(reloaded.index(0), GameRoles::Runner).toString(),
+           QStringLiteral("org.ryujinx.Ryujinx"));
 }
 
 void CoreTests::malformedRyujinxDataDoesNotReplaceCachedGames() {
@@ -3521,7 +3678,8 @@ void CoreTests::malformedRyujinxDataDoesNotReplaceCachedGames() {
   createRyujinxFixture(root, roms);
   RyujinxGameModel model(directory.path() + QStringLiteral("/omakade.sqlite3"));
   model.refreshFromRoots({root});
-  QCOMPARE(model.rowCount(), 1);
+  QVERIFY2(model.rowCount() == 1,
+           qPrintable(model.statusText() + QStringLiteral(": ") + model.errorText()));
   writeFile(root + QStringLiteral("/Config.json"), "not json");
   model.refreshFromRoots({root});
   QCOMPARE(model.rowCount(), 1);
@@ -3556,12 +3714,19 @@ void CoreTests::ryujinxLauncherBuildsSafeCommands() {
   QCOMPARE(flatpak.program, QStringLiteral("flatpak"));
   QCOMPARE(flatpak.arguments.at(1), QStringLiteral("io.github.ryubing.Ryujinx"));
   QCOMPARE(flatpak.arguments.constLast(), QStringLiteral("/roms/Zelda.nsp"));
+  const LaunchCommand legacyFlatpak = GameLauncher::ryujinxCommand(
+      QStringLiteral("path:/roms/Zelda.nsp"), QString{}, QStringLiteral("org.ryujinx.Ryujinx"));
+  QCOMPARE(legacyFlatpak.arguments.at(1), QStringLiteral("org.ryujinx.Ryujinx"));
   QVERIFY(!GameLauncher::ryujinxCommand(QStringLiteral("bad;id"), QStringLiteral("Ryujinx")).isValid());
   QVERIFY(!GameLauncher::ryujinxCommand(QStringLiteral("0100abcd12345678"), QStringLiteral("Ryujinx"))
                .isValid());
   // Paths with commas, plus signs, and hashes stay launchable.
   QVERIFY(GameLauncher::ryujinxCommand(
               QStringLiteral("/roms/Zelda, Part 2 + [dlc #3].nsp"), QStringLiteral("Ryujinx"))
+              .isValid());
+  QVERIFY(GameLauncher::ryujinxCommand(
+              QStringLiteral("/roms/Zelda: Tears @ Midnight [0100ABCD12345678].xci"),
+              QStringLiteral("Ryujinx"))
               .isValid());
   QVERIFY(!GameLauncher::ryujinxCommand(QStringLiteral("/roms/totally-not-a-rom.txt"),
                                         QStringLiteral("Ryujinx"))

@@ -32,6 +32,7 @@ public:
   Q_INVOKABLE void refresh();
   [[nodiscard]] bool scanning() const { return m_scanning; }
   Q_INVOKABLE void reloadAchievementSummary(const QString& gameId);
+  void clearAchievementSummaries();
   void refreshFromRoots(const QStringList& roots);
 
 signals:

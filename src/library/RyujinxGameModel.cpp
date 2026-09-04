@@ -160,8 +160,8 @@ bool RyujinxGameModel::ensureSchema() {
           "CREATE TABLE IF NOT EXISTS ryujinx_games (game_id TEXT PRIMARY KEY, name TEXT NOT NULL, "
           "path TEXT, title_id TEXT, last_played INTEGER NOT NULL DEFAULT 0, playtime_seconds "
           "INTEGER NOT NULL DEFAULT 0, cover_path TEXT, flatpak INTEGER NOT NULL DEFAULT 0, "
-          "favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, observed_at "
-          "INTEGER NOT NULL)"))) {
+          "flatpak_app_id TEXT NOT NULL DEFAULT '', favorite INTEGER NOT NULL DEFAULT 0, hidden "
+          "INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)"))) {
     setStatus(QStringLiteral("Could not initialize Ryujinx cache"), query.lastError().text());
     return false;
   }
@@ -177,11 +177,27 @@ bool RyujinxGameModel::ensureSchema() {
       hasPaths = hasPaths || query.value(1).toString() == QStringLiteral("paths");
     }
   }
-  if (hasPaths) {
-    return true;
+  if (!hasPaths && !query.exec(QStringLiteral(
+                       "ALTER TABLE source_state ADD COLUMN paths TEXT NOT NULL DEFAULT ''"))) {
+    setStatus(QStringLiteral("Could not migrate Ryujinx cache"), query.lastError().text());
+    return false;
+  }
+  bool hasFlatpakAppId = false;
+  if (query.exec(QStringLiteral("PRAGMA table_info(ryujinx_games)"))) {
+    while (query.next()) {
+      hasFlatpakAppId =
+          hasFlatpakAppId || query.value(1).toString() == QStringLiteral("flatpak_app_id");
+    }
+  }
+  if (!hasFlatpakAppId &&
+      !query.exec(QStringLiteral(
+          "ALTER TABLE ryujinx_games ADD COLUMN flatpak_app_id TEXT NOT NULL DEFAULT ''"))) {
+    setStatus(QStringLiteral("Could not migrate Ryujinx cache"), query.lastError().text());
+    return false;
   }
   if (!query.exec(QStringLiteral(
-          "ALTER TABLE source_state ADD COLUMN paths TEXT NOT NULL DEFAULT ''"))) {
+          "UPDATE ryujinx_games SET flatpak_app_id = 'io.github.ryubing.Ryujinx' "
+          "WHERE flatpak = 1 AND flatpak_app_id = ''"))) {
     setStatus(QStringLiteral("Could not migrate Ryujinx cache"), query.lastError().text());
     return false;
   }
@@ -192,8 +208,9 @@ void RyujinxGameModel::loadDatabase() {
   QVector<Game> loaded;
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral("SELECT game_id, name, path, title_id, cover_path, last_played, "
-                                 "playtime_seconds, flatpak, favorite, hidden FROM ryujinx_games "
-                                 "WHERE observed_at > 0 ORDER BY name COLLATE NOCASE"))) {
+                                 "playtime_seconds, flatpak, flatpak_app_id, favorite, hidden FROM "
+                                 "ryujinx_games WHERE observed_at > 0 ORDER BY name COLLATE "
+                                 "NOCASE"))) {
     setStatus(QStringLiteral("Could not load cached Ryujinx games"), query.lastError().text());
     return;
   }
@@ -205,10 +222,11 @@ void RyujinxGameModel::loadDatabase() {
                              .coverPath = query.value(4).toString(),
                              .playtimeSeconds = query.value(6).toLongLong(),
                              .lastPlayed = query.value(5).toLongLong(),
-                             .flatpak = query.value(7).toBool()};
+                             .flatpak = query.value(7).toBool(),
+                             .flatpakAppId = query.value(8).toString()};
     loaded.append({.ryujinx = record,
-                   .favorite = query.value(8).toBool(),
-                   .hidden = query.value(9).toBool(),
+                   .favorite = query.value(9).toBool(),
+                   .hidden = query.value(10).toBool(),
                    .accentStart = colorFor(record.gameId, 0),
                    .accentEnd = colorFor(record.gameId, 1)});
   }
@@ -249,11 +267,12 @@ void RyujinxGameModel::applyScan(const RyujinxScanResult& result) {
   for (const RyujinxGameRecord& game : result.games) {
     query.prepare(QStringLiteral(
         "INSERT INTO ryujinx_games(game_id, name, path, title_id, cover_path, last_played, "
-        "playtime_seconds, flatpak, observed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', "
-        "'now')) ON CONFLICT(game_id) DO UPDATE SET name = excluded.name, path = excluded.path, "
-        "title_id = excluded.title_id, cover_path = excluded.cover_path, last_played = "
-        "excluded.last_played, playtime_seconds = excluded.playtime_seconds, flatpak = "
-        "excluded.flatpak, observed_at = excluded.observed_at"));
+        "playtime_seconds, flatpak, flatpak_app_id, observed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, "
+        "?, strftime('%s', 'now')) ON CONFLICT(game_id) DO UPDATE SET name = excluded.name, path "
+        "= excluded.path, title_id = excluded.title_id, cover_path = excluded.cover_path, "
+        "last_played = excluded.last_played, playtime_seconds = excluded.playtime_seconds, "
+        "flatpak = excluded.flatpak, flatpak_app_id = excluded.flatpak_app_id, observed_at = "
+        "excluded.observed_at"));
     query.addBindValue(game.gameId);
     query.addBindValue(game.title);
     query.addBindValue(game.path);
@@ -262,6 +281,7 @@ void RyujinxGameModel::applyScan(const RyujinxScanResult& result) {
     query.addBindValue(game.lastPlayed);
     query.addBindValue(game.playtimeSeconds);
     query.addBindValue(game.flatpak);
+    query.addBindValue(game.flatpakAppId.isNull() ? QStringLiteral("") : game.flatpakAppId);
     okay = okay && query.exec();
   }
   query.prepare(QStringLiteral(
@@ -324,7 +344,7 @@ QVariant RyujinxGameModel::valueForRole(const Game& game, int role) const {
   case GameRoles::Source:
     return QStringLiteral("Ryujinx");
   case GameRoles::Runner:
-    return game.ryujinx.titleId;
+    return game.ryujinx.flatpakAppId;
   case GameRoles::LaunchTarget:
     // Ryujinx's positional argument must be a ROM file path, never a title id.
     return game.ryujinx.path;

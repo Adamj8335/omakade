@@ -13,6 +13,7 @@ struct RyujinxGameRecord {
   qint64 playtimeSeconds = 0;
   qint64 lastPlayed = 0;
   bool flatpak = false;
+  QString flatpakAppId;
 };
 
 struct RyujinxScanResult {

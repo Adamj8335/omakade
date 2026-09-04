@@ -822,8 +822,8 @@ ApplicationWindow {
                     id: searchField
                     objectName: "searchField"
                     property bool controllerNavigation: false
-                    Layout.preferredWidth: Math.min(300, root.width * 0.26)
-                    Layout.minimumWidth: 190
+                    Layout.preferredWidth: root.width < 900 ? 150 : Math.min(300, root.width * 0.26)
+                    Layout.minimumWidth: root.width < 900 ? 150 : 190
                     Layout.preferredHeight: 38
                     placeholderText: "Search games"
                     color: Theme.foreground
@@ -935,9 +935,43 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 12
 
-                Row {
-                    spacing: 5
+                Flickable {
+                    id: sourceFlickable
+                    objectName: "sourceFlickable"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 80
+                    Layout.preferredHeight: sourceButtonsRow.implicitHeight
                     visible: !DemoMode
+                    clip: true
+                    contentWidth: sourceButtonsRow.implicitWidth
+                    contentHeight: sourceButtonsRow.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    function reveal(item) {
+                        if (!item || !root.isWithin(item, sourceButtonsRow)
+                                || contentWidth <= width) {
+                            return
+                        }
+                        const position = item.mapToItem(sourceButtonsRow, 0, 0)
+                        const margin = 5
+                        if (position.x < contentX + margin) {
+                            contentX = Math.max(0, position.x - margin)
+                        } else if (position.x + item.width > contentX + width - margin) {
+                            contentX = Math.min(contentWidth - width,
+                                                position.x + item.width - width + margin)
+                        }
+                    }
+
+                    Connections {
+                        target: root
+                        function onActiveFocusItemChanged() {
+                            sourceFlickable.reveal(root.activeFocusItem)
+                        }
+                    }
+
+                    Row {
+                    id: sourceButtonsRow
+                    spacing: 5
                     GlassButton {
                         id: allSourcesButton
                         objectName: "allSourcesButton"
@@ -1054,6 +1088,7 @@ ApplicationWindow {
                             libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
                         }
                     }
+                    }
                 }
 
                 Text {
@@ -1089,7 +1124,7 @@ ApplicationWindow {
                     id: sortButton
                     objectName: "sortButton"
                     property Item controllerLeftTarget: root.width < 1040
-                                                         ? ryujinxSourceButton
+                                                         ? root.sourceRowEndButton
                                                          : hiddenModeButton
                     property Item controllerRightTarget: rescanButton
                     compact: true
@@ -2090,7 +2125,7 @@ ApplicationWindow {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    enabled: RetroAchievements !== null
+                    enabled: RetroAchievements !== null && !RetroAchievements.busy
                     TextField {
                         id: retroAchievementsUsernameField
                         property bool controllerNavigation: false

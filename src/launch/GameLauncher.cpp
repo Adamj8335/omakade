@@ -33,14 +33,16 @@ bool validPcsx2Id(const QString& id) {
 
 bool validRyujinxId(const QString& id) {
   // Ryujinx launches a ROM file path; title ids are display metadata only.
-  // Accept any non-empty path (existence is checked at launch time), like RetroArch.
-  if (id.startsWith(QStringLiteral("path:")) && id.size() > 5) {
-    return true;
+  // QProcess passes this as one argument without a shell, so ordinary filename punctuation is
+  // safe. Validate the actual invariant instead: a bounded, non-empty path with a ROM suffix.
+  const QString path = id.startsWith(QStringLiteral("path:")) ? id.mid(5) : id;
+  if (path.isEmpty() || path.size() > 4096 || path.contains(QChar::Null)) {
+    return false;
   }
-  static const QRegularExpression romPath(
-      QStringLiteral("^[/\\p{L}0-9 ._()&',+#!\\[\\]-]{1,500}\\.(xci|nsp|nro)$"),
-      QRegularExpression::UseUnicodePropertiesOption | QRegularExpression::CaseInsensitiveOption);
-  return romPath.match(id).hasMatch();
+  const QString suffix = QFileInfo(path).suffix();
+  return suffix.compare(QStringLiteral("xci"), Qt::CaseInsensitive) == 0 ||
+         suffix.compare(QStringLiteral("nsp"), Qt::CaseInsensitive) == 0 ||
+         suffix.compare(QStringLiteral("nro"), Qt::CaseInsensitive) == 0;
 }
 
 bool validHeroicTarget(const QString& id, const QString& runner) {
@@ -94,6 +96,16 @@ QString battleNetExecutable(const QString& prefix) {
 QString wineExecutable() {
   const QString wine = QStandardPaths::findExecutable(QStringLiteral("wine"));
   return wine.isEmpty() ? QStandardPaths::findExecutable(QStringLiteral("wine64")) : wine;
+}
+
+QString installedRyujinxFlatpakId() {
+  for (const QString& appId : {QStringLiteral("io.github.ryubing.Ryujinx"),
+                               QStringLiteral("org.ryujinx.Ryujinx")}) {
+    if (flatpakAppInstalled(appId)) {
+      return appId;
+    }
+  }
+  return {};
 }
 
 QString bottlesBottleName(const QString& prefix) {
@@ -197,7 +209,8 @@ LaunchCommand GameLauncher::pcsx2Command(const QString& id, bool isElf, bool fla
   return LaunchCommand{QStringLiteral("pcsx2-qt"), arguments};
 }
 
-LaunchCommand GameLauncher::ryujinxCommand(const QString& id, const QString& nativeExecutable) {
+LaunchCommand GameLauncher::ryujinxCommand(const QString& id, const QString& nativeExecutable,
+                                           const QString& flatpakAppId) {
   if (!validRyujinxId(id)) {
     return {};
   }
@@ -205,14 +218,18 @@ LaunchCommand GameLauncher::ryujinxCommand(const QString& id, const QString& nat
   if (!nativeExecutable.isEmpty()) {
     return LaunchCommand{nativeExecutable, {target}};
   }
+  if (flatpakAppId.isEmpty()) {
+    return {};
+  }
   return LaunchCommand{QStringLiteral("flatpak"),
-                       {QStringLiteral("run"), QStringLiteral("io.github.ryubing.Ryujinx"),
-                        QStringLiteral("--"), target}};
+                       {QStringLiteral("run"), flatpakAppId, QStringLiteral("--"), target}};
 }
 
 LaunchCommand GameLauncher::battleNetCommand(const QString& id, const QString& prefix,
                                              const QString& runner, bool flatpak) {
-  if (!validBattleNetId(id) || !validBattleNetPrefix(prefix)) {
+  if (!validBattleNetId(id) || !validBattleNetPrefix(prefix) ||
+      (runner != QStringLiteral("wine") && runner != QStringLiteral("bottles") &&
+       runner != QStringLiteral("proton"))) {
     return {};
   }
   const QString launchCode = BattleNetScanner::launchCodeForProduct(id);
@@ -281,7 +298,7 @@ bool GameLauncher::launch(const QString& source, const QString& id, bool flatpak
     const bool idIsPath = id.startsWith(QStringLiteral("path:"));
     const QString romTarget =
         idIsPath ? id : (launchTarget.isEmpty() ? id : launchTarget);
-    return launchRyujinx(romTarget, flatpak, false);
+    return launchRyujinx(romTarget, flatpak, runner, false);
   }
   if (source.compare(QStringLiteral("Battle.net"), Qt::CaseInsensitive) == 0) {
     return launchBattleNet(id, launchTarget, runner, flatpak, false);
@@ -317,7 +334,7 @@ bool GameLauncher::manage(const QString& source, const QString& id, bool flatpak
     return launchPcsx2(id, false, flatpak, true);
   }
   if (source.compare(QStringLiteral("Ryujinx"), Qt::CaseInsensitive) == 0) {
-    return launchRyujinx(id, flatpak, true);
+    return launchRyujinx(id, flatpak, runner, true);
   }
   if (source.compare(QStringLiteral("Battle.net"), Qt::CaseInsensitive) == 0) {
     return launchBattleNet(id, launchTarget, runner, flatpak, true);
@@ -523,8 +540,10 @@ bool GameLauncher::launchPcsx2(const QString& id, bool isElf, bool flatpak, bool
   return true;
 }
 
-bool GameLauncher::launchRyujinx(const QString& id, bool flatpak, bool manageOnly) {
+bool GameLauncher::launchRyujinx(const QString& id, bool flatpak, const QString& configuredAppId,
+                                 bool manageOnly) {
   QString nativeExecutable;
+  QString flatpakAppId;
   if (!flatpak) {
     // Native installs ship the binary under different names depending on the package.
     for (const QString& candidate :
@@ -541,8 +560,16 @@ bool GameLauncher::launchRyujinx(const QString& id, bool flatpak, bool manageOnl
     }
   }
   if (flatpak) {
-    const QString error =
-        flatpakError(QStringLiteral("io.github.ryubing.Ryujinx"), QStringLiteral("Ryujinx"));
+    flatpakAppId = configuredAppId;
+    if (flatpakAppId != QStringLiteral("io.github.ryubing.Ryujinx") &&
+        flatpakAppId != QStringLiteral("org.ryujinx.Ryujinx")) {
+      flatpakAppId = installedRyujinxFlatpakId();
+    }
+    if (flatpakAppId.isEmpty()) {
+      setError(QStringLiteral("The Ryujinx Flatpak is not installed."));
+      return false;
+    }
+    const QString error = flatpakError(flatpakAppId, QStringLiteral("Ryujinx"));
     if (!error.isEmpty()) {
       setError(error);
       return false;
@@ -551,10 +578,9 @@ bool GameLauncher::launchRyujinx(const QString& id, bool flatpak, bool manageOnl
   const LaunchCommand command =
       manageOnly
           ? (flatpak ? LaunchCommand{QStringLiteral("flatpak"),
-                                     {QStringLiteral("run"),
-                                      QStringLiteral("io.github.ryubing.Ryujinx")}}
+                                     {QStringLiteral("run"), flatpakAppId}}
                      : LaunchCommand{nativeExecutable, {}})
-          : ryujinxCommand(id, nativeExecutable);
+          : ryujinxCommand(id, nativeExecutable, flatpakAppId);
   if (!command.isValid()) {
     setError(QStringLiteral("This game has an invalid Ryujinx target."));
     return false;
@@ -582,12 +608,19 @@ bool GameLauncher::launchBattleNet(const QString& id, const QString& prefix, con
   }
   const QString execArg =
       QStringLiteral("--exec=launch %1").arg(BattleNetScanner::launchCodeForProduct(id));
-  const bool bottlesAvailable =
-      runner == QStringLiteral("bottles") &&
-      !QStandardPaths::findExecutable(command.program).isEmpty();
-  const bool protonAvailable = runner == QStringLiteral("proton") &&
-                               !QStandardPaths::findExecutable(QStringLiteral("umu-run")).isEmpty();
-  if (bottlesAvailable && flatpak) {
+  const bool bottlesRunner = runner == QStringLiteral("bottles");
+  const bool protonRunner = runner == QStringLiteral("proton");
+  const bool wineRunner = runner == QStringLiteral("wine");
+  if (!bottlesRunner && !protonRunner && !wineRunner) {
+    setError(QStringLiteral("This game has an invalid Battle.net runner."));
+    return false;
+  }
+  if (bottlesRunner && QStandardPaths::findExecutable(command.program).isEmpty()) {
+    setError(flatpak ? QStringLiteral("Flatpak is not installed.")
+                     : QStringLiteral("Bottles is not installed."));
+    return false;
+  }
+  if (bottlesRunner && flatpak) {
     const QString error =
         flatpakError(QStringLiteral("com.usebottles.bottles"), QStringLiteral("Bottles"));
     if (!error.isEmpty()) {
@@ -595,18 +628,15 @@ bool GameLauncher::launchBattleNet(const QString& id, const QString& prefix, con
       return false;
     }
   }
-  if (!bottlesAvailable && !protonAvailable) {
+  if (protonRunner && QStandardPaths::findExecutable(QStringLiteral("umu-run")).isEmpty()) {
+    setError(QStringLiteral(
+        "umu-launcher is not installed. Install it to launch Battle.net games from Proton."));
+    return false;
+  }
+  if (wineRunner) {
     const QString wine = wineExecutable();
     if (wine.isEmpty()) {
-      if (runner == QStringLiteral("proton")) {
-        setError(QStringLiteral(
-            "umu-launcher is not installed. Install it or Wine to launch Battle.net games."));
-      } else if (runner == QStringLiteral("bottles")) {
-        setError(flatpak ? QStringLiteral("The Bottles Flatpak is not installed.")
-                         : QStringLiteral("Bottles is not installed."));
-      } else {
-        setError(QStringLiteral("Wine is not installed."));
-      }
+      setError(QStringLiteral("Wine is not installed."));
       return false;
     }
     command = {wine, manageOnly ? QStringList{exe} : QStringList{exe, execArg}};
@@ -624,7 +654,7 @@ bool GameLauncher::launchBattleNet(const QString& id, const QString& prefix, con
   process.setWorkingDirectory(QFileInfo(exe).absolutePath());
   QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
   environment.insert(QStringLiteral("WINEPREFIX"), QDir::cleanPath(prefix));
-  if (protonAvailable) {
+  if (protonRunner) {
     environment.insert(QStringLiteral("GAMEID"), QStringLiteral("0"));
     environment.insert(QStringLiteral("STEAM_COMPAT_DATA_PATH"),
                        QFileInfo(prefix + QStringLiteral("/..")).absoluteFilePath());

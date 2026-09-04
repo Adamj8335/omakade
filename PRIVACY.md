@@ -21,7 +21,8 @@ Omakade retains:
   database
 - Owned Steam App IDs, titles, and account playtime after an explicit library
   sync in the same database
-- Steam ID, public IGDB client ID, cache limit, and reduced-motion preference in
+- Steam ID, RetroAchievements username, public IGDB client ID, cache limit, and
+  reduced-motion preference in
   `$XDG_CONFIG_HOME/omakade/config.toml`
 - Downloaded covers and achievement icons in `$XDG_CACHE_HOME/omakade/`
 - Copies of covers selected by the user in `$XDG_DATA_HOME/omakade/artwork/`
@@ -31,6 +32,10 @@ is stored only through the desktop Secret Service under
 `io.github.tsouth89.Omakade.Steam`. Older preview keys stored as
 `io.github.omakade.Steam` remain readable. The key is never written to Omakade's config, database,
 logs, or process arguments.
+
+A RetroAchievements Web API key is stored only through the desktop Secret
+Service under `io.github.tsouth89.Omakade.RetroAchievements`. It is never
+written to Omakade's config, database, logs, or process arguments.
 
 Optional IGDB game insights require a Twitch developer client ID and client
 secret supplied by the user. The public client ID is stored in Omakade's config.
@@ -62,10 +67,16 @@ credentials. Omakade maps a Steam App ID to an IGDB game, then requests IGDB's
 external critic aggregate and game-length estimates. Responses are cached in
 the local library database for offline use and refreshed after 30 days.
 
+RetroAchievements requests occur only after the user supplies a username and
+Web API key. Omakade downloads supported game hashes and matches ROM hashes
+locally. It sends the matched game identifier and configured username to
+RetroAchievements to retrieve progress. Responses are cached in the local
+library database for offline use.
+
 ## Removal
 
-The settings panel can clear downloaded achievement art and remove Steam or
-IGDB credentials from Secret Service. Removing Omakade does not remove its XDG
+The settings panel can clear downloaded achievement art and remove Steam,
+RetroAchievements, or IGDB credentials from Secret Service. Removing Omakade does not remove its XDG
 data by default, so users can preserve settings across reinstallations.
 Resetting a custom cover removes Omakade's private copy and restores the
 source-provided artwork. It does not change the original selected image.

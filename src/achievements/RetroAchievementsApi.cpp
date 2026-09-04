@@ -44,6 +44,36 @@ QString badgeUrl(const QString& badgeName, bool unlocked) {
   return QStringLiteral("https://media.retroachievements.org/Badge/%1%2.png")
       .arg(badgeName, unlocked ? QString{} : QStringLiteral("_lock"));
 }
+
+QString normalizedConsoleName(const QString& name) {
+  QString normalized;
+  normalized.reserve(name.size());
+  for (const QChar character : name) {
+    if (character.isLetterOrNumber()) {
+      normalized.append(character.toLower());
+    }
+  }
+
+  // RetroArch and RetroAchievements use different long and short names for these systems.
+  if (normalized.contains(QStringLiteral("megadrive")) ||
+      normalized.contains(QStringLiteral("genesis"))) {
+    return QStringLiteral("megadrive");
+  }
+  if (normalized.contains(QStringLiteral("famicomdisksystem"))) {
+    return QStringLiteral("famicomdisksystem");
+  }
+  if (normalized.contains(QStringLiteral("supernintendoentertainmentsystem")) ||
+      normalized.contains(QStringLiteral("snes")) ||
+      normalized.contains(QStringLiteral("superfamicom"))) {
+    return QStringLiteral("snes");
+  }
+  if (normalized.contains(QStringLiteral("nintendoentertainmentsystem")) ||
+      normalized.startsWith(QStringLiteral("nes")) ||
+      normalized.contains(QStringLiteral("famicom"))) {
+    return QStringLiteral("nes");
+  }
+  return normalized;
+}
 } // namespace
 
 QString RetroAchievementsApi::host() { return QStringLiteral("retroachievements.org"); }
@@ -128,14 +158,14 @@ bool RetroAchievementsApi::parseConsoleIds(const QByteArray& contents,
 
 int RetroAchievementsApi::bestConsoleMatch(const QVector<RetroAchievementsConsoleRecord>& consoles,
                                            const QString& targetName) {
-  const QString target = targetName.toLower();
+  const QString target = normalizedConsoleName(targetName);
   if (target.isEmpty()) {
     return 0;
   }
   int matchedId = 0;
-  int bestScore = -1;
+  int bestScore = std::numeric_limits<int>::min();
   for (const RetroAchievementsConsoleRecord& console : consoles) {
-    const QString candidate = console.name.toLower();
+    const QString candidate = normalizedConsoleName(console.name);
     if (candidate.isEmpty()) {
       continue;
     }

@@ -382,6 +382,11 @@ int main(int argc, char* argv[]) {
                      [&achievements](const QString& gameId) { achievements.load(gameId); });
     QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsUpdated,
                      retroArchLibrary, &RetroArchGameModel::reloadAchievementSummary);
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsCleared,
+                     retroArchLibrary, &RetroArchGameModel::clearAchievementSummaries);
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsCleared,
+                     &achievements,
+                     [&achievements] { achievements.load(achievements.appId()); });
   }
   GameLauncher launcher;
   std::unique_ptr<SunshineIntegration> sunshine;
@@ -563,6 +568,8 @@ int main(int argc, char* argv[]) {
                          : QStringLiteral("hiddenModeButton"));
               auto* allSources =
                   quickWindow->findChild<QQuickItem*>(QStringLiteral("allSourcesButton"));
+              auto* sourceFlickable =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("sourceFlickable"));
               auto* retroArchSource =
                   quickWindow->findChild<QQuickItem*>(QStringLiteral("retroArchSourceButton"));
               auto* statusFilter =
@@ -577,10 +584,21 @@ int main(int argc, char* argv[]) {
                   quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
               if (sort == nullptr || rescan == nullptr || settings == nullptr ||
                   allMode == nullptr || hiddenMode == nullptr || allSources == nullptr ||
+                  sourceFlickable == nullptr ||
                   retroArchSource == nullptr || statusFilter == nullptr || tagFilter == nullptr ||
                   installedAvailability == nullptr || readyAvailability == nullptr ||
                   settingsScroll == nullptr) {
                 fail(QStringLiteral("Controller navigation test could not find toolbar controls"));
+                return;
+              }
+              const auto withinWindow = [quickWindow](QQuickItem* item) {
+                const QPointF topLeft = item->mapToScene(QPointF(0, 0));
+                return topLeft.x() >= 0 && topLeft.y() >= 0 &&
+                       topLeft.x() + item->width() <= quickWindow->width() &&
+                       topLeft.y() + item->height() <= quickWindow->height();
+              };
+              if (!withinWindow(settings) || !withinWindow(sort) || !withinWindow(rescan)) {
+                fail(QStringLiteral("Library toolbar controls extend outside the window"));
                 return;
               }
               controller.toolbarRequested();
@@ -592,6 +610,13 @@ int main(int argc, char* argv[]) {
               if (narrow) {
                 if (!retroArchSource->hasActiveFocus()) {
                   fail(QStringLiteral("Controller Left did not reach source filters when tiled"));
+                  return;
+                }
+                const QPointF sourcePosition =
+                    retroArchSource->mapToItem(sourceFlickable, QPointF(0, 0));
+                if (sourcePosition.x() < 0 ||
+                    sourcePosition.x() + retroArchSource->width() > sourceFlickable->width()) {
+                  fail(QStringLiteral("Focused source filter was not revealed"));
                   return;
                 }
                 for (int step = 0; step < 6; ++step) {

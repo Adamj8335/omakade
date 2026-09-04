@@ -139,7 +139,7 @@ QString RetroAchievementsService::statusText() const { return m_statusText; }
 QString RetroAchievementsService::state() const { return m_state; }
 
 void RetroAchievementsService::setUsername(const QString& username) {
-  if (m_settings == nullptr) {
+  if (m_settings == nullptr || reportBusy()) {
     return;
   }
   const QString before = m_settings->retroAchievementsUsername();
@@ -149,6 +149,7 @@ void RetroAchievementsService::setUsername(const QString& username) {
     // stale row from the previous account would otherwise look like valid, up-to-date progress
     // for whichever RetroArch game is opened next.
     clearCachedAchievements();
+    emit achievementsCleared();
     emit accountChanged();
     setStatus(QStringLiteral("local"), QStringLiteral("RetroAchievements username saved"));
   } else if (username.trimmed() != before) {
