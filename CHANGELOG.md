@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.5.0
+
+### RetroAchievements
+
+- Added optional RetroAchievements support for RetroArch games, including
+  compatible ROM hashing, achievement progress, unlock details, rarity, and
+  account-aware caching.
+- Kept network, hashing, and database work off the interface thread and handled
+  sign-out, stale data, unsupported systems, and malformed responses safely.
 
 ### Battle.net
 
@@ -28,6 +36,23 @@
 - Imported non-Steam shortcuts from `shortcuts.vdf`, including Wine/Proton
   games added to Steam, and launched them with the 64-bit shortcut ID Steam
   expects.
+- Kept cached shortcuts available when `shortcuts.vdf` is temporarily
+  unreadable.
+
+### Interface and reliability
+
+- Improved game-details layouts across narrow, standard, and ultrawide windows,
+  including cover sizing, action widths, and the insights grid.
+- Fixed keyboard and controller movement between Play, Favorite, Manage, and
+  Hide in both two-column and four-column layouts.
+- Preserved cached launcher games when an optional source is unavailable and
+  expanded automated coverage for the new integrations and navigation paths.
+- Updated project, support, download, and package links after the repository
+  account rename.
+
+Thanks to @karem505 for PCSX2 and Ryujinx, @HowieDuhzit for
+RetroAchievements, @Nitemaeric for Battle.net, @Aweiward for Steam non-Steam
+shortcuts, and @jeanmrx1 for the responsive game-details improvements.
 
 ## 1.4.0
 

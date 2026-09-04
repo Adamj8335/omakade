@@ -2430,12 +2430,12 @@ ApplicationWindow {
                     GlassButton {
                         compact: true
                         text: "PROJECT"
-                        onClicked: Qt.openUrlExternally("https://github.com/tsouth89/omakade")
+                        onClicked: Qt.openUrlExternally("https://github.com/btsouth/omakade")
                     }
                     GlassButton {
                         compact: true
                         text: "REPORT ISSUE"
-                        onClicked: Qt.openUrlExternally("https://github.com/tsouth89/omakade/issues/new/choose")
+                        onClicked: Qt.openUrlExternally("https://github.com/btsouth/omakade/issues/new/choose")
                     }
                     Item { Layout.fillWidth: true }
                 }

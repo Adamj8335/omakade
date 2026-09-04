@@ -18,7 +18,7 @@
   <launchable type="desktop-id">io.github.tsouth89.Omakade.desktop</launchable>
   <content_rating type="oars-1.1" />
   <url type="homepage">https://btsouth.github.io/omakade/</url>
-  <url type="bugtracker">https://github.com/tsouth89/omakade/issues</url>
+  <url type="bugtracker">https://github.com/btsouth/omakade/issues</url>
   <screenshots>
     <screenshot type="default">
       <image>https://btsouth.github.io/omakade/assets/library-preview.webp</image>
@@ -26,6 +26,7 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.5.0" date="2026-09-04" />
     <release version="1.4.0" date="2026-09-02" />
     <release version="1.3.0" date="2026-09-01" />
     <release version="1.2.3" date="2026-09-01" />
