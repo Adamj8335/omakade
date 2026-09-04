@@ -44,6 +44,7 @@
 #include <QTimer>
 #include <QWindow>
 
+#include <algorithm>
 #include <memory>
 
 namespace {
@@ -146,10 +147,19 @@ int main(int argc, char* argv[]) {
   const bool demoMode = smokeTest || renderMode ||
                         application.arguments().contains(QStringLiteral("--demo"));
   const bool benchmarkMode = application.arguments().contains(QStringLiteral("--benchmark"));
+  const QString benchmarkMaxOption = QStringLiteral("--benchmark-max-ms");
+  const bool benchmarkLimitSupplied =
+      std::ranges::any_of(application.arguments(), [&benchmarkMaxOption](const QString& argument) {
+        return argument == benchmarkMaxOption ||
+               argument.startsWith(benchmarkMaxOption + QLatin1Char('='));
+      });
   bool benchmarkLimitValid = false;
   const int benchmarkMaxMs =
-      optionValue(application.arguments(), QStringLiteral("--benchmark-max-ms"))
-          .toInt(&benchmarkLimitValid);
+      optionValue(application.arguments(), benchmarkMaxOption).toInt(&benchmarkLimitValid);
+  if (benchmarkLimitSupplied && (!benchmarkLimitValid || benchmarkMaxMs <= 0)) {
+    qCritical() << "--benchmark-max-ms requires a positive integer";
+    return EXIT_FAILURE;
+  }
   const bool stressMode = application.arguments().contains(QStringLiteral("--stress-test"));
   const bool reducedMotionRequest =
       application.arguments().contains(QStringLiteral("--reduced-motion"));
@@ -564,13 +574,13 @@ int main(int argc, char* argv[]) {
     }
     QObject::connect(
         quickWindow, &QQuickWindow::frameSwapped, &application,
-        [&application, &controller, &startupTimer, benchmarkMode, benchmarkLimitValid,
+        [&application, &controller, &startupTimer, benchmarkMode, benchmarkLimitSupplied,
          benchmarkMaxMs] {
           const qint64 firstFrameMs = startupTimer.elapsed();
           qInfo() << "First frame in" << firstFrameMs << "ms";
           controller.start();
           if (benchmarkMode) {
-            if (benchmarkLimitValid && benchmarkMaxMs > 0 && firstFrameMs > benchmarkMaxMs) {
+            if (benchmarkLimitSupplied && firstFrameMs > benchmarkMaxMs) {
               qCritical() << "First frame exceeded benchmark limit of" << benchmarkMaxMs << "ms";
               application.exit(EXIT_FAILURE);
             } else {
@@ -738,6 +748,12 @@ int main(int argc, char* argv[]) {
           QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 0));
           if (textEntryKeyboard->property("value").toString() != QStringLiteral("Aa!")) {
             fail(QStringLiteral("Couch text entry did not switch letter and symbol layouts"));
+            return;
+          }
+          textEntryKeyboard->setProperty("maximumLength", 3);
+          QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 41));
+          if (textEntryKeyboard->property("value").toString() != QStringLiteral("Aa!")) {
+            fail(QStringLiteral("Couch text entry exceeded its maximum length with Space"));
             return;
           }
           QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 45));

@@ -411,9 +411,7 @@ ApplicationWindow {
         }
         if (enabled) {
             couchLibraryView.currentIndex = libraryView.currentIndex
-            if (root.visibility !== Window.FullScreen) {
-                root.desktopVisibility = root.visibility
-            }
+            root.desktopVisibility = root.visibility
         } else {
             libraryView.currentIndex = couchLibraryView.currentIndex
         }

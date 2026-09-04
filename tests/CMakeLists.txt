@@ -58,6 +58,26 @@ set_tests_properties(omakade_couch_thousand_game_startup PROPERTIES
   TIMEOUT 5
 )
 
+foreach(benchmark_case IN ITEMS text empty missing nonpositive)
+  if(benchmark_case STREQUAL "text")
+    set(benchmark_limit_argument --benchmark-max-ms=fast)
+  elseif(benchmark_case STREQUAL "empty")
+    set(benchmark_limit_argument --benchmark-max-ms=)
+  elseif(benchmark_case STREQUAL "missing")
+    set(benchmark_limit_argument --benchmark-max-ms)
+  else()
+    set(benchmark_limit_argument --benchmark-max-ms=-1)
+  endif()
+  add_test(NAME omakade_benchmark_rejects_${benchmark_case}_limit
+    COMMAND omakade --benchmark ${benchmark_limit_argument}
+  )
+  set_tests_properties(omakade_benchmark_rejects_${benchmark_case}_limit PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+    WILL_FAIL TRUE
+    TIMEOUT 5
+  )
+endforeach()
+
 add_test(NAME omakade_couch_thousand_game_navigation
   COMMAND omakade --couch --stress-test --couch-navigation-test --render-size=1920x1080
 )

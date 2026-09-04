@@ -79,7 +79,8 @@ FocusScope {
         if (key === "BACKSPACE") {
             value = value.slice(0, -1)
         } else if (key === "SPACE") {
-            value += " "
+            appendText(" ")
+            return
         } else if (key === "CLEAR") {
             value = ""
         } else if (key === "DONE") {

@@ -30,8 +30,9 @@ testing only when the maintainer explicitly authorizes that specific release.
    overlays as well.
 5. Confirm CI passes on both x86_64 and aarch64. Run the Release workflow
    manually from the candidate branch to build package artifacts without
-   publishing them. Give the maintainer the exact candidate and checklist, then
-   wait for local test results and explicit publication approval. For an
+   publishing them or their attestations. Give the maintainer the exact
+   candidate and checklist, then wait for local test results and explicit
+   publication approval. For an
    aarch64 release, also have the exact package tested on supported ARM64
    hardware.
 6. Tag the approved commit as `vX.Y.Z` and push the tag. Do not push the
