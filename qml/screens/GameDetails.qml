@@ -15,6 +15,12 @@ Item {
     required property var installations
     required property var selectedInstallation
     property bool collectionEditorOpen: false
+    property bool couchMode: false
+    readonly property real uiScale: couchMode
+                                    ? Math.max(1, Math.min(1.25,
+                                                          Math.min(width / 1920,
+                                                                   height / 1080) * 1.18))
+                                    : 1
 
     // Closing the editor hides the focused field, so hand focus back to the button that
     // opened it and drop the draft instead of showing it again next time.
@@ -97,14 +103,15 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: root.alpha(Theme.darkerBackground, 0.76)
+        color: root.alpha(Theme.darkerBackground, root.couchMode ? 0.88 : 0.76)
     }
 
     Rectangle {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Math.min(parent.height * 0.58, 500)
+        height: root.couchMode ? parent.height * 0.68
+                               : Math.min(parent.height * 0.58, 500)
         opacity: 0.42
         gradient: Gradient {
             orientation: Gradient.Horizontal
@@ -117,7 +124,8 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Math.min(parent.height * 0.58, 500)
+        height: root.couchMode ? parent.height * 0.68
+                               : Math.min(parent.height * 0.58, 500)
         source: root.game.heroPath || ""
         asynchronous: true
         cache: false
@@ -131,7 +139,8 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Math.min(parent.height * 0.62, 540)
+        height: root.couchMode ? parent.height * 0.74
+                               : Math.min(parent.height * 0.62, 540)
         gradient: Gradient {
             GradientStop { position: 0.0; color: "transparent" }
             GradientStop { position: 1.0; color: Theme.darkerBackground }
@@ -142,7 +151,7 @@ Item {
         id: backButton
         anchors.top: parent.top
         anchors.left: parent.left
-        anchors.margins: 24
+        anchors.margins: root.couchMode ? 42 * root.uiScale : 24
         text: "BACK"
         iconText: "←"
         compact: true
@@ -152,17 +161,19 @@ Item {
     Item {
         id: detailsArea
         anchors.fill: parent
-        anchors.topMargin: 80
-        anchors.leftMargin: Math.max(28, parent.width * 0.055)
-        anchors.rightMargin: Math.max(28, parent.width * 0.055)
-        anchors.bottomMargin: 22
+        anchors.topMargin: root.couchMode ? 112 * root.uiScale : 80
+        anchors.leftMargin: root.couchMode ? 64 * root.uiScale
+                                           : Math.max(28, parent.width * 0.055)
+        anchors.rightMargin: root.couchMode ? 64 * root.uiScale
+                                            : Math.max(28, parent.width * 0.055)
+        anchors.bottomMargin: root.couchMode ? 64 * root.uiScale : 22
         readonly property real columnSpacing: Math.max(28, width * 0.045)
 
         ColumnLayout {
             id: coverSidebar
             anchors.top: parent.top
             anchors.left: parent.left
-            width: Math.max(0, Math.min(root.width * 0.28,
+            width: Math.max(0, Math.min(root.width * (root.couchMode ? 0.24 : 0.28),
                                         (detailsArea.height - reservedControlHeight) / 1.5,
                                         detailsArea.width * 0.44))
             spacing: 8
@@ -274,7 +285,7 @@ Item {
             ColumnLayout {
                 id: detailsContent
                 width: detailsScroll.availableWidth
-                spacing: 16
+                spacing: root.couchMode ? 20 * root.uiScale : 16
 
                 Text {
                     Layout.fillWidth: true
@@ -282,7 +293,9 @@ Item {
                     textFormat: Text.PlainText
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: Math.max(28, Math.min(54, width * 0.07))
+                    font.pixelSize: root.couchMode
+                                    ? Math.max(42, Math.min(68, width * 0.075))
+                                    : Math.max(28, Math.min(54, width * 0.07))
                     font.weight: Font.Bold
                     wrapMode: Text.Wrap
                 }
@@ -340,7 +353,7 @@ Item {
                     color: Theme.foreground
                     opacity: 0.84
                     font.family: Theme.fontFamily
-                    font.pixelSize: 13
+                    font.pixelSize: root.couchMode ? 17 * root.uiScale : 13
                     lineHeight: 1.45
                     wrapMode: Text.Wrap
                 }
@@ -1070,6 +1083,58 @@ Item {
                         }
                     }
                 }
+        }
+    }
+
+    Row {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.rightMargin: 54 * root.uiScale
+        anchors.bottomMargin: 20 * root.uiScale
+        spacing: 20 * root.uiScale
+        visible: root.couchMode
+        z: 20
+
+        Repeater {
+            model: [
+                { glyph: Controller.primaryGlyph, label: "SELECT" },
+                { glyph: Controller.backGlyph, label: "BACK" },
+                { glyph: Controller.favoriteGlyph, label: "FAVORITE" },
+                { glyph: "START", label: "DESKTOP" }
+            ]
+
+            Row {
+                required property var modelData
+                spacing: 7 * root.uiScale
+
+                Rectangle {
+                    width: Math.max(31 * root.uiScale, glyphText.implicitWidth + 14 * root.uiScale)
+                    height: 31 * root.uiScale
+                    radius: height / 2
+                    color: root.alpha(Theme.foreground, 0.12)
+                    border.color: root.alpha(Theme.foreground, 0.22)
+
+                    Text {
+                        id: glyphText
+                        anchors.centerIn: parent
+                        text: modelData.glyph
+                        color: Theme.brightForeground
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 11 * root.uiScale
+                        font.weight: Font.Bold
+                    }
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.label
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 12 * root.uiScale
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 0.8
+                }
+            }
         }
     }
 }

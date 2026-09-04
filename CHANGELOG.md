@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Couch Mode
+
+- Added the first dedicated ten-foot library with a large featured game,
+  horizontal cover browsing, controller hints, and controller-tested focus.
+- Added persistent Couch Mode startup, `omakade --couch`, F11 and controller
+  Start switching, and automatic Couch Mode for Sunshine sessions.
+
 ## 1.5.0
 
 ### RetroAchievements

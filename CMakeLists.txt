@@ -121,6 +121,7 @@ qt_add_qml_module(omakade
   QML_FILES
     qml/Main.qml
     qml/components/GameCard.qml
+    qml/components/CouchLibraryView.qml
     qml/components/GlassButton.qml
     qml/components/LibraryView.qml
     qml/screens/GameDetails.qml

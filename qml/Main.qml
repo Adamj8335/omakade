@@ -23,6 +23,8 @@ ApplicationWindow {
     property string filterPickerKind: ""
     property var filterPickerValues: []
     property string pendingCollectionDelete: ""
+    property bool couchMode: CouchModeRequested
+    property int desktopVisibility: Window.Windowed
     readonly property bool libraryScanning: (SteamLibrary ? SteamLibrary.scanning : false)
                                             || (LutrisLibrary ? LutrisLibrary.scanning : false)
                                             || (HeroicLibrary ? HeroicLibrary.scanning : false)
@@ -250,6 +252,10 @@ ApplicationWindow {
         if (root.navigationContainer() !== null) {
             return
         }
+        if (root.couchMode) {
+            couchLibraryView.toggleControls()
+            return
+        }
         if (libraryView.gridFocused) {
             sortButton.forceActiveFocus(Qt.TabFocusReason)
         } else {
@@ -290,7 +296,7 @@ ApplicationWindow {
         } else if (detailOpen && detailsLoader.item) {
             Qt.callLater(function() { root.focusWithin(detailsLoader.item, true) })
         } else {
-            Qt.callLater(libraryView.focusGrid)
+            Qt.callLater(root.focusLibrary)
         }
     }
 
@@ -346,7 +352,37 @@ ApplicationWindow {
 
     function closeDetails() {
         detailOpen = false
-        Qt.callLater(libraryView.focusGrid)
+        Qt.callLater(root.focusLibrary)
+    }
+
+    function focusLibrary() {
+        if (root.couchMode) {
+            couchLibraryView.focusGrid()
+        } else {
+            libraryView.focusGrid()
+        }
+    }
+
+    function setCouchMode(enabled) {
+        if (root.couchMode === enabled) {
+            return
+        }
+        if (enabled) {
+            couchLibraryView.currentIndex = libraryView.currentIndex
+            if (root.visibility !== Window.FullScreen) {
+                root.desktopVisibility = root.visibility
+            }
+        } else {
+            libraryView.currentIndex = couchLibraryView.currentIndex
+        }
+        root.couchMode = enabled
+        Preferences.couchModeEnabled = enabled
+        root.visibility = enabled ? Window.FullScreen : root.desktopVisibility
+        Qt.callLater(root.focusLibrary)
+    }
+
+    function toggleCouchMode() {
+        setCouchMode(!root.couchMode)
     }
 
     function showToast(message) {
@@ -535,14 +571,14 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+F"
-        enabled: !root.detailOpen && !root.diagnosticsOpen && !root.linkDialogOpen
+        enabled: !root.couchMode && !root.detailOpen && !root.diagnosticsOpen
+                 && !root.linkDialogOpen
                  && !root.collectionDeleteOpen
         onActivated: searchField.forceActiveFocus()
     }
     Shortcut {
         sequence: "F11"
-        onActivated: root.visibility = root.visibility === Window.FullScreen
-                     ? Window.Windowed : Window.FullScreen
+        onActivated: root.toggleCouchMode()
     }
     Shortcut {
         sequence: "Ctrl+M"
@@ -609,11 +645,11 @@ ApplicationWindow {
                 detailsLoader.item.closeCollectionEditor()
             } else if (root.detailOpen) {
                 root.closeDetails()
-            } else if (searchField.text.length > 0) {
+            } else if (!root.couchMode && searchField.text.length > 0) {
                 searchField.clear()
                 libraryView.focusGrid()
-            } else if (!libraryView.gridFocused) {
-                libraryView.focusGrid()
+            } else if (root.couchMode || !libraryView.gridFocused) {
+                root.focusLibrary()
             }
         }
     }
@@ -622,23 +658,27 @@ ApplicationWindow {
         target: Controller
         property: "focusNavigation"
         value: root.detailOpen || root.diagnosticsOpen || root.linkDialogOpen
-               || root.collectionDeleteOpen || !libraryView.gridFocused
+               || root.collectionDeleteOpen
+               || (!root.couchMode && !libraryView.gridFocused)
     }
     Shortcut {
         sequence: "Return"
-        enabled: root.navigationContainer() === null && libraryView.gridFocused
+        enabled: !root.couchMode && root.navigationContainer() === null
+                 && libraryView.gridFocused
                  && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
     Shortcut {
         sequence: "Enter"
-        enabled: root.navigationContainer() === null && libraryView.gridFocused
+        enabled: !root.couchMode && root.navigationContainer() === null
+                 && libraryView.gridFocused
                  && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
     Shortcut {
         sequence: "Space"
-        enabled: root.navigationContainer() === null && libraryView.gridFocused
+        enabled: !root.couchMode && root.navigationContainer() === null
+                 && libraryView.gridFocused
                  && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
@@ -647,7 +687,7 @@ ApplicationWindow {
         // Only give the grid focus when nothing has it, so alt-tabbing back does not pull
         // focus away from a toolbar control or an empty-state button.
         if (active && root.navigationContainer() === null && !root.activeFocusItem) {
-            Qt.callLater(libraryView.focusGrid)
+            Qt.callLater(root.focusLibrary)
         }
     }
     onClosing: function(close) {
@@ -687,8 +727,8 @@ ApplicationWindow {
         anchors.fill: parent
         opacity: root.detailOpen ? 0 : 1
         scale: root.detailOpen ? 0.985 : 1
-        visible: opacity > 0
-        enabled: !root.detailOpen
+        visible: !root.couchMode && opacity > 0
+        enabled: !root.couchMode && !root.detailOpen
 
         // Arrow keys move between the filters and toolbar controls, and Down with nothing
         // below drops back into the game grid. Controller directions take the same path.
@@ -879,6 +919,14 @@ ApplicationWindow {
                     text: "SETTINGS"
                     compact: true
                     onClicked: root.diagnosticsOpen = true
+                }
+
+                GlassButton {
+                    id: couchModeButton
+                    objectName: "couchModeButton"
+                    text: "COUCH"
+                    compact: true
+                    onClicked: root.setCouchMode(true)
                 }
             }
 
@@ -1331,6 +1379,31 @@ ApplicationWindow {
         }
     }
 
+    CouchLibraryView {
+        id: couchLibraryView
+        objectName: "couchLibrary"
+        anchors.fill: parent
+        visible: root.couchMode && !root.detailOpen
+        enabled: visible && root.navigationContainer() === null
+        libraryModel: Library
+        scanning: root.libraryScanning
+
+        onGameActivated: index => root.openGame(index)
+        onFavoriteToggled: function(index) {
+            Library.toggleFavorite(index)
+            couchLibraryView.refreshCurrentGame()
+        }
+        onSettingsRequested: root.diagnosticsOpen = true
+        onDesktopRequested: root.setCouchMode(false)
+        onCoverRequested: function(source, appId) {
+            if (source === "Steam" && SteamLibrary) {
+                SteamLibrary.requestCover(appId)
+            } else if (source === "Battle.net" && BattleNetLibrary) {
+                BattleNetLibrary.requestCover(appId)
+            }
+        }
+    }
+
     Loader {
         id: detailsLoader
         anchors.fill: parent
@@ -1353,6 +1426,7 @@ ApplicationWindow {
             game: root.selectedGame
             installations: root.selectedInstallations
             selectedInstallation: root.selectedInstallation
+            couchMode: root.couchMode
             navigationEnabled: !root.linkDialogOpen && !root.diagnosticsOpen
                                && !root.collectionDeleteOpen
             onBackRequested: root.closeDetails()
@@ -2569,7 +2643,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         smokeReady = true
-        libraryView.focusGrid()
+        root.focusLibrary()
     }
 
     Connections {
@@ -2586,6 +2660,7 @@ ApplicationWindow {
             }
             if (libraryView.currentIndex < 0 && Library.rowCount() > 0) {
                 libraryView.currentIndex = 0
+                couchLibraryView.currentIndex = 0
             }
             if (root.detailOpen
                     && !root.refreshSelected(root.selectedGame.source,
@@ -2616,7 +2691,7 @@ ApplicationWindow {
         target: Controller
         function onFocusDirectionRequested(key) {
             const container = root.navigationContainer()
-            if (!container && !libraryView.gridFocused
+            if (!root.couchMode && !container && !libraryView.gridFocused
                     && !root.focusSpatial(librarySurface, key)
                     && key === Qt.Key_Down) {
                 libraryView.focusGrid()
@@ -2633,6 +2708,11 @@ ApplicationWindow {
                     && !root.collectionDeleteOpen) {
                 Library.toggleFavorite(root.selectedIndex)
                 root.refreshAfterOrganization()
+            } else if (root.couchMode && !root.detailOpen
+                       && root.navigationContainer() === null
+                       && couchLibraryView.currentIndex >= 0) {
+                Library.toggleFavorite(couchLibraryView.currentIndex)
+                couchLibraryView.refreshCurrentGame()
             } else if (!root.detailOpen && root.navigationContainer() === null
                        && libraryView.gridFocused && libraryView.currentIndex >= 0) {
                 Library.toggleFavorite(libraryView.currentIndex)

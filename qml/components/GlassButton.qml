@@ -8,16 +8,21 @@ Button {
     property bool primary: false
     property bool selected: false
     property bool compact: false
+    property real displayScale: root.Window.window && root.Window.window.couchMode
+                                ? Math.max(1, Math.min(1.2,
+                                                      root.Window.window.height / 900))
+                                : 1
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
     }
 
-    implicitHeight: compact ? 34 : 42
-    implicitWidth: Math.max(compact ? 76 : 104, contentRow.implicitWidth + (compact ? 22 : 30))
-    leftPadding: compact ? 11 : 15
+    implicitHeight: (compact ? 34 : 42) * displayScale
+    implicitWidth: Math.max((compact ? 76 : 104) * displayScale,
+                            contentRow.implicitWidth + (compact ? 22 : 30) * displayScale)
+    leftPadding: (compact ? 11 : 15) * displayScale
     rightPadding: leftPadding
-    spacing: 8
+    spacing: 8 * displayScale
     focusPolicy: Qt.StrongFocus
 
     // Qt only presses a Button on Return or Enter when the platform theme says so. Controller
@@ -74,7 +79,7 @@ Button {
             color: root.enabled ? (root.primary ? Theme.brightForeground : Theme.foreground)
                                 : root.alpha(Theme.foreground, 0.35)
             font.family: Theme.fontFamily
-            font.pixelSize: root.compact ? 12 : 14
+            font.pixelSize: (root.compact ? 12 : 14) * root.displayScale
             anchors.verticalCenter: parent.verticalCenter
         }
 
@@ -83,7 +88,7 @@ Button {
             color: root.enabled ? (root.primary ? Theme.brightForeground : Theme.foreground)
                                 : root.alpha(Theme.foreground, 0.35)
             font.family: Theme.fontFamily
-            font.pixelSize: root.compact ? 11 : 12
+            font.pixelSize: (root.compact ? 11 : 12) * root.displayScale
             font.weight: root.primary || root.selected ? Font.DemiBold : Font.Medium
             anchors.verticalCenter: parent.verticalCenter
         }

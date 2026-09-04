@@ -134,8 +134,11 @@ int main(int argc, char* argv[]) {
   const bool quitRequest = application.arguments().contains(QStringLiteral("--quit"));
   const bool renderMode = !screenshotPath.isEmpty();
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
-  const bool navigationTest =
-      application.arguments().contains(QStringLiteral("--controller-navigation-test"));
+  const bool couchNavigationTest =
+      application.arguments().contains(QStringLiteral("--couch-navigation-test"));
+  const bool navigationTest = couchNavigationTest ||
+                              application.arguments().contains(
+                                  QStringLiteral("--controller-navigation-test"));
   const bool ownedLayoutTest =
       application.arguments().contains(QStringLiteral("--owned-layout-test"));
   const bool uninstalledLayoutTest =
@@ -144,6 +147,8 @@ int main(int argc, char* argv[]) {
                         application.arguments().contains(QStringLiteral("--demo"));
   const bool benchmarkMode = application.arguments().contains(QStringLiteral("--benchmark"));
   const bool stressMode = application.arguments().contains(QStringLiteral("--stress-test"));
+  const bool couchRequest = application.arguments().contains(QStringLiteral("--couch")) ||
+                            SunshineIntegration::streaming();
   if (benchmarkMode) {
     qInfo() << "Theme ready in" << startupTimer.elapsed() << "ms";
   }
@@ -153,7 +158,7 @@ int main(int argc, char* argv[]) {
   SingleInstance singleInstance;
   const QByteArray instanceCommand =
       !playKey.isEmpty()                 ? QByteArray("play ") + playKey.toUtf8()
-      : SunshineIntegration::streaming() ? QByteArray("activate stream")
+      : couchRequest                     ? QByteArray("activate stream")
                                          : QByteArray("activate");
   if (!smokeTest && !renderMode && !navigationTest &&
       !singleInstance.claimOrNotify(instanceCommand)) {
@@ -165,6 +170,7 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("/omakade-test-%1.toml").arg(QCoreApplication::applicationPid())
           : QString{};
   AppSettings preferences(settingsPath);
+  const bool startInCouchMode = couchRequest || preferences.couchModeEnabled();
   ControllerInput controller;
   std::unique_ptr<QAbstractItemModel> games;
   std::unique_ptr<LutrisGameModel> lutrisGames;
@@ -450,6 +456,8 @@ int main(int argc, char* argv[]) {
                                            QCoreApplication::applicationVersion());
   engine.rootContext()->setContextProperty(QStringLiteral("OwnedGameCountOverride"),
                                            ownedLayoutTest ? 250 : 0);
+  engine.rootContext()->setContextProperty(QStringLiteral("CouchModeRequested"),
+                                           startInCouchMode);
 
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,
@@ -468,19 +476,20 @@ int main(int argc, char* argv[]) {
   }
 
   auto* rootWindow = qobject_cast<QWindow*>(engine.rootObjects().constFirst());
-  if (rootWindow != nullptr && qEnvironmentVariableIsSet("SUNSHINE_APP_ID") && !renderMode &&
-      !navigationTest && !smokeTest) {
-    // Sunshine launched Omakade for a Moonlight client, so fill the streamed display.
+  if (rootWindow != nullptr && startInCouchMode && !renderMode && !navigationTest && !smokeTest) {
+    // Couch mode fills the chosen display. Sunshine selects its configured output first.
     const QList<QScreen*> screens = QGuiApplication::screens();
     QStringList screenNames;
     screenNames.reserve(screens.size());
     for (const QScreen* screen : screens) {
       screenNames.append(screen->name());
     }
-    const int screenIndex = SunshineIntegration::outputScreenIndex(
-        SunshineIntegration::configuredOutputName(), screenNames);
-    if (screenIndex >= 0) {
-      rootWindow->setScreen(screens.at(screenIndex));
+    if (qEnvironmentVariableIsSet("SUNSHINE_APP_ID")) {
+      const int screenIndex = SunshineIntegration::outputScreenIndex(
+          SunshineIntegration::configuredOutputName(), screenNames);
+      if (screenIndex >= 0) {
+        rootWindow->setScreen(screens.at(screenIndex));
+      }
     }
     rootWindow->showFullScreen();
   }
@@ -533,7 +542,96 @@ int main(int argc, char* argv[]) {
         },
         Qt::SingleShotConnection);
 
-    if (navigationTest) {
+    if (couchNavigationTest) {
+      QTimer::singleShot(150, quickWindow, [quickWindow, &application, &controller] {
+        const auto fail = [&application](const QString& message) {
+          qCritical().noquote() << message;
+          application.exit(EXIT_FAILURE);
+        };
+        auto* couch = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchLibrary"));
+        auto* strip = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchGameStrip"));
+        auto* view = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchViewButton"));
+        auto* favorite =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchFavoriteButton"));
+        auto* settings =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSettingsButton"));
+        if (!quickWindow->property("couchMode").toBool() || couch == nullptr ||
+            !couch->isVisible() || strip == nullptr || view == nullptr || favorite == nullptr ||
+            settings == nullptr) {
+          fail(QStringLiteral("Couch navigation test could not find the couch controls"));
+          return;
+        }
+        strip->setProperty("currentIndex", 0);
+        strip->forceActiveFocus();
+        controller.keyRequested(Qt::Key_Right, Qt::NoModifier);
+        QTimer::singleShot(50, quickWindow,
+                           [quickWindow, &application, &controller, strip, view, favorite, settings,
+                            fail] {
+          if (!strip->hasActiveFocus() || strip->property("currentIndex").toInt() != 1) {
+            fail(QStringLiteral("Controller Right did not advance the couch game strip"));
+            return;
+          }
+          const auto sendKey = [&controller](int key) {
+            controller.keyRequested(key, Qt::NoModifier);
+            QEventLoop eventLoop;
+            QTimer::singleShot(30, &eventLoop, &QEventLoop::quit);
+            eventLoop.exec();
+          };
+          sendKey(Qt::Key_Up);
+          if (!view->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Up did not reach the couch game action"));
+            return;
+          }
+          sendKey(Qt::Key_Right);
+          if (!favorite->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Right did not reach the couch favorite action"));
+            return;
+          }
+          controller.toolbarRequested();
+          QCoreApplication::processEvents();
+          if (!strip->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Controls did not return to the couch game strip"));
+            return;
+          }
+          controller.toolbarRequested();
+          QCoreApplication::processEvents();
+          if (!view->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Controls did not return to couch actions"));
+            return;
+          }
+          sendKey(Qt::Key_Up);
+          for (int step = 0; step < 3; ++step) {
+            sendKey(Qt::Key_Right);
+          }
+          if (!settings->hasActiveFocus()) {
+            fail(QStringLiteral("Controller could not reach couch Settings"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          QTimer::singleShot(80, quickWindow, [quickWindow, &application, &controller, fail] {
+            if (!quickWindow->property("diagnosticsOpen").toBool()) {
+              fail(QStringLiteral("Couch Settings did not open"));
+              return;
+            }
+            controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
+            QTimer::singleShot(50, quickWindow, [quickWindow, &application, &controller, fail] {
+              if (quickWindow->property("diagnosticsOpen").toBool()) {
+                fail(QStringLiteral("Controller Back did not close couch Settings"));
+                return;
+              }
+              controller.keyRequested(Qt::Key_F11, Qt::NoModifier);
+              QTimer::singleShot(50, quickWindow, [quickWindow, &application, fail] {
+                if (quickWindow->property("couchMode").toBool()) {
+                  fail(QStringLiteral("Controller Start did not return to desktop mode"));
+                  return;
+                }
+                application.quit();
+              });
+            });
+          });
+        });
+      });
+    } else if (navigationTest) {
       QTimer::singleShot(150, quickWindow, [quickWindow, &application, &controller, ownedLayoutTest] {
         auto fail = [&application](const QString& message) {
           qCritical().noquote() << message;
@@ -1139,7 +1237,11 @@ int main(int argc, char* argv[]) {
                        return;
                      }
                      if (fullscreen) {
-                       rootWindow->showFullScreen();
+                       if (!QMetaObject::invokeMethod(rootWindow, "setCouchMode",
+                                                      Q_ARG(QVariant, true))) {
+                         rootWindow->setProperty("couchMode", true);
+                         rootWindow->showFullScreen();
+                       }
                      } else {
                        rootWindow->show();
                      }

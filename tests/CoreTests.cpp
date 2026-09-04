@@ -3075,6 +3075,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   {
     AppSettings settings(path);
     QVERIFY(!settings.closeAfterLaunch());
+    QVERIFY(!settings.couchModeEnabled());
     settings.setReducedMotion(true);
     settings.setArtworkCacheLimitMb(512);
     settings.setSteamId(QStringLiteral("76561198000000000"));
@@ -3089,6 +3090,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     settings.setRyujinxEnabled(false);
     settings.setBattleNetEnabled(false);
     settings.setCloseAfterLaunch(true);
+    settings.setCouchModeEnabled(true);
   }
   AppSettings reloaded(path);
   QVERIFY(reloaded.reducedMotion());
@@ -3106,6 +3108,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   QVERIFY(!reloaded.ryujinxAutoEnabled());
   QVERIFY(!reloaded.battleNetEnabled());
   QVERIFY(reloaded.closeAfterLaunch());
+  QVERIFY(reloaded.couchModeEnabled());
 
   // A config without emulator keys keeps auto-detection pending and the keys absent
   // even after unrelated settings change.

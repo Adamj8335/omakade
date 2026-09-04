@@ -186,6 +186,17 @@ void AppSettings::setCloseAfterLaunch(bool value) {
   emit closeAfterLaunchChanged();
 }
 
+bool AppSettings::couchModeEnabled() const { return m_couchModeEnabled; }
+
+void AppSettings::setCouchModeEnabled(bool value) {
+  if (m_couchModeEnabled == value) {
+    return;
+  }
+  m_couchModeEnabled = value;
+  save();
+  emit couchModeEnabledChanged();
+}
+
 QString AppSettings::defaultPath() {
   return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
          QStringLiteral("/omakade/config.toml");
@@ -247,6 +258,7 @@ void AppSettings::load() {
   m_ryujinxEnabled = readEnabled(QStringLiteral("ryujinx_enabled"), false);
   m_battleNetEnabled = readEnabled(QStringLiteral("battlenet_enabled"), true);
   m_closeAfterLaunch = readEnabled(QStringLiteral("close_after_launch"), false);
+  m_couchModeEnabled = readEnabled(QStringLiteral("couch_mode_enabled"), false);
   m_sunshineOmakadeApp = readEnabled(QStringLiteral("sunshine_omakade_app"), false);
   m_sunshineGameApps = readEnabled(QStringLiteral("sunshine_game_apps"), false);
 }
@@ -308,8 +320,10 @@ void AppSettings::save() const {
                     .arg(m_ryujinxEnabled ? QStringLiteral("true") : QStringLiteral("false"));
   }
   contents += QStringLiteral("close_after_launch = %1\n"
-                             "sunshine_omakade_app = %2\nsunshine_game_apps = %3\n")
+                             "couch_mode_enabled = %2\n"
+                             "sunshine_omakade_app = %3\nsunshine_game_apps = %4\n")
                   .arg(m_closeAfterLaunch ? QStringLiteral("true") : QStringLiteral("false"))
+                  .arg(m_couchModeEnabled ? QStringLiteral("true") : QStringLiteral("false"))
                   .arg(m_sunshineOmakadeApp ? QStringLiteral("true") : QStringLiteral("false"))
                   .arg(m_sunshineGameApps ? QStringLiteral("true") : QStringLiteral("false"));
   file.write(contents.toUtf8());

@@ -41,6 +41,14 @@ add_test(NAME omakade_controller_navigation_wide
   COMMAND omakade --controller-navigation-test --owned-layout-test --uninstalled-layout-test
           --render-size=1600x900
 )
+
+add_test(NAME omakade_couch_navigation
+  COMMAND omakade --couch --couch-navigation-test --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_navigation PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
 set_tests_properties(omakade_controller_navigation_wide PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30
@@ -49,6 +57,26 @@ set_tests_properties(omakade_controller_navigation_wide PROPERTIES
 add_test(NAME omakade_render_smoke
   COMMAND omakade --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-render.png
           --render-size=820x590
+)
+
+add_test(NAME omakade_couch_render
+  COMMAND omakade --couch
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch.png
+          --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
+
+add_test(NAME omakade_couch_detail_render
+  COMMAND omakade --couch --uninstalled-layout-test
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-detail.png
+          --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_detail_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
 )
 set_tests_properties(omakade_render_smoke PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"

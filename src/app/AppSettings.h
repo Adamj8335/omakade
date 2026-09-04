@@ -26,6 +26,8 @@ class AppSettings final : public QObject {
       bool battleNetEnabled READ battleNetEnabled WRITE setBattleNetEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool closeAfterLaunch READ closeAfterLaunch WRITE setCloseAfterLaunch NOTIFY
                  closeAfterLaunchChanged)
+  Q_PROPERTY(bool couchModeEnabled READ couchModeEnabled WRITE setCouchModeEnabled NOTIFY
+                 couchModeEnabledChanged)
   Q_PROPERTY(bool sunshineOmakadeApp READ sunshineOmakadeApp WRITE setSunshineOmakadeApp NOTIFY
                  sunshineChanged)
   Q_PROPERTY(bool sunshineGameApps READ sunshineGameApps WRITE setSunshineGameApps NOTIFY
@@ -68,6 +70,8 @@ public:
   void setBattleNetEnabled(bool value);
   [[nodiscard]] bool closeAfterLaunch() const;
   void setCloseAfterLaunch(bool value);
+  [[nodiscard]] bool couchModeEnabled() const;
+  void setCouchModeEnabled(bool value);
   [[nodiscard]] bool sunshineOmakadeApp() const;
   void setSunshineOmakadeApp(bool value);
   [[nodiscard]] bool sunshineGameApps() const;
@@ -81,6 +85,7 @@ signals:
   void retroAchievementsUsernameChanged();
   void sourcesChanged();
   void closeAfterLaunchChanged();
+  void couchModeEnabledChanged();
   void sunshineChanged();
 
 private:
@@ -105,6 +110,7 @@ private:
   bool m_ryujinxAuto = true;
   bool m_battleNetEnabled = true;
   bool m_closeAfterLaunch = false;
+  bool m_couchModeEnabled = false;
   bool m_sunshineOmakadeApp = false;
   bool m_sunshineGameApps = false;
 };
