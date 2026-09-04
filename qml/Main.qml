@@ -20,9 +20,16 @@ ApplicationWindow {
     property bool collectionDeleteOpen: false
     // The organize filters open a picker list instead of cycling through every value.
     property bool filterPickerOpen: false
+    property bool couchTextEntryOpen: false
+    property var couchTextEntryTarget: null
+    property string couchTextEntryTitle: "ENTER TEXT"
+    property bool couchTextEntryPassword: false
+    property string couchTextEntryPlaceholder: "Start typing"
     property string filterPickerKind: ""
     property var filterPickerValues: []
     property string pendingCollectionDelete: ""
+    property bool couchMode: CouchModeRequested
+    property int desktopVisibility: Window.Windowed
     readonly property bool libraryScanning: (SteamLibrary ? SteamLibrary.scanning : false)
                                             || (LutrisLibrary ? LutrisLibrary.scanning : false)
                                             || (HeroicLibrary ? HeroicLibrary.scanning : false)
@@ -80,6 +87,9 @@ ApplicationWindow {
     }
 
     function navigationContainer() {
+        if (couchTextEntryOpen) {
+            return null
+        }
         if (filterPickerOpen) {
             return filterPickerOverlay
         }
@@ -250,6 +260,10 @@ ApplicationWindow {
         if (root.navigationContainer() !== null) {
             return
         }
+        if (root.couchMode) {
+            couchLibraryView.toggleControls()
+            return
+        }
         if (libraryView.gridFocused) {
             sortButton.forceActiveFocus(Qt.TabFocusReason)
         } else {
@@ -290,8 +304,42 @@ ApplicationWindow {
         } else if (detailOpen && detailsLoader.item) {
             Qt.callLater(function() { root.focusWithin(detailsLoader.item, true) })
         } else {
-            Qt.callLater(libraryView.focusGrid)
+            Qt.callLater(root.focusLibrary)
         }
+    }
+
+    function openCouchTextEntry(target, title, password, placeholder) {
+        if (!root.couchMode || !target) {
+            return
+        }
+        couchTextEntryTarget = target
+        couchTextEntryTitle = title || "ENTER TEXT"
+        couchTextEntryPassword = password || false
+        couchTextEntryPlaceholder = placeholder || "Start typing"
+        couchTextEntryKeyboard.value = target.text || ""
+        couchTextEntryKeyboard.keyboardMode = "upper"
+        couchTextEntryOpen = true
+        Qt.callLater(couchTextEntryKeyboard.focusKeyboard)
+    }
+
+    function closeCouchTextEntry(accepted) {
+        const target = couchTextEntryTarget
+        if (accepted && target) {
+            target.text = couchTextEntryKeyboard.value
+        }
+        couchTextEntryOpen = false
+        couchTextEntryTarget = null
+        if (target) {
+            Qt.callLater(function() { root.restoreFocus(target) })
+        }
+    }
+
+    function handleCouchTextEntry(event, target, title, password, placeholder) {
+        if (!root.couchMode) {
+            return
+        }
+        root.openCouchTextEntry(target, title, password, placeholder)
+        event.accepted = true
     }
 
     function alpha(color, value) {
@@ -346,7 +394,35 @@ ApplicationWindow {
 
     function closeDetails() {
         detailOpen = false
-        Qt.callLater(libraryView.focusGrid)
+        Qt.callLater(root.focusLibrary)
+    }
+
+    function focusLibrary() {
+        if (root.couchMode) {
+            couchLibraryView.focusGrid()
+        } else {
+            libraryView.focusGrid()
+        }
+    }
+
+    function setCouchMode(enabled) {
+        if (root.couchMode === enabled) {
+            return
+        }
+        if (enabled) {
+            couchLibraryView.currentIndex = libraryView.currentIndex
+            root.desktopVisibility = root.visibility
+        } else {
+            libraryView.currentIndex = couchLibraryView.currentIndex
+        }
+        root.couchMode = enabled
+        Preferences.couchModeEnabled = enabled
+        root.visibility = enabled ? Window.FullScreen : root.desktopVisibility
+        Qt.callLater(root.focusLibrary)
+    }
+
+    function toggleCouchMode() {
+        setCouchMode(!root.couchMode)
     }
 
     function showToast(message) {
@@ -535,14 +611,14 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+F"
-        enabled: !root.detailOpen && !root.diagnosticsOpen && !root.linkDialogOpen
+        enabled: !root.couchMode && !root.detailOpen && !root.diagnosticsOpen
+                 && !root.linkDialogOpen
                  && !root.collectionDeleteOpen
         onActivated: searchField.forceActiveFocus()
     }
     Shortcut {
         sequence: "F11"
-        onActivated: root.visibility = root.visibility === Window.FullScreen
-                     ? Window.Windowed : Window.FullScreen
+        onActivated: root.toggleCouchMode()
     }
     Shortcut {
         sequence: "Ctrl+M"
@@ -594,8 +670,14 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            if (root.filterPickerOpen) {
+            if (root.couchTextEntryOpen) {
+                root.closeCouchTextEntry(false)
+            } else if (root.filterPickerOpen) {
                 root.filterPickerOpen = false
+            } else if (root.couchMode && couchLibraryView.searchOpen) {
+                couchLibraryView.closeSearch(false)
+            } else if (root.couchMode && couchLibraryView.browseOpen) {
+                couchLibraryView.closeBrowse()
             } else if (root.linkDialogOpen) {
                 root.linkDialogOpen = false
             } else if (root.collectionDeleteOpen) {
@@ -609,11 +691,11 @@ ApplicationWindow {
                 detailsLoader.item.closeCollectionEditor()
             } else if (root.detailOpen) {
                 root.closeDetails()
-            } else if (searchField.text.length > 0) {
+            } else if (!root.couchMode && searchField.text.length > 0) {
                 searchField.clear()
                 libraryView.focusGrid()
-            } else if (!libraryView.gridFocused) {
-                libraryView.focusGrid()
+            } else if (root.couchMode || !libraryView.gridFocused) {
+                root.focusLibrary()
             }
         }
     }
@@ -621,24 +703,29 @@ ApplicationWindow {
     Binding {
         target: Controller
         property: "focusNavigation"
-        value: root.detailOpen || root.diagnosticsOpen || root.linkDialogOpen
-               || root.collectionDeleteOpen || !libraryView.gridFocused
+        value: !root.couchTextEntryOpen
+               && (root.detailOpen || root.diagnosticsOpen || root.linkDialogOpen
+               || root.collectionDeleteOpen
+               || (!root.couchMode && !libraryView.gridFocused))
     }
     Shortcut {
         sequence: "Return"
-        enabled: root.navigationContainer() === null && libraryView.gridFocused
+        enabled: !root.couchMode && root.navigationContainer() === null
+                 && libraryView.gridFocused
                  && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
     Shortcut {
         sequence: "Enter"
-        enabled: root.navigationContainer() === null && libraryView.gridFocused
+        enabled: !root.couchMode && root.navigationContainer() === null
+                 && libraryView.gridFocused
                  && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
     Shortcut {
         sequence: "Space"
-        enabled: root.navigationContainer() === null && libraryView.gridFocused
+        enabled: !root.couchMode && root.navigationContainer() === null
+                 && libraryView.gridFocused
                  && libraryView.currentIndex >= 0
         onActivated: root.openGame(libraryView.currentIndex)
     }
@@ -647,7 +734,7 @@ ApplicationWindow {
         // Only give the grid focus when nothing has it, so alt-tabbing back does not pull
         // focus away from a toolbar control or an empty-state button.
         if (active && root.navigationContainer() === null && !root.activeFocusItem) {
-            Qt.callLater(libraryView.focusGrid)
+            Qt.callLater(root.focusLibrary)
         }
     }
     onClosing: function(close) {
@@ -687,8 +774,8 @@ ApplicationWindow {
         anchors.fill: parent
         opacity: root.detailOpen ? 0 : 1
         scale: root.detailOpen ? 0.985 : 1
-        visible: opacity > 0
-        enabled: !root.detailOpen
+        visible: !root.couchMode && opacity > 0
+        enabled: !root.couchMode && !root.detailOpen
 
         // Arrow keys move between the filters and toolbar controls, and Down with nothing
         // below drops back into the game grid. Controller directions take the same path.
@@ -879,6 +966,14 @@ ApplicationWindow {
                     text: "SETTINGS"
                     compact: true
                     onClicked: root.diagnosticsOpen = true
+                }
+
+                GlassButton {
+                    id: couchModeButton
+                    objectName: "couchModeButton"
+                    text: "COUCH"
+                    compact: true
+                    onClicked: root.setCouchMode(true)
                 }
             }
 
@@ -1331,6 +1426,31 @@ ApplicationWindow {
         }
     }
 
+    CouchLibraryView {
+        id: couchLibraryView
+        objectName: "couchLibrary"
+        anchors.fill: parent
+        visible: root.couchMode && !root.detailOpen
+        enabled: visible && root.navigationContainer() === null
+        libraryModel: Library
+        scanning: root.libraryScanning
+
+        onGameActivated: index => root.openGame(index)
+        onFavoriteToggled: function(index) {
+            Library.toggleFavorite(index)
+            couchLibraryView.refreshCurrentGame()
+        }
+        onSettingsRequested: root.diagnosticsOpen = true
+        onDesktopRequested: root.setCouchMode(false)
+        onCoverRequested: function(source, appId) {
+            if (source === "Steam" && SteamLibrary) {
+                SteamLibrary.requestCover(appId)
+            } else if (source === "Battle.net" && BattleNetLibrary) {
+                BattleNetLibrary.requestCover(appId)
+            }
+        }
+    }
+
     Loader {
         id: detailsLoader
         anchors.fill: parent
@@ -1353,6 +1473,7 @@ ApplicationWindow {
             game: root.selectedGame
             installations: root.selectedInstallations
             selectedInstallation: root.selectedInstallation
+            couchMode: root.couchMode
             navigationEnabled: !root.linkDialogOpen && !root.diagnosticsOpen
                                && !root.collectionDeleteOpen
             onBackRequested: root.closeDetails()
@@ -1420,6 +1541,9 @@ ApplicationWindow {
                     root.showToast("That collection already exists or is invalid")
                 }
             }
+            onTextEntryRequested: function(target, title, password, placeholder) {
+                root.openCouchTextEntry(target, title, password, placeholder)
+            }
         }
     }
 
@@ -1486,13 +1610,23 @@ ApplicationWindow {
             }
             TextField {
                 id: linkSearch
-                property bool controllerNavigation: false
+                property bool controllerNavigation: root.couchMode
                 Layout.fillWidth: true
                 placeholderText: "Search installed games"
                 Accessible.name: placeholderText
                 color: Theme.foreground
                 font.family: Theme.fontFamily
                 onTextChanged: root.linkResults = Library.linkCandidates(root.selectedIndex, text)
+                Keys.onReturnPressed: function(event) {
+                    root.handleCouchTextEntry(event, linkSearch,
+                                              "SEARCH INSTALLATIONS", false,
+                                              linkSearch.placeholderText)
+                }
+                Keys.onEnterPressed: function(event) {
+                    root.handleCouchTextEntry(event, linkSearch,
+                                              "SEARCH INSTALLATIONS", false,
+                                              linkSearch.placeholderText)
+                }
                 Keys.onDownPressed: function(event) {
                     if (candidateList.count > 0) {
                         candidateList.currentIndex = 0
@@ -1751,10 +1885,17 @@ ApplicationWindow {
         }
 
         Rectangle {
+            id: settingsPanel
             anchors.centerIn: parent
-            width: Math.min(610, parent.width - 48)
-            height: Math.min(760, parent.height - 48)
-            radius: Math.max(8, Theme.cornerRadius)
+            readonly property real uiScale: root.couchMode
+                                                ? Math.max(1, Math.min(1.35,
+                                                                      root.height / 900))
+                                                : 1
+            width: Math.min(root.couchMode ? 1280 : 610,
+                            parent.width - (root.couchMode ? 96 : 48))
+            height: Math.min(root.couchMode ? 900 : 760,
+                             parent.height - (root.couchMode ? 72 : 48))
+            radius: Math.max(root.couchMode ? 14 : 8, Theme.cornerRadius)
             color: root.alpha(Theme.background, 0.98)
             border.color: root.alpha(Theme.foreground, 0.2)
 
@@ -1765,7 +1906,8 @@ ApplicationWindow {
                 objectName: "settingsScroll"
                 readonly property real navigationContentY: contentItem ? contentItem.contentY : 0
                 anchors.fill: parent
-                anchors.margins: 28
+                anchors.margins: root.couchMode ? 42 : 28
+                anchors.bottomMargin: root.couchMode ? 70 : 28
                 rightPadding: 18
                 contentWidth: availableWidth
 
@@ -1777,14 +1919,14 @@ ApplicationWindow {
                     text: "SETTINGS & SOURCES"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 20
+                    font.pixelSize: 20 * settingsPanel.uiScale
                     font.weight: Font.Bold
                 }
                 Text {
                     text: "GAME SOURCES"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Repeater {
@@ -1841,7 +1983,7 @@ ApplicationWindow {
                                 text: modelData.name
                                 color: modelData.enabled ? Theme.accent : Theme.mutedText
                                 font.family: Theme.fontFamily
-                                font.pixelSize: 11
+                                font.pixelSize: 11 * settingsPanel.uiScale
                                 font.weight: Font.Bold
                             }
                             GlassButton {
@@ -1909,7 +2051,7 @@ ApplicationWindow {
                             text: modelData.status + " · " + root.scanTime(modelData.lastScan)
                             color: Theme.foreground
                             font.family: Theme.fontFamily
-                            font.pixelSize: 10
+                            font.pixelSize: 10 * settingsPanel.uiScale
                             wrapMode: Text.Wrap
                         }
                         Text {
@@ -1918,7 +2060,7 @@ ApplicationWindow {
                             text: modelData.paths.join("\n")
                             color: Theme.mutedText
                             font.family: Theme.fontFamily
-                            font.pixelSize: 9
+                            font.pixelSize: 9 * settingsPanel.uiScale
                             wrapMode: Text.WrapAnywhere
                         }
                         Text {
@@ -1927,7 +2069,7 @@ ApplicationWindow {
                             text: modelData.error
                             color: Theme.yellow
                             font.family: Theme.fontFamily
-                            font.pixelSize: 9
+                            font.pixelSize: 9 * settingsPanel.uiScale
                             wrapMode: Text.Wrap
                         }
                     }
@@ -1937,7 +2079,7 @@ ApplicationWindow {
                     text: "Demo library"
                     color: Theme.accent
                     font.family: Theme.fontFamily
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * settingsPanel.uiScale
                 }
                 Repeater {
                     model: [
@@ -1956,14 +2098,14 @@ ApplicationWindow {
                             text: modelData.label
                             color: Theme.mutedText
                             font.family: Theme.fontFamily
-                            font.pixelSize: 10
+                            font.pixelSize: 10 * settingsPanel.uiScale
                         }
                         Text {
                             Layout.fillWidth: true
                             text: modelData.value
                             color: Theme.foreground
                             font.family: Theme.fontFamily
-                            font.pixelSize: 11
+                            font.pixelSize: 11 * settingsPanel.uiScale
                             elide: Text.ElideMiddle
                         }
                     }
@@ -1977,7 +2119,7 @@ ApplicationWindow {
                     text: "OPTIONAL STEAM CONNECTION"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -1990,7 +2132,7 @@ ApplicationWindow {
                                             || SteamAccount.state === "rate-limited")
                            ? Theme.yellow : Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -1998,7 +2140,7 @@ ApplicationWindow {
                     enabled: SteamAccount !== null
                     TextField {
                         id: steamIdField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: "Steam ID (17 digits, starts with 7656119)"
                         Accessible.name: "Steam ID"
@@ -2011,6 +2153,14 @@ ApplicationWindow {
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
                         inputMethodHints: Qt.ImhDigitsOnly
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, steamIdField, "STEAM ID", false,
+                                                      steamIdField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, steamIdField, "STEAM ID", false,
+                                                      steamIdField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2031,7 +2181,7 @@ ApplicationWindow {
                     enabled: SteamAccount !== null && !SteamAccount.busy
                     TextField {
                         id: apiKeyField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         Accessible.name: "Steam Web API key"
                         placeholderText: SteamAccount && SteamAccount.hasApiKey
@@ -2040,6 +2190,14 @@ ApplicationWindow {
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         echoMode: TextInput.Password
                         font.family: Theme.fontFamily
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, apiKeyField, "STEAM WEB API KEY", true,
+                                                      apiKeyField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, apiKeyField, "STEAM WEB API KEY", true,
+                                                      apiKeyField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2086,7 +2244,7 @@ ApplicationWindow {
                               ? SteamAccount.ownedGameCount + " OWNED GAMES CACHED" : ""
                         color: Theme.mutedText
                         font.family: Theme.fontFamily
-                        font.pixelSize: 9
+                        font.pixelSize: 9 * settingsPanel.uiScale
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -2095,7 +2253,7 @@ ApplicationWindow {
                     text: "OWNED LIBRARY SYNC REQUIRES PUBLIC STEAM GAME DETAILS"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 8
+                    font.pixelSize: 8 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Rectangle {
@@ -2107,7 +2265,7 @@ ApplicationWindow {
                     text: "OPTIONAL RETROACHIEVEMENTS CONNECTION"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2120,7 +2278,7 @@ ApplicationWindow {
                                                  || RetroAchievements.state === "rate-limited")
                            ? Theme.yellow : Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -2128,13 +2286,23 @@ ApplicationWindow {
                     enabled: RetroAchievements !== null && !RetroAchievements.busy
                     TextField {
                         id: retroAchievementsUsernameField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: "RetroAchievements username"
                         text: RetroAchievements ? RetroAchievements.username : ""
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsUsernameField,
+                                                      "RETROACHIEVEMENTS USERNAME", false,
+                                                      retroAchievementsUsernameField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsUsernameField,
+                                                      "RETROACHIEVEMENTS USERNAME", false,
+                                                      retroAchievementsUsernameField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2155,13 +2323,23 @@ ApplicationWindow {
                     enabled: RetroAchievements !== null && !RetroAchievements.busy
                     TextField {
                         id: retroAchievementsKeyField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: RetroAchievements && RetroAchievements.hasApiKey
                                          ? "API key stored securely" : "RetroAchievements Web API key"
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         echoMode: TextInput.Password
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsKeyField,
+                                                      "RETROACHIEVEMENTS API KEY", true,
+                                                      retroAchievementsKeyField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsKeyField,
+                                                      "RETROACHIEVEMENTS API KEY", true,
+                                                      retroAchievementsKeyField.placeholderText)
+                        }
                         font.family: Theme.fontFamily
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
@@ -2197,7 +2375,7 @@ ApplicationWindow {
                     text: "SUPPORTS NES, SNES, GENESIS, GAME BOY AND OTHER CARTRIDGE SYSTEMS FIRST; DISC-BASED SYSTEMS ARE NOT MATCHED YET"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 8
+                    font.pixelSize: 8 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Rectangle {
@@ -2209,7 +2387,7 @@ ApplicationWindow {
                     text: "OPTIONAL GAME INSIGHTS"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2217,7 +2395,7 @@ ApplicationWindow {
                     text: Insights ? Insights.statusText : "IGDB is unavailable in demo mode."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Text {
@@ -2225,7 +2403,7 @@ ApplicationWindow {
                     text: "TWITCH SETUP · Create Application, not Extension · Redirect: http://localhost · Client type: Confidential · Manage → New Secret"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 9
+                    font.pixelSize: 9 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -2233,7 +2411,7 @@ ApplicationWindow {
                     enabled: Insights !== null && !Insights.busy
                     TextField {
                         id: igdbClientIdField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: "Twitch developer client ID"
                         Accessible.name: placeholderText
@@ -2243,6 +2421,16 @@ ApplicationWindow {
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbClientIdField,
+                                                      "TWITCH CLIENT ID", false,
+                                                      igdbClientIdField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbClientIdField,
+                                                      "TWITCH CLIENT ID", false,
+                                                      igdbClientIdField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2263,7 +2451,7 @@ ApplicationWindow {
                     enabled: Insights !== null && !Insights.busy
                     TextField {
                         id: igdbSecretField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         Accessible.name: "Twitch developer client secret"
                         placeholderText: Insights && Insights.hasClientSecret
@@ -2271,6 +2459,16 @@ ApplicationWindow {
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         echoMode: TextInput.Password
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbSecretField,
+                                                      "TWITCH CLIENT SECRET", true,
+                                                      igdbSecretField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbSecretField,
+                                                      "TWITCH CLIENT SECRET", true,
+                                                      igdbSecretField.placeholderText)
+                        }
                         font.family: Theme.fontFamily
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
@@ -2310,7 +2508,7 @@ ApplicationWindow {
                     text: "STREAM WITH SUNSHINE AND MOONLIGHT"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2318,7 +2516,7 @@ ApplicationWindow {
                     text: Sunshine ? Sunshine.statusText : "Sunshine export is unavailable in demo mode."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Text {
@@ -2326,7 +2524,7 @@ ApplicationWindow {
                     text: "Moonlight shows Sunshine's app list. Omakade can add itself next to Steam Big Picture and one app per installed game with its cover. Sunshine reads the list when it starts, so restart it after changes."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 9
+                    font.pixelSize: 9 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -2337,7 +2535,7 @@ ApplicationWindow {
                         text: "OMAKADE IN MOONLIGHT"
                         color: Theme.foreground
                         font.family: Theme.fontFamily
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * settingsPanel.uiScale
                     }
                     GlassButton {
                         objectName: "sunshineOmakadeButton"
@@ -2356,7 +2554,7 @@ ApplicationWindow {
                               : "ONE APP PER INSTALLED GAME"
                         color: Theme.foreground
                         font.family: Theme.fontFamily
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * settingsPanel.uiScale
                     }
                     GlassButton {
                         objectName: "sunshineGamesButton"
@@ -2391,7 +2589,7 @@ ApplicationWindow {
                     text: "LIBRARY COLLECTIONS"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2399,7 +2597,7 @@ ApplicationWindow {
                     text: "Create collections from a game's details."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                 }
                 Repeater {
                     model: Library.collectionNames
@@ -2411,7 +2609,7 @@ ApplicationWindow {
                             text: modelData
                             color: Theme.foreground
                             font.family: Theme.fontFamily
-                            font.pixelSize: 11
+                            font.pixelSize: 11 * settingsPanel.uiScale
                             elide: Text.ElideRight
                         }
                         GlassButton {
@@ -2484,6 +2682,20 @@ ApplicationWindow {
                     }
                 }
             }
+            }
+
+            Text {
+                visible: root.couchMode
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 42
+                anchors.bottomMargin: 24
+                text: Controller.primaryGlyph + "  SELECT     "
+                      + Controller.backGlyph + "  CLOSE"
+                color: Theme.mutedText
+                font.family: Theme.fontFamily
+                font.pixelSize: 12 * settingsPanel.uiScale
+                font.weight: Font.DemiBold
             }
         }
     }
@@ -2567,9 +2779,24 @@ ApplicationWindow {
         }
     }
 
+    CouchKeyboard {
+        id: couchTextEntryKeyboard
+        objectName: "couchTextEntryKeyboard"
+        anchors.fill: parent
+        visible: root.couchTextEntryOpen
+        enabled: visible
+        z: 100
+        title: root.couchTextEntryTitle
+        placeholder: root.couchTextEntryPlaceholder
+        passwordMode: root.couchTextEntryPassword
+        gridObjectName: "couchTextEntryGrid"
+        onAccepted: root.closeCouchTextEntry(true)
+        onCanceled: root.closeCouchTextEntry(false)
+    }
+
     Component.onCompleted: {
         smokeReady = true
-        libraryView.focusGrid()
+        root.focusLibrary()
     }
 
     Connections {
@@ -2586,6 +2813,7 @@ ApplicationWindow {
             }
             if (libraryView.currentIndex < 0 && Library.rowCount() > 0) {
                 libraryView.currentIndex = 0
+                couchLibraryView.currentIndex = 0
             }
             if (root.detailOpen
                     && !root.refreshSelected(root.selectedGame.source,
@@ -2616,7 +2844,7 @@ ApplicationWindow {
         target: Controller
         function onFocusDirectionRequested(key) {
             const container = root.navigationContainer()
-            if (!container && !libraryView.gridFocused
+            if (!root.couchMode && !container && !libraryView.gridFocused
                     && !root.focusSpatial(librarySurface, key)
                     && key === Qt.Key_Down) {
                 libraryView.focusGrid()
@@ -2633,6 +2861,13 @@ ApplicationWindow {
                     && !root.collectionDeleteOpen) {
                 Library.toggleFavorite(root.selectedIndex)
                 root.refreshAfterOrganization()
+            } else if (root.couchMode && !root.detailOpen
+                       && root.navigationContainer() === null
+                       && !couchLibraryView.searchOpen
+                       && !couchLibraryView.browseOpen
+                       && couchLibraryView.currentIndex >= 0) {
+                Library.toggleFavorite(couchLibraryView.currentIndex)
+                couchLibraryView.refreshCurrentGame()
             } else if (!root.detailOpen && root.navigationContainer() === null
                        && libraryView.gridFocused && libraryView.currentIndex >= 0) {
                 Library.toggleFavorite(libraryView.currentIndex)

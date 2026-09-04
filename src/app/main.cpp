@@ -44,6 +44,7 @@
 #include <QTimer>
 #include <QWindow>
 
+#include <algorithm>
 #include <memory>
 
 namespace {
@@ -134,8 +135,11 @@ int main(int argc, char* argv[]) {
   const bool quitRequest = application.arguments().contains(QStringLiteral("--quit"));
   const bool renderMode = !screenshotPath.isEmpty();
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
-  const bool navigationTest =
-      application.arguments().contains(QStringLiteral("--controller-navigation-test"));
+  const bool couchNavigationTest =
+      application.arguments().contains(QStringLiteral("--couch-navigation-test"));
+  const bool navigationTest = couchNavigationTest ||
+                              application.arguments().contains(
+                                  QStringLiteral("--controller-navigation-test"));
   const bool ownedLayoutTest =
       application.arguments().contains(QStringLiteral("--owned-layout-test"));
   const bool uninstalledLayoutTest =
@@ -143,7 +147,24 @@ int main(int argc, char* argv[]) {
   const bool demoMode = smokeTest || renderMode ||
                         application.arguments().contains(QStringLiteral("--demo"));
   const bool benchmarkMode = application.arguments().contains(QStringLiteral("--benchmark"));
+  const QString benchmarkMaxOption = QStringLiteral("--benchmark-max-ms");
+  const bool benchmarkLimitSupplied =
+      std::ranges::any_of(application.arguments(), [&benchmarkMaxOption](const QString& argument) {
+        return argument == benchmarkMaxOption ||
+               argument.startsWith(benchmarkMaxOption + QLatin1Char('='));
+      });
+  bool benchmarkLimitValid = false;
+  const int benchmarkMaxMs =
+      optionValue(application.arguments(), benchmarkMaxOption).toInt(&benchmarkLimitValid);
+  if (benchmarkLimitSupplied && (!benchmarkLimitValid || benchmarkMaxMs <= 0)) {
+    qCritical() << "--benchmark-max-ms requires a positive integer";
+    return EXIT_FAILURE;
+  }
   const bool stressMode = application.arguments().contains(QStringLiteral("--stress-test"));
+  const bool reducedMotionRequest =
+      application.arguments().contains(QStringLiteral("--reduced-motion"));
+  const bool couchRequest = application.arguments().contains(QStringLiteral("--couch")) ||
+                            SunshineIntegration::streaming();
   if (benchmarkMode) {
     qInfo() << "Theme ready in" << startupTimer.elapsed() << "ms";
   }
@@ -153,7 +174,7 @@ int main(int argc, char* argv[]) {
   SingleInstance singleInstance;
   const QByteArray instanceCommand =
       !playKey.isEmpty()                 ? QByteArray("play ") + playKey.toUtf8()
-      : SunshineIntegration::streaming() ? QByteArray("activate stream")
+      : couchRequest                     ? QByteArray("activate stream")
                                          : QByteArray("activate");
   if (!smokeTest && !renderMode && !navigationTest &&
       !singleInstance.claimOrNotify(instanceCommand)) {
@@ -165,6 +186,10 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("/omakade-test-%1.toml").arg(QCoreApplication::applicationPid())
           : QString{};
   AppSettings preferences(settingsPath);
+  if (reducedMotionRequest) {
+    preferences.setReducedMotion(true);
+  }
+  const bool startInCouchMode = couchRequest || preferences.couchModeEnabled();
   ControllerInput controller;
   std::unique_ptr<QAbstractItemModel> games;
   std::unique_ptr<LutrisGameModel> lutrisGames;
@@ -450,6 +475,8 @@ int main(int argc, char* argv[]) {
                                            QCoreApplication::applicationVersion());
   engine.rootContext()->setContextProperty(QStringLiteral("OwnedGameCountOverride"),
                                            ownedLayoutTest ? 250 : 0);
+  engine.rootContext()->setContextProperty(QStringLiteral("CouchModeRequested"),
+                                           startInCouchMode);
 
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,
@@ -468,19 +495,20 @@ int main(int argc, char* argv[]) {
   }
 
   auto* rootWindow = qobject_cast<QWindow*>(engine.rootObjects().constFirst());
-  if (rootWindow != nullptr && qEnvironmentVariableIsSet("SUNSHINE_APP_ID") && !renderMode &&
-      !navigationTest && !smokeTest) {
-    // Sunshine launched Omakade for a Moonlight client, so fill the streamed display.
+  if (rootWindow != nullptr && startInCouchMode && !renderMode && !navigationTest && !smokeTest) {
+    // Couch mode fills the chosen display. Sunshine selects its configured output first.
     const QList<QScreen*> screens = QGuiApplication::screens();
     QStringList screenNames;
     screenNames.reserve(screens.size());
     for (const QScreen* screen : screens) {
       screenNames.append(screen->name());
     }
-    const int screenIndex = SunshineIntegration::outputScreenIndex(
-        SunshineIntegration::configuredOutputName(), screenNames);
-    if (screenIndex >= 0) {
-      rootWindow->setScreen(screens.at(screenIndex));
+    if (qEnvironmentVariableIsSet("SUNSHINE_APP_ID")) {
+      const int screenIndex = SunshineIntegration::outputScreenIndex(
+          SunshineIntegration::configuredOutputName(), screenNames);
+      if (screenIndex >= 0) {
+        rootWindow->setScreen(screens.at(screenIndex));
+      }
     }
     rootWindow->showFullScreen();
   }
@@ -493,24 +521,46 @@ int main(int argc, char* argv[]) {
       // `--render-overlay=settings|picker` opens an overlay so visual checks can cover it.
       const QString overlay =
           optionValue(application.arguments(), QStringLiteral("--render-overlay"));
-      if (overlay == QStringLiteral("settings")) {
+      if (overlay == QStringLiteral("settings") ||
+          overlay == QStringLiteral("couch-settings-top") ||
+          overlay == QStringLiteral("couch-settings-bottom")) {
         quickWindow->setProperty("diagnosticsOpen", true);
-        QTimer::singleShot(400, quickWindow, [quickWindow] {
-          // Scroll to the end so the lower sections land in the capture.
-          auto* scroll = quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
-          QObject* flickable =
-              scroll == nullptr ? nullptr : scroll->property("contentItem").value<QObject*>();
-          if (flickable != nullptr) {
-            flickable->setProperty("contentY", flickable->property("contentHeight").toReal() -
-                                                   scroll->height());
-          }
-        });
+        if (overlay == QStringLiteral("settings") ||
+            overlay == QStringLiteral("couch-settings-bottom")) {
+          QTimer::singleShot(400, quickWindow, [quickWindow] {
+            // Scroll to the end so the lower sections land in the capture.
+            auto* scroll = quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
+            QObject* flickable =
+                scroll == nullptr ? nullptr : scroll->property("contentItem").value<QObject*>();
+            if (flickable != nullptr) {
+              flickable->setProperty("contentY", flickable->property("contentHeight").toReal() -
+                                                     scroll->height());
+            }
+          });
+        }
       } else if (overlay == QStringLiteral("picker")) {
         QMetaObject::invokeMethod(
             quickWindow, "openFilterPicker", Q_ARG(QVariant, QStringLiteral("collection")),
             Q_ARG(QVariant, QVariant(QStringList{QStringLiteral("Couch co-op"),
                                                  QStringLiteral("Cozy evenings"),
                                                  QStringLiteral("Finish this year")})));
+      } else if (overlay == QStringLiteral("couch-search")) {
+        if (auto* couch = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchLibrary"))) {
+          QMetaObject::invokeMethod(couch, "openSearch");
+        }
+      } else if (overlay == QStringLiteral("couch-browse")) {
+        if (auto* couch = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchLibrary"))) {
+          QMetaObject::invokeMethod(couch, "openBrowse");
+        }
+      } else if (overlay == QStringLiteral("couch-entry")) {
+        if (auto* target = quickWindow->findChild<QQuickItem*>(QStringLiteral("searchField"))) {
+          target->setProperty("text", QStringLiteral("Secret-42!"));
+          QMetaObject::invokeMethod(
+              quickWindow, "openCouchTextEntry",
+              Q_ARG(QVariant, QVariant::fromValue(static_cast<QObject*>(target))),
+              Q_ARG(QVariant, QStringLiteral("ENTER API KEY")), Q_ARG(QVariant, true),
+              Q_ARG(QVariant, QStringLiteral("Enter a value")));
+        }
       }
       QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
         const QImage screenshot = quickWindow->grabWindow();
@@ -524,16 +574,388 @@ int main(int argc, char* argv[]) {
     }
     QObject::connect(
         quickWindow, &QQuickWindow::frameSwapped, &application,
-        [&application, &controller, &startupTimer, benchmarkMode] {
-          qInfo() << "First frame in" << startupTimer.elapsed() << "ms";
+        [&application, &controller, &startupTimer, benchmarkMode, benchmarkLimitSupplied,
+         benchmarkMaxMs] {
+          const qint64 firstFrameMs = startupTimer.elapsed();
+          qInfo() << "First frame in" << firstFrameMs << "ms";
           controller.start();
           if (benchmarkMode) {
-            application.quit();
+            if (benchmarkLimitSupplied && firstFrameMs > benchmarkMaxMs) {
+              qCritical() << "First frame exceeded benchmark limit of" << benchmarkMaxMs << "ms";
+              application.exit(EXIT_FAILURE);
+            } else {
+              application.quit();
+            }
           }
         },
         Qt::SingleShotConnection);
 
-    if (navigationTest) {
+    if (couchNavigationTest) {
+      QTimer::singleShot(150, quickWindow, [quickWindow, &application, &controller] {
+        const auto fail = [&application](const QString& message) {
+          qCritical().noquote() << message;
+          application.exit(EXIT_FAILURE);
+        };
+        auto* couch = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchLibrary"));
+        auto* strip = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchGameStrip"));
+        auto* view = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchViewButton"));
+        auto* favorite =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchFavoriteButton"));
+        auto* settings =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSettingsButton"));
+        auto* settingsScroll =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
+        auto* search = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSearchButton"));
+        auto* browse = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowseButton"));
+        auto* browsePanel =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowsePanel"));
+        auto* browseCategories =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowseCategories"));
+        auto* browseOptions =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowseOptions"));
+        auto* keyboard = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchKeyboard"));
+        auto* keyboardGrid =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchKeyboardGrid"));
+        auto* textEntryKeyboard =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchTextEntryKeyboard"));
+        auto* textEntryGrid =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchTextEntryGrid"));
+        auto* desktopSearch =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("searchField"));
+        if (!quickWindow->property("couchMode").toBool() || couch == nullptr ||
+            !couch->isVisible() || strip == nullptr || view == nullptr || favorite == nullptr ||
+            settings == nullptr || settingsScroll == nullptr || search == nullptr ||
+            browse == nullptr ||
+            browsePanel == nullptr || browseCategories == nullptr || browseOptions == nullptr ||
+            keyboard == nullptr || keyboardGrid == nullptr || textEntryKeyboard == nullptr ||
+            textEntryGrid == nullptr || desktopSearch == nullptr) {
+          fail(QStringLiteral("Couch navigation test could not find the couch controls"));
+          return;
+        }
+        strip->setProperty("currentIndex", 0);
+        strip->forceActiveFocus();
+        controller.keyRequested(Qt::Key_Right, Qt::NoModifier);
+        QTimer::singleShot(50, quickWindow,
+                           [quickWindow, &application, &controller, couch, strip, view, favorite,
+                            browse, browsePanel, browseCategories, browseOptions, search, settings,
+                            settingsScroll, keyboard, keyboardGrid, textEntryKeyboard,
+                            textEntryGrid, desktopSearch, fail] {
+          if (!strip->hasActiveFocus() || strip->property("currentIndex").toInt() != 1) {
+            fail(QStringLiteral("Controller Right did not advance the couch game strip"));
+            return;
+          }
+          const auto sendKey = [&controller](int key) {
+            controller.keyRequested(key, Qt::NoModifier);
+            QEventLoop eventLoop;
+            QTimer::singleShot(30, &eventLoop, &QEventLoop::quit);
+            eventLoop.exec();
+          };
+          sendKey(Qt::Key_Up);
+          if (!view->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Up did not reach the couch game action"));
+            return;
+          }
+          sendKey(Qt::Key_Right);
+          if (!favorite->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Right did not reach the couch favorite action"));
+            return;
+          }
+          controller.toolbarRequested();
+          QCoreApplication::processEvents();
+          if (!strip->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Controls did not return to the couch game strip"));
+            return;
+          }
+          controller.toolbarRequested();
+          QCoreApplication::processEvents();
+          if (!view->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Controls did not return to couch actions"));
+            return;
+          }
+          sendKey(Qt::Key_Up);
+          for (int step = 0; step < 3; ++step) {
+            sendKey(Qt::Key_Right);
+          }
+          if (!browse->hasActiveFocus()) {
+            fail(QStringLiteral("Controller could not reach couch Browse"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          if (!couch->property("browseOpen").toBool() || !browsePanel->isVisible() ||
+              !browseCategories->hasActiveFocus()) {
+            fail(QStringLiteral("Couch Browse did not open with category focus"));
+            return;
+          }
+          sendKey(Qt::Key_Right);
+          if (!browseOptions->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Right did not reach couch Browse options"));
+            return;
+          }
+          sendKey(Qt::Key_Down);
+          sendKey(Qt::Key_Return);
+          QObject* library =
+              qmlContext(quickWindow)->contextProperty(QStringLiteral("Library")).value<QObject*>();
+          if (library == nullptr || library->property("mode").toInt() != 1) {
+            fail(QStringLiteral("Couch Browse did not apply the selected library view"));
+            return;
+          }
+          sendKey(Qt::Key_Escape);
+          if (couch->property("browseOpen").toBool() || !browse->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Back did not close couch Browse"));
+            return;
+          }
+          sendKey(Qt::Key_Right);
+          if (!search->hasActiveFocus()) {
+            fail(QStringLiteral("Controller could not reach couch Search"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          if (!couch->property("searchOpen").toBool() || !keyboard->isVisible() ||
+              !keyboardGrid->hasActiveFocus()) {
+            fail(QStringLiteral("Couch Search did not open the on-screen keyboard"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          if (keyboard->property("value").toString() != QStringLiteral("A")) {
+            fail(QStringLiteral("Controller confirm did not type with the on-screen keyboard"));
+            return;
+          }
+          sendKey(Qt::Key_Escape);
+          if (couch->property("searchOpen").toBool() || !search->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Back did not cancel couch Search"));
+            return;
+          }
+          const bool openedTextEntry = QMetaObject::invokeMethod(
+              quickWindow, "openCouchTextEntry",
+              Q_ARG(QVariant, QVariant::fromValue(static_cast<QObject*>(desktopSearch))),
+              Q_ARG(QVariant, QStringLiteral("TEST TEXT ENTRY")), Q_ARG(QVariant, true),
+              Q_ARG(QVariant, QStringLiteral("Enter a value")));
+          QCoreApplication::processEvents();
+          if (!openedTextEntry || !quickWindow->property("couchTextEntryOpen").toBool() ||
+              !textEntryKeyboard->isVisible() || !textEntryGrid->hasActiveFocus() ||
+              !textEntryKeyboard->property("passwordMode").toBool()) {
+            fail(QStringLiteral("Couch text entry did not open with masked keyboard focus"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          if (textEntryKeyboard->property("value").toString() != QStringLiteral("A")) {
+            fail(QStringLiteral("Controller confirm did not type in couch text entry"));
+            return;
+          }
+          QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 43));
+          QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 0));
+          QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 44));
+          QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 0));
+          if (textEntryKeyboard->property("value").toString() != QStringLiteral("Aa!")) {
+            fail(QStringLiteral("Couch text entry did not switch letter and symbol layouts"));
+            return;
+          }
+          textEntryKeyboard->setProperty("maximumLength", 3);
+          QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 41));
+          if (textEntryKeyboard->property("value").toString() != QStringLiteral("Aa!")) {
+            fail(QStringLiteral("Couch text entry exceeded its maximum length with Space"));
+            return;
+          }
+          QMetaObject::invokeMethod(textEntryKeyboard, "activateKey", Q_ARG(QVariant, 45));
+          QCoreApplication::processEvents();
+          if (quickWindow->property("couchTextEntryOpen").toBool() ||
+              desktopSearch->property("text").toString() != QStringLiteral("Aa!")) {
+            fail(QStringLiteral("Couch text entry did not apply its value"));
+            return;
+          }
+          desktopSearch->setProperty("text", QString());
+          QEventLoop focusRestoreLoop;
+          QTimer::singleShot(30, &focusRestoreLoop, &QEventLoop::quit);
+          focusRestoreLoop.exec();
+          search->forceActiveFocus();
+          sendKey(Qt::Key_Right);
+          if (!settings->hasActiveFocus()) {
+            fail(QStringLiteral("Controller could not reach couch Settings"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          QTimer::singleShot(80, quickWindow,
+                             [quickWindow, &application, &controller, couch, strip,
+                              settingsScroll, fail] {
+            if (!quickWindow->property("diagnosticsOpen").toBool()) {
+              fail(QStringLiteral("Couch Settings did not open"));
+              return;
+            }
+            QQuickItem* settingsStart = quickWindow->activeFocusItem();
+            for (int step = 0; step < 30; ++step) {
+              controller.focusDirectionRequested(Qt::Key_Down);
+            }
+            if (quickWindow->activeFocusItem() == settingsStart ||
+                settingsScroll->property("navigationContentY").toReal() <= 0) {
+              fail(QStringLiteral("Controller did not traverse and scroll couch Settings"));
+              return;
+            }
+            controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
+            QTimer::singleShot(
+                50, quickWindow,
+                [quickWindow, &application, &controller, couch, strip, fail] {
+              if (quickWindow->property("diagnosticsOpen").toBool()) {
+                fail(QStringLiteral("Controller Back did not close couch Settings"));
+                return;
+              }
+              couch->setProperty("currentIndex", 0);
+              QMetaObject::invokeMethod(couch, "refreshCurrentGame");
+              QMetaObject::invokeMethod(couch, "focusGrid");
+              QCoreApplication::processEvents();
+              controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
+              QTimer::singleShot(80, quickWindow,
+                                 [quickWindow, &application, &controller, strip, fail] {
+                auto* play =
+                    quickWindow->findChild<QQuickItem*>(QStringLiteral("playButton"));
+                auto* favorite =
+                    quickWindow->findChild<QQuickItem*>(QStringLiteral("favoriteButton"));
+                if (!quickWindow->property("detailOpen").toBool() || play == nullptr ||
+                    favorite == nullptr || !play->hasActiveFocus()) {
+                  fail(QStringLiteral("Couch game details did not open with Play focused"));
+                  return;
+                }
+                controller.focusDirectionRequested(Qt::Key_Right);
+                if (!favorite->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller Right did not reach the couch favorite action"));
+                  return;
+                }
+                controller.focusDirectionRequested(Qt::Key_Left);
+                if (!play->hasActiveFocus()) {
+                  fail(QStringLiteral("Controller Left did not return to the couch Play action"));
+                  return;
+                }
+                auto* newCollection =
+                    quickWindow->findChild<QQuickItem*>(QStringLiteral("newCollectionButton"));
+                const bool demoMode =
+                    qmlContext(quickWindow)->contextProperty(QStringLiteral("DemoMode")).toBool();
+                if (!demoMode && newCollection != nullptr && newCollection->isVisible()) {
+                  const auto sendDetailKey = [&controller](int key) {
+                    controller.keyRequested(key, Qt::NoModifier);
+                    QEventLoop eventLoop;
+                    QTimer::singleShot(30, &eventLoop, &QEventLoop::quit);
+                    eventLoop.exec();
+                  };
+                  auto* details =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("gameDetails"));
+                  auto* textEntry = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("couchTextEntryKeyboard"));
+                  auto* insights =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("insightsSection"));
+                  auto* insightRefresh = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("insightRefreshButton"));
+                  auto* achievementSection = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("achievementListSection"));
+                  auto* achievementSort = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("achievementSortButton"));
+                  auto* achievementRefresh = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("achievementRefreshButton"));
+                  auto* detailsScroll =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("detailsScroll"));
+                  if (details == nullptr || textEntry == nullptr || insights == nullptr ||
+                      insightRefresh == nullptr || achievementSection == nullptr ||
+                      achievementSort == nullptr || achievementRefresh == nullptr ||
+                      detailsScroll == nullptr) {
+                    fail(QStringLiteral("Couch focus sweep could not find detail controls"));
+                    return;
+                  }
+                  newCollection->forceActiveFocus();
+                  sendDetailKey(Qt::Key_Return);
+                  if (!quickWindow->property("couchTextEntryOpen").toBool() ||
+                      !textEntry->isVisible()) {
+                    fail(QStringLiteral("New Collection did not open couch text entry"));
+                    return;
+                  }
+                  sendDetailKey(Qt::Key_Escape);
+                  sendDetailKey(Qt::Key_Escape);
+                  details =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("gameDetails"));
+                  newCollection = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("newCollectionButton"));
+                  if (quickWindow->property("couchTextEntryOpen").toBool()) {
+                    fail(QStringLiteral("Controller Back did not close couch text entry"));
+                    return;
+                  }
+                  if (details == nullptr || newCollection == nullptr) {
+                    fail(QStringLiteral("Controller Back unexpectedly closed game details"));
+                    return;
+                  }
+                  if (details->property("collectionEditorOpen").toBool()) {
+                    fail(QStringLiteral("Controller Back did not close the collection editor"));
+                    return;
+                  }
+                  if (!newCollection->hasActiveFocus()) {
+                    fail(QStringLiteral("Controller Back did not restore New Collection focus"));
+                    return;
+                  }
+
+                  if (insights->isVisible() && achievementSection->isVisible()) {
+                    if (!insightRefresh->isVisible() || !insightRefresh->isEnabled() ||
+                        !achievementSort->isVisible() || !achievementSort->isEnabled() ||
+                        !achievementRefresh->isVisible() || !achievementRefresh->isEnabled()) {
+                      fail(QStringLiteral("Couch detail fixture is missing focusable controls"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Down);
+                    if (!insightRefresh->hasActiveFocus()) {
+                      fail(QStringLiteral("Controller did not reach couch game insights"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Down);
+                    if (!achievementSort->hasActiveFocus()) {
+                      fail(QStringLiteral("Controller did not reach couch achievement sorting"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Right);
+                    if (!achievementRefresh->hasActiveFocus()) {
+                      fail(QStringLiteral("Controller did not reach couch achievement refresh"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Left);
+                    const qreal initialContentY =
+                        detailsScroll->property("navigationContentY").toReal();
+                    controller.focusDirectionRequested(Qt::Key_Down);
+                    QQuickItem* firstAchievement = quickWindow->activeFocusItem();
+                    if (firstAchievement == nullptr ||
+                        !firstAchievement->objectName().startsWith(
+                            QStringLiteral("achievementCard"))) {
+                      fail(QStringLiteral("Controller did not enter couch achievement cards"));
+                      return;
+                    }
+                    for (int step = 0; step < 5; ++step) {
+                      controller.focusDirectionRequested(Qt::Key_Down);
+                    }
+                    if (quickWindow->activeFocusItem() == firstAchievement ||
+                        detailsScroll->property("navigationContentY").toReal() <= initialContentY) {
+                      fail(QStringLiteral("Couch achievement navigation did not move and scroll"));
+                      return;
+                    }
+                  }
+                }
+                controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
+                QTimer::singleShot(50, quickWindow,
+                                   [quickWindow, &application, &controller, fail] {
+                  auto* currentStrip = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("couchGameStrip"));
+                  if (quickWindow->property("detailOpen").toBool() ||
+                      currentStrip == nullptr || !currentStrip->hasActiveFocus()) {
+                    fail(QStringLiteral("Controller Back did not restore the couch library"));
+                    return;
+                  }
+                  controller.keyRequested(Qt::Key_F11, Qt::NoModifier);
+                  QTimer::singleShot(50, quickWindow, [quickWindow, &application, fail] {
+                    if (quickWindow->property("couchMode").toBool()) {
+                      fail(QStringLiteral("Controller Start did not return to desktop mode"));
+                      return;
+                    }
+                    application.quit();
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    } else if (navigationTest) {
       QTimer::singleShot(150, quickWindow, [quickWindow, &application, &controller, ownedLayoutTest] {
         auto fail = [&application](const QString& message) {
           qCritical().noquote() << message;
@@ -1139,7 +1561,11 @@ int main(int argc, char* argv[]) {
                        return;
                      }
                      if (fullscreen) {
-                       rootWindow->showFullScreen();
+                       if (!QMetaObject::invokeMethod(rootWindow, "setCouchMode",
+                                                      Q_ARG(QVariant, true))) {
+                         rootWindow->setProperty("couchMode", true);
+                         rootWindow->showFullScreen();
+                       }
                      } else {
                        rootWindow->show();
                      }

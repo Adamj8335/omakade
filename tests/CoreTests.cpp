@@ -3075,6 +3075,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   {
     AppSettings settings(path);
     QVERIFY(!settings.closeAfterLaunch());
+    QVERIFY(!settings.couchModeEnabled());
     settings.setReducedMotion(true);
     settings.setArtworkCacheLimitMb(512);
     settings.setSteamId(QStringLiteral("76561198000000000"));
@@ -3089,6 +3090,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
     settings.setRyujinxEnabled(false);
     settings.setBattleNetEnabled(false);
     settings.setCloseAfterLaunch(true);
+    settings.setCouchModeEnabled(true);
   }
   AppSettings reloaded(path);
   QVERIFY(reloaded.reducedMotion());
@@ -3106,6 +3108,7 @@ void CoreTests::settingsPersistReducedMotionAndCacheLimit() {
   QVERIFY(!reloaded.ryujinxAutoEnabled());
   QVERIFY(!reloaded.battleNetEnabled());
   QVERIFY(reloaded.closeAfterLaunch());
+  QVERIFY(reloaded.couchModeEnabled());
 
   // A config without emulator keys keeps auto-detection pending and the keys absent
   // even after unrelated settings change.
@@ -3425,6 +3428,19 @@ void CoreTests::virtualControllerConnectsAndMapsPrimaryButton() {
   keys.clear();
   QTest::qWait(400);
   QVERIFY(keys.isEmpty());
+
+  const SDL_JoystickID reconnectedId = SDL_AttachVirtualJoystick(&description);
+  QVERIFY2(reconnectedId != 0, SDL_GetError());
+  QTRY_COMPARE_WITH_TIMEOUT(controller.controllerCount(), connectedCount, 1000);
+  SDL_Joystick* reconnectedJoystick = SDL_OpenJoystick(reconnectedId);
+  QVERIFY(reconnectedJoystick != nullptr);
+  QVERIFY(SDL_SetJoystickVirtualButton(reconnectedJoystick, SDL_GAMEPAD_BUTTON_SOUTH, true));
+  SDL_UpdateJoysticks();
+  QTRY_VERIFY_WITH_TIMEOUT(!keys.isEmpty(), 1000);
+  QCOMPARE(keys.first().at(0).toInt(), static_cast<int>(Qt::Key_Return));
+  SDL_CloseJoystick(reconnectedJoystick);
+  QVERIFY(SDL_DetachVirtualJoystick(reconnectedId));
+  QTRY_COMPARE_WITH_TIMEOUT(controller.controllerCount(), connectedCount - 1, 1000);
   SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
 }
 

@@ -44,6 +44,7 @@ Omakade includes:
 - Explicit linking for games installed through multiple sources
 - ProtonDB and PCGamingWiki shortcuts with actionable launch errors
 - Keyboard, mouse, and controller navigation
+- Controller-first Couch Mode with ten-foot layouts and on-screen search
 - Optional Sunshine app export so Moonlight can start Omakade or any installed
   game, plus `--play` and `--quit` commands
 
@@ -123,13 +124,14 @@ list when it starts, so press **Restart Sunshine** after a change. Omakade
 leaves the other Sunshine apps alone and keeps a one-time backup next to
 `apps.json`.
 
-Starting Omakade from Moonlight opens it fullscreen on the streamed display.
+Starting Omakade from Moonlight opens it in Couch Mode on the streamed display.
 Starting a game from Moonlight launches it through its own launcher, the same
 as pressing Play. The same entry points work from a terminal or a keybinding:
 
 ```bash
 omakade --play Steam::620          # Source:runner:id, the runner is often empty
 omakade --play Heroic:legendary:Sugar
+omakade --couch                     # Start directly in Couch Mode
 omakade --quit
 ```
 
@@ -154,8 +156,9 @@ ctest --preset dev
 ```
 
 Use `Ctrl+F` to search, arrow keys to navigate, Enter to open details, Escape
-to return, and F11 to toggle fullscreen. `Ctrl+M` toggles reduced motion and
-`Ctrl+D` opens settings and source diagnostics.
+to return, and F11 to enter or leave Couch Mode. The controller Start button
+does the same. Couch Mode remembers the preferred launch mode. `Ctrl+M` toggles
+reduced motion and `Ctrl+D` opens settings and source diagnostics.
 
 ## Local data
 

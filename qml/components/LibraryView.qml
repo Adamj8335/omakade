@@ -70,7 +70,9 @@ Item {
         id: grid
         objectName: "libraryGrid"
         anchors.fill: parent
-        anchors.rightMargin: libraryScrollTrack.visible ? 20 : 0
+        // Keep the grid width stable. Making it depend on scrollbar visibility can change the
+        // column count, which changes content height and makes visibility oscillate.
+        anchors.rightMargin: 20
         clip: true
         model: root.libraryModel
         boundsBehavior: Flickable.StopAtBounds

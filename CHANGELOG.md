@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Couch Mode
+
+- Added the first dedicated ten-foot library with a large featured game,
+  horizontal cover browsing, controller hints, and controller-tested focus.
+- Added persistent Couch Mode startup, `omakade --couch`, F11 and controller
+  Start switching, and automatic Couch Mode for Sunshine sessions.
+- Added controller-driven library search with an on-screen keyboard.
+- Expanded the on-screen keyboard to support controller text entry, case and
+  symbols across game organization, linking, and account settings.
+- Added a couch-native browser for views, sorting, availability, sources,
+  completion status, collections, and tags.
+- Added 1,000-game couch startup and navigation gates, reconnect coverage, and
+  visual checks for reduced motion, light themes, and opaque surfaces.
+- Made the complete Settings and Sources view wide, readable, and controller
+  guided in Couch Mode.
+
+### Release engineering
+
+- Added native aarch64 CI and release packages alongside x86_64.
+- Added per-architecture SBOMs, vulnerability scanning, checksums, and
+  provenance attestations.
+
 ## 1.5.0
 
 ### RetroAchievements
