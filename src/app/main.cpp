@@ -808,10 +808,120 @@ int main(int argc, char* argv[]) {
                   fail(QStringLiteral("Controller Left did not return to the couch Play action"));
                   return;
                 }
+                auto* newCollection =
+                    quickWindow->findChild<QQuickItem*>(QStringLiteral("newCollectionButton"));
+                const bool demoMode =
+                    qmlContext(quickWindow)->contextProperty(QStringLiteral("DemoMode")).toBool();
+                if (!demoMode && newCollection != nullptr && newCollection->isVisible()) {
+                  const auto sendDetailKey = [&controller](int key) {
+                    controller.keyRequested(key, Qt::NoModifier);
+                    QEventLoop eventLoop;
+                    QTimer::singleShot(30, &eventLoop, &QEventLoop::quit);
+                    eventLoop.exec();
+                  };
+                  auto* details =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("gameDetails"));
+                  auto* textEntry = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("couchTextEntryKeyboard"));
+                  auto* insights =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("insightsSection"));
+                  auto* insightRefresh = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("insightRefreshButton"));
+                  auto* achievementSection = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("achievementListSection"));
+                  auto* achievementSort = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("achievementSortButton"));
+                  auto* achievementRefresh = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("achievementRefreshButton"));
+                  auto* detailsScroll =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("detailsScroll"));
+                  if (details == nullptr || textEntry == nullptr || insights == nullptr ||
+                      insightRefresh == nullptr || achievementSection == nullptr ||
+                      achievementSort == nullptr || achievementRefresh == nullptr ||
+                      detailsScroll == nullptr) {
+                    fail(QStringLiteral("Couch focus sweep could not find detail controls"));
+                    return;
+                  }
+                  newCollection->forceActiveFocus();
+                  sendDetailKey(Qt::Key_Return);
+                  if (!quickWindow->property("couchTextEntryOpen").toBool() ||
+                      !textEntry->isVisible()) {
+                    fail(QStringLiteral("New Collection did not open couch text entry"));
+                    return;
+                  }
+                  sendDetailKey(Qt::Key_Escape);
+                  sendDetailKey(Qt::Key_Escape);
+                  details =
+                      quickWindow->findChild<QQuickItem*>(QStringLiteral("gameDetails"));
+                  newCollection = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("newCollectionButton"));
+                  if (quickWindow->property("couchTextEntryOpen").toBool()) {
+                    fail(QStringLiteral("Controller Back did not close couch text entry"));
+                    return;
+                  }
+                  if (details == nullptr || newCollection == nullptr) {
+                    fail(QStringLiteral("Controller Back unexpectedly closed game details"));
+                    return;
+                  }
+                  if (details->property("collectionEditorOpen").toBool()) {
+                    fail(QStringLiteral("Controller Back did not close the collection editor"));
+                    return;
+                  }
+                  if (!newCollection->hasActiveFocus()) {
+                    fail(QStringLiteral("Controller Back did not restore New Collection focus"));
+                    return;
+                  }
+
+                  if (insights->isVisible() && achievementSection->isVisible()) {
+                    if (!insightRefresh->isVisible() || !insightRefresh->isEnabled() ||
+                        !achievementSort->isVisible() || !achievementSort->isEnabled() ||
+                        !achievementRefresh->isVisible() || !achievementRefresh->isEnabled()) {
+                      fail(QStringLiteral("Couch detail fixture is missing focusable controls"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Down);
+                    if (!insightRefresh->hasActiveFocus()) {
+                      fail(QStringLiteral("Controller did not reach couch game insights"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Down);
+                    if (!achievementSort->hasActiveFocus()) {
+                      fail(QStringLiteral("Controller did not reach couch achievement sorting"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Right);
+                    if (!achievementRefresh->hasActiveFocus()) {
+                      fail(QStringLiteral("Controller did not reach couch achievement refresh"));
+                      return;
+                    }
+                    controller.focusDirectionRequested(Qt::Key_Left);
+                    const qreal initialContentY =
+                        detailsScroll->property("navigationContentY").toReal();
+                    controller.focusDirectionRequested(Qt::Key_Down);
+                    QQuickItem* firstAchievement = quickWindow->activeFocusItem();
+                    if (firstAchievement == nullptr ||
+                        !firstAchievement->objectName().startsWith(
+                            QStringLiteral("achievementCard"))) {
+                      fail(QStringLiteral("Controller did not enter couch achievement cards"));
+                      return;
+                    }
+                    for (int step = 0; step < 5; ++step) {
+                      controller.focusDirectionRequested(Qt::Key_Down);
+                    }
+                    if (quickWindow->activeFocusItem() == firstAchievement ||
+                        detailsScroll->property("navigationContentY").toReal() <= initialContentY) {
+                      fail(QStringLiteral("Couch achievement navigation did not move and scroll"));
+                      return;
+                    }
+                  }
+                }
                 controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
                 QTimer::singleShot(50, quickWindow,
-                                   [quickWindow, &application, &controller, strip, fail] {
-                  if (quickWindow->property("detailOpen").toBool() || !strip->hasActiveFocus()) {
+                                   [quickWindow, &application, &controller, fail] {
+                  auto* currentStrip = quickWindow->findChild<QQuickItem*>(
+                      QStringLiteral("couchGameStrip"));
+                  if (quickWindow->property("detailOpen").toBool() ||
+                      currentStrip == nullptr || !currentStrip->hasActiveFocus()) {
                     fail(QStringLiteral("Controller Back did not restore the couch library"));
                     return;
                   }

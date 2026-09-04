@@ -77,14 +77,6 @@ Item {
         }
     }
 
-    Keys.onEscapePressed: function(event) {
-        if (root.collectionEditorOpen) {
-            root.closeCollectionEditor()
-        } else {
-            root.backRequested()
-        }
-        event.accepted = true
-    }
     Keys.onPressed: function(event) {
         if (root.navigationEnabled && event.key === Qt.Key_F) {
             root.favoriteRequested()
@@ -97,7 +89,10 @@ Item {
         enabled: root.navigationEnabled && target !== null
         function onActiveFocusItemChanged() {
             Qt.callLater(function() {
-                root.revealFocusedItem(root.Window.window.activeFocusItem)
+                const window = root.Window.window
+                if (window) {
+                    root.revealFocusedItem(window.activeFocusItem)
+                }
             })
         }
     }
