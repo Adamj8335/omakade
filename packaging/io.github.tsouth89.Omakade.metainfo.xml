@@ -17,11 +17,11 @@
   </description>
   <launchable type="desktop-id">io.github.tsouth89.Omakade.desktop</launchable>
   <content_rating type="oars-1.1" />
-  <url type="homepage">https://tsouth89.github.io/omakade/</url>
+  <url type="homepage">https://btsouth.github.io/omakade/</url>
   <url type="bugtracker">https://github.com/tsouth89/omakade/issues</url>
   <screenshots>
     <screenshot type="default">
-      <image>https://tsouth89.github.io/omakade/assets/library-preview.webp</image>
+      <image>https://btsouth.github.io/omakade/assets/library-preview.webp</image>
       <caption>A unified, theme-native game library</caption>
     </screenshot>
   </screenshots>

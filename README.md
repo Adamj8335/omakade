@@ -5,15 +5,15 @@
 
 **Your games, beautifully together.**
 
-[![Omakade library showing installed games from multiple launchers](docs/assets/library-preview.webp)](https://tsouth89.github.io/omakade/assets/omakade-demo.mp4)
+[![Omakade library showing installed games from multiple launchers](docs/assets/library-preview.webp)](https://btsouth.github.io/omakade/assets/omakade-demo.mp4)
 
-[Watch the 18-second demo](https://tsouth89.github.io/omakade/assets/omakade-demo.mp4)
+[Watch the 18-second demo](https://btsouth.github.io/omakade/assets/omakade-demo.mp4)
 
 Omakade is a fast, local-first game library built for Omarchy. It brings
 installed Steam, Lutris, Heroic, Faugus, RetroArch, Epic, GOG, and Amazon games
 into one quiet, cover-focused home that follows the active Omarchy theme.
 
-[Project homepage](https://tsouth89.github.io/omakade/) ·
+[Project homepage](https://btsouth.github.io/omakade/) ·
 [Roadmap](PLAN.md) · [Support](SUPPORT.md)
 
 > Omakade is an independent community project. It is not an official Omarchy
