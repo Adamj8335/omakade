@@ -2519,7 +2519,10 @@ void CoreTests::battleNetLauncherBuildsSafeCommands() {
   QCOMPARE(scoped.arguments.constLast(), QStringLiteral("--exec=launch WoW"));
   const LaunchCommand proton = GameLauncher::battleNetCommand(
       QStringLiteral("s2"), prefix, QStringLiteral("proton"), false);
-  QCOMPARE(proton.program, QStringLiteral("umu-run"));
+  QCOMPARE(proton.program, QStringLiteral("env"));
+  QCOMPARE(proton.arguments.at(0), QStringLiteral("WINEPREFIX=%1").arg(prefix));
+  QCOMPARE(proton.arguments.at(1), QStringLiteral("umu-run"));
+  QVERIFY(proton.arguments.at(2).contains(QStringLiteral("Battle.net.exe")));
   QCOMPARE(proton.arguments.constLast(), QStringLiteral("--exec=launch S2"));
   QVERIFY(!GameLauncher::battleNetCommand(QStringLiteral("bad;id"), prefix, QStringLiteral("wine"),
                                           false)

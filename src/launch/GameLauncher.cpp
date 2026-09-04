@@ -250,7 +250,9 @@ LaunchCommand GameLauncher::battleNetCommand(const QString& id, const QString& p
                                     QStringLiteral("-e"), exe, QStringLiteral("--"), execArg}};
   }
   if (runner == QStringLiteral("proton")) {
-    return {QStringLiteral("umu-run"), {exe, execArg}};
+    return {QStringLiteral("env"),
+            {QStringLiteral("WINEPREFIX=%1").arg(prefix), QStringLiteral("umu-run"), exe,
+             execArg}};
   }
   return {QStringLiteral("wine"), {exe, execArg}};
 }
