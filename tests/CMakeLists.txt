@@ -78,6 +78,17 @@ set_tests_properties(omakade_couch_detail_render PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30
 )
+
+add_test(NAME omakade_couch_keyboard_render
+  COMMAND omakade --couch
+          --render-overlay=couch-search
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-keyboard.png
+          --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_keyboard_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
 set_tests_properties(omakade_render_smoke PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30

@@ -44,6 +44,7 @@ Omakade includes:
 - Explicit linking for games installed through multiple sources
 - ProtonDB and PCGamingWiki shortcuts with actionable launch errors
 - Keyboard, mouse, and controller navigation
+- Controller-first Couch Mode with ten-foot layouts and on-screen search
 - Optional Sunshine app export so Moonlight can start Omakade or any installed
   game, plus `--play` and `--quit` commands
 

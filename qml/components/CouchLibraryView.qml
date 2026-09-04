@@ -11,6 +11,8 @@ FocusScope {
     property int currentIndex: 0
     property var currentGame: ({})
     property var pendingCurrent: null
+    property bool searchOpen: false
+    property string searchInitial: ""
     readonly property bool gridFocused: gameStrip.activeFocus
     readonly property real uiScale: Math.max(0.68, Math.min(1.25,
                                                            Math.min(width / 1920,
@@ -46,6 +48,9 @@ FocusScope {
     }
 
     function toggleControls() {
+        if (searchOpen) {
+            return
+        }
         if (gameStrip.activeFocus) {
             viewButton.forceActiveFocus(Qt.TabFocusReason)
         } else {
@@ -57,6 +62,28 @@ FocusScope {
         libraryModel.mode = mode
         currentIndex = libraryModel.rowCount() > 0 ? 0 : -1
         Qt.callLater(focusGrid)
+    }
+
+    function openSearch() {
+        searchInitial = libraryModel.searchText
+        couchKeyboard.value = searchInitial
+        searchOpen = true
+        Qt.callLater(couchKeyboard.focusKeyboard)
+    }
+
+    function closeSearch(accepted) {
+        if (!accepted) {
+            libraryModel.searchText = searchInitial
+        }
+        searchOpen = false
+        currentIndex = libraryModel.rowCount() > 0 ? 0 : -1
+        Qt.callLater(function() {
+            if (accepted) {
+                root.focusGrid()
+            } else {
+                searchButton.forceActiveFocus(Qt.TabFocusReason)
+            }
+        })
     }
 
     onCurrentIndexChanged: refreshCurrentGame()
@@ -233,6 +260,21 @@ FocusScope {
                 selected: root.libraryModel.mode === 2
                 onClicked: root.selectMode(2)
                 KeyNavigation.left: favoritesButton
+                KeyNavigation.right: searchButton
+                KeyNavigation.down: favoriteButton
+            }
+            GlassButton {
+                id: searchButton
+                objectName: "couchSearchButton"
+                text: root.libraryModel.searchText.length > 0
+                      ? "SEARCH · "
+                        + root.libraryModel.searchText.substring(0, 12).toUpperCase()
+                        + (root.libraryModel.searchText.length > 12 ? "…" : "")
+                      : "SEARCH"
+                compact: true
+                displayScale: Math.max(1, root.uiScale * 1.18)
+                onClicked: root.openSearch()
+                KeyNavigation.left: recentButton
                 KeyNavigation.right: settingsButton
                 KeyNavigation.down: favoriteButton
             }
@@ -243,7 +285,7 @@ FocusScope {
                 compact: true
                 displayScale: Math.max(1, root.uiScale * 1.18)
                 onClicked: root.settingsRequested()
-                KeyNavigation.left: recentButton
+                KeyNavigation.left: searchButton
                 KeyNavigation.right: desktopButton
                 KeyNavigation.down: favoriteButton
             }
@@ -665,6 +707,25 @@ FocusScope {
                 }
             }
         }
+    }
+
+    CouchKeyboard {
+        id: couchKeyboard
+        objectName: "couchKeyboard"
+        anchors.fill: parent
+        visible: root.searchOpen
+        enabled: visible
+        z: 50
+
+        onValueEdited: function(value) {
+            root.libraryModel.searchText = value
+            root.currentIndex = root.libraryModel.rowCount() > 0 ? 0 : -1
+        }
+        onAccepted: function(value) {
+            root.libraryModel.searchText = value
+            root.closeSearch(true)
+        }
+        onCanceled: root.closeSearch(false)
     }
 
     Component.onCompleted: {

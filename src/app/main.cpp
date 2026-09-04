@@ -520,6 +520,10 @@ int main(int argc, char* argv[]) {
             Q_ARG(QVariant, QVariant(QStringList{QStringLiteral("Couch co-op"),
                                                  QStringLiteral("Cozy evenings"),
                                                  QStringLiteral("Finish this year")})));
+      } else if (overlay == QStringLiteral("couch-search")) {
+        if (auto* couch = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchLibrary"))) {
+          QMetaObject::invokeMethod(couch, "openSearch");
+        }
       }
       QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
         const QImage screenshot = quickWindow->grabWindow();
@@ -555,9 +559,14 @@ int main(int argc, char* argv[]) {
             quickWindow->findChild<QQuickItem*>(QStringLiteral("couchFavoriteButton"));
         auto* settings =
             quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSettingsButton"));
+        auto* search = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSearchButton"));
+        auto* keyboard = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchKeyboard"));
+        auto* keyboardGrid =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchKeyboardGrid"));
         if (!quickWindow->property("couchMode").toBool() || couch == nullptr ||
             !couch->isVisible() || strip == nullptr || view == nullptr || favorite == nullptr ||
-            settings == nullptr) {
+            settings == nullptr || search == nullptr || keyboard == nullptr ||
+            keyboardGrid == nullptr) {
           fail(QStringLiteral("Couch navigation test could not find the couch controls"));
           return;
         }
@@ -565,8 +574,8 @@ int main(int argc, char* argv[]) {
         strip->forceActiveFocus();
         controller.keyRequested(Qt::Key_Right, Qt::NoModifier);
         QTimer::singleShot(50, quickWindow,
-                           [quickWindow, &application, &controller, strip, view, favorite, settings,
-                            fail] {
+                           [quickWindow, &application, &controller, couch, strip, view, favorite,
+                            search, settings, keyboard, keyboardGrid, fail] {
           if (!strip->hasActiveFocus() || strip->property("currentIndex").toInt() != 1) {
             fail(QStringLiteral("Controller Right did not advance the couch game strip"));
             return;
@@ -603,6 +612,27 @@ int main(int argc, char* argv[]) {
           for (int step = 0; step < 3; ++step) {
             sendKey(Qt::Key_Right);
           }
+          if (!search->hasActiveFocus()) {
+            fail(QStringLiteral("Controller could not reach couch Search"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          if (!couch->property("searchOpen").toBool() || !keyboard->isVisible() ||
+              !keyboardGrid->hasActiveFocus()) {
+            fail(QStringLiteral("Couch Search did not open the on-screen keyboard"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          if (keyboard->property("value").toString() != QStringLiteral("A")) {
+            fail(QStringLiteral("Controller confirm did not type with the on-screen keyboard"));
+            return;
+          }
+          sendKey(Qt::Key_Escape);
+          if (couch->property("searchOpen").toBool() || !search->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Back did not cancel couch Search"));
+            return;
+          }
+          sendKey(Qt::Key_Right);
           if (!settings->hasActiveFocus()) {
             fail(QStringLiteral("Controller could not reach couch Settings"));
             return;

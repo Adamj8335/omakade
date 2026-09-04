@@ -632,6 +632,8 @@ ApplicationWindow {
         onActivated: {
             if (root.filterPickerOpen) {
                 root.filterPickerOpen = false
+            } else if (root.couchMode && couchLibraryView.searchOpen) {
+                couchLibraryView.closeSearch(false)
             } else if (root.linkDialogOpen) {
                 root.linkDialogOpen = false
             } else if (root.collectionDeleteOpen) {
@@ -2710,6 +2712,7 @@ ApplicationWindow {
                 root.refreshAfterOrganization()
             } else if (root.couchMode && !root.detailOpen
                        && root.navigationContainer() === null
+                       && !couchLibraryView.searchOpen
                        && couchLibraryView.currentIndex >= 0) {
                 Library.toggleFavorite(couchLibraryView.currentIndex)
                 couchLibraryView.refreshCurrentGame()
