@@ -49,6 +49,22 @@ set_tests_properties(omakade_couch_navigation PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30
 )
+
+add_test(NAME omakade_couch_thousand_game_startup
+  COMMAND omakade --couch --stress-test --benchmark --benchmark-max-ms=500
+)
+set_tests_properties(omakade_couch_thousand_game_startup PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1;HYPRLAND_INSTANCE_SIGNATURE="
+  TIMEOUT 5
+)
+
+add_test(NAME omakade_couch_thousand_game_navigation
+  COMMAND omakade --couch --stress-test --couch-navigation-test --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_thousand_game_navigation PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1;HYPRLAND_INSTANCE_SIGNATURE="
+  TIMEOUT 10
+)
 set_tests_properties(omakade_controller_navigation_wide PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30
@@ -66,6 +82,26 @@ add_test(NAME omakade_couch_render
 )
 set_tests_properties(omakade_couch_render PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
+
+add_test(NAME omakade_couch_reduced_motion_render
+  COMMAND omakade --couch --reduced-motion
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-reduced-motion.png
+          --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_reduced_motion_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
+
+add_test(NAME omakade_couch_light_opaque_render
+  COMMAND omakade --couch
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-light-opaque.png
+          --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_light_opaque_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1;XDG_STATE_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/light-state;XDG_CONFIG_HOME=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/empty-config;HYPRLAND_INSTANCE_SIGNATURE="
   TIMEOUT 30
 )
 

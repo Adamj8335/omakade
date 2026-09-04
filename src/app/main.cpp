@@ -146,7 +146,13 @@ int main(int argc, char* argv[]) {
   const bool demoMode = smokeTest || renderMode ||
                         application.arguments().contains(QStringLiteral("--demo"));
   const bool benchmarkMode = application.arguments().contains(QStringLiteral("--benchmark"));
+  bool benchmarkLimitValid = false;
+  const int benchmarkMaxMs =
+      optionValue(application.arguments(), QStringLiteral("--benchmark-max-ms"))
+          .toInt(&benchmarkLimitValid);
   const bool stressMode = application.arguments().contains(QStringLiteral("--stress-test"));
+  const bool reducedMotionRequest =
+      application.arguments().contains(QStringLiteral("--reduced-motion"));
   const bool couchRequest = application.arguments().contains(QStringLiteral("--couch")) ||
                             SunshineIntegration::streaming();
   if (benchmarkMode) {
@@ -170,6 +176,9 @@ int main(int argc, char* argv[]) {
                 QStringLiteral("/omakade-test-%1.toml").arg(QCoreApplication::applicationPid())
           : QString{};
   AppSettings preferences(settingsPath);
+  if (reducedMotionRequest) {
+    preferences.setReducedMotion(true);
+  }
   const bool startInCouchMode = couchRequest || preferences.couchModeEnabled();
   ControllerInput controller;
   std::unique_ptr<QAbstractItemModel> games;
@@ -550,11 +559,18 @@ int main(int argc, char* argv[]) {
     }
     QObject::connect(
         quickWindow, &QQuickWindow::frameSwapped, &application,
-        [&application, &controller, &startupTimer, benchmarkMode] {
-          qInfo() << "First frame in" << startupTimer.elapsed() << "ms";
+        [&application, &controller, &startupTimer, benchmarkMode, benchmarkLimitValid,
+         benchmarkMaxMs] {
+          const qint64 firstFrameMs = startupTimer.elapsed();
+          qInfo() << "First frame in" << firstFrameMs << "ms";
           controller.start();
           if (benchmarkMode) {
-            application.quit();
+            if (benchmarkLimitValid && benchmarkMaxMs > 0 && firstFrameMs > benchmarkMaxMs) {
+              qCritical() << "First frame exceeded benchmark limit of" << benchmarkMaxMs << "ms";
+              application.exit(EXIT_FAILURE);
+            } else {
+              application.quit();
+            }
           }
         },
         Qt::SingleShotConnection);

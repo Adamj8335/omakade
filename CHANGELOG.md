@@ -13,6 +13,8 @@
   symbols across game organization, linking, and account settings.
 - Added a couch-native browser for views, sorting, availability, sources,
   completion status, collections, and tags.
+- Added 1,000-game couch startup and navigation gates, reconnect coverage, and
+  visual checks for reduced motion, light themes, and opaque surfaces.
 
 ## 1.5.0
 

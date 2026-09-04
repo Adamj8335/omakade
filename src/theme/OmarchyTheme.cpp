@@ -16,9 +16,17 @@
 #include <functional>
 
 namespace {
-QString defaultStateHome() { return QDir::homePath() + QStringLiteral("/.local/state"); }
+QString defaultStateHome() {
+  const QString xdgStateHome = qEnvironmentVariable("XDG_STATE_HOME");
+  return xdgStateHome.isEmpty() ? QDir::homePath() + QStringLiteral("/.local/state")
+                                : xdgStateHome;
+}
 
-QString defaultConfigHome() { return QDir::homePath() + QStringLiteral("/.config"); }
+QString defaultConfigHome() {
+  const QString xdgConfigHome = qEnvironmentVariable("XDG_CONFIG_HOME");
+  return xdgConfigHome.isEmpty() ? QDir::homePath() + QStringLiteral("/.config")
+                                 : xdgConfigHome;
+}
 
 double linearChannel(double channel) {
   channel /= 255.0;
