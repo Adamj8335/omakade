@@ -47,6 +47,7 @@ Item {
     signal tagsRequested(string tags)
     signal collectionToggled(string name, bool included)
     signal collectionCreateRequested(string name)
+    signal textEntryRequested(var target, string title, bool password, string placeholder)
 
     function alpha(color, value) {
         return Qt.rgba(color.r, color.g, color.b, value)
@@ -511,7 +512,7 @@ Item {
                         }
                         TextField {
                             id: tagsField
-                            property bool controllerNavigation: false
+                            property bool controllerNavigation: root.couchMode
                             Layout.fillWidth: true
                             placeholderText: "Co-op, cozy, difficult"
                             Accessible.name: "Tags"
@@ -531,8 +532,24 @@ Item {
                                               ? Theme.accent
                                               : root.alpha(Theme.foreground, 0.15)
                             }
-                            Keys.onReturnPressed: root.tagsRequested(text)
-                            Keys.onEnterPressed: root.tagsRequested(text)
+                            Keys.onReturnPressed: function(event) {
+                                if (root.couchMode) {
+                                    root.textEntryRequested(tagsField, "EDIT TAGS", false,
+                                                            tagsField.placeholderText)
+                                    event.accepted = true
+                                } else {
+                                    root.tagsRequested(text)
+                                }
+                            }
+                            Keys.onEnterPressed: function(event) {
+                                if (root.couchMode) {
+                                    root.textEntryRequested(tagsField, "EDIT TAGS", false,
+                                                            tagsField.placeholderText)
+                                    event.accepted = true
+                                } else {
+                                    root.tagsRequested(text)
+                                }
+                            }
                         }
                         GlassButton {
                             compact: true
@@ -585,7 +602,15 @@ Item {
                                     text: "+ NEW COLLECTION"
                                     onClicked: {
                                         root.collectionEditorOpen = true
-                                        Qt.callLater(collectionField.forceActiveFocus)
+                                        Qt.callLater(function() {
+                                            if (root.couchMode) {
+                                                root.textEntryRequested(
+                                                    collectionField, "NEW COLLECTION", false,
+                                                    collectionField.placeholderText)
+                                            } else {
+                                                collectionField.forceActiveFocus()
+                                            }
+                                        })
                                     }
                                 }
                             }
@@ -609,7 +634,7 @@ Item {
                         }
                         TextField {
                             id: collectionField
-                            property bool controllerNavigation: false
+                            property bool controllerNavigation: root.couchMode
                             Layout.fillWidth: true
                             Layout.maximumWidth: 360
                             Layout.columnSpan: collectionEditor.columns === 2 ? 2 : 1
@@ -627,12 +652,22 @@ Item {
                                               : root.alpha(Theme.foreground, 0.15)
                             }
                             Keys.onReturnPressed: {
-                                root.collectionCreateRequested(text)
-                                clear()
+                                if (root.couchMode) {
+                                    root.textEntryRequested(collectionField, "NEW COLLECTION",
+                                                            false, collectionField.placeholderText)
+                                } else {
+                                    root.collectionCreateRequested(text)
+                                    clear()
+                                }
                             }
                             Keys.onEnterPressed: {
-                                root.collectionCreateRequested(text)
-                                clear()
+                                if (root.couchMode) {
+                                    root.textEntryRequested(collectionField, "NEW COLLECTION",
+                                                            false, collectionField.placeholderText)
+                                } else {
+                                    root.collectionCreateRequested(text)
+                                    clear()
+                                }
                             }
                         }
                         GlassButton {

@@ -20,6 +20,11 @@ ApplicationWindow {
     property bool collectionDeleteOpen: false
     // The organize filters open a picker list instead of cycling through every value.
     property bool filterPickerOpen: false
+    property bool couchTextEntryOpen: false
+    property var couchTextEntryTarget: null
+    property string couchTextEntryTitle: "ENTER TEXT"
+    property bool couchTextEntryPassword: false
+    property string couchTextEntryPlaceholder: "Start typing"
     property string filterPickerKind: ""
     property var filterPickerValues: []
     property string pendingCollectionDelete: ""
@@ -82,6 +87,9 @@ ApplicationWindow {
     }
 
     function navigationContainer() {
+        if (couchTextEntryOpen) {
+            return null
+        }
         if (filterPickerOpen) {
             return filterPickerOverlay
         }
@@ -298,6 +306,40 @@ ApplicationWindow {
         } else {
             Qt.callLater(root.focusLibrary)
         }
+    }
+
+    function openCouchTextEntry(target, title, password, placeholder) {
+        if (!root.couchMode || !target) {
+            return
+        }
+        couchTextEntryTarget = target
+        couchTextEntryTitle = title || "ENTER TEXT"
+        couchTextEntryPassword = password || false
+        couchTextEntryPlaceholder = placeholder || "Start typing"
+        couchTextEntryKeyboard.value = target.text || ""
+        couchTextEntryKeyboard.keyboardMode = "upper"
+        couchTextEntryOpen = true
+        Qt.callLater(couchTextEntryKeyboard.focusKeyboard)
+    }
+
+    function closeCouchTextEntry(accepted) {
+        const target = couchTextEntryTarget
+        if (accepted && target) {
+            target.text = couchTextEntryKeyboard.value
+        }
+        couchTextEntryOpen = false
+        couchTextEntryTarget = null
+        if (target) {
+            Qt.callLater(function() { root.restoreFocus(target) })
+        }
+    }
+
+    function handleCouchTextEntry(event, target, title, password, placeholder) {
+        if (!root.couchMode) {
+            return
+        }
+        root.openCouchTextEntry(target, title, password, placeholder)
+        event.accepted = true
     }
 
     function alpha(color, value) {
@@ -630,7 +672,9 @@ ApplicationWindow {
     Shortcut {
         sequence: "Escape"
         onActivated: {
-            if (root.filterPickerOpen) {
+            if (root.couchTextEntryOpen) {
+                root.closeCouchTextEntry(false)
+            } else if (root.filterPickerOpen) {
                 root.filterPickerOpen = false
             } else if (root.couchMode && couchLibraryView.searchOpen) {
                 couchLibraryView.closeSearch(false)
@@ -661,9 +705,10 @@ ApplicationWindow {
     Binding {
         target: Controller
         property: "focusNavigation"
-        value: root.detailOpen || root.diagnosticsOpen || root.linkDialogOpen
+        value: !root.couchTextEntryOpen
+               && (root.detailOpen || root.diagnosticsOpen || root.linkDialogOpen
                || root.collectionDeleteOpen
-               || (!root.couchMode && !libraryView.gridFocused)
+               || (!root.couchMode && !libraryView.gridFocused))
     }
     Shortcut {
         sequence: "Return"
@@ -1498,6 +1543,9 @@ ApplicationWindow {
                     root.showToast("That collection already exists or is invalid")
                 }
             }
+            onTextEntryRequested: function(target, title, password, placeholder) {
+                root.openCouchTextEntry(target, title, password, placeholder)
+            }
         }
     }
 
@@ -1564,13 +1612,23 @@ ApplicationWindow {
             }
             TextField {
                 id: linkSearch
-                property bool controllerNavigation: false
+                property bool controllerNavigation: root.couchMode
                 Layout.fillWidth: true
                 placeholderText: "Search installed games"
                 Accessible.name: placeholderText
                 color: Theme.foreground
                 font.family: Theme.fontFamily
                 onTextChanged: root.linkResults = Library.linkCandidates(root.selectedIndex, text)
+                Keys.onReturnPressed: function(event) {
+                    root.handleCouchTextEntry(event, linkSearch,
+                                              "SEARCH INSTALLATIONS", false,
+                                              linkSearch.placeholderText)
+                }
+                Keys.onEnterPressed: function(event) {
+                    root.handleCouchTextEntry(event, linkSearch,
+                                              "SEARCH INSTALLATIONS", false,
+                                              linkSearch.placeholderText)
+                }
                 Keys.onDownPressed: function(event) {
                     if (candidateList.count > 0) {
                         candidateList.currentIndex = 0
@@ -2076,7 +2134,7 @@ ApplicationWindow {
                     enabled: SteamAccount !== null
                     TextField {
                         id: steamIdField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: "Steam ID (17 digits, starts with 7656119)"
                         Accessible.name: "Steam ID"
@@ -2089,6 +2147,14 @@ ApplicationWindow {
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
                         inputMethodHints: Qt.ImhDigitsOnly
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, steamIdField, "STEAM ID", false,
+                                                      steamIdField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, steamIdField, "STEAM ID", false,
+                                                      steamIdField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2109,7 +2175,7 @@ ApplicationWindow {
                     enabled: SteamAccount !== null && !SteamAccount.busy
                     TextField {
                         id: apiKeyField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         Accessible.name: "Steam Web API key"
                         placeholderText: SteamAccount && SteamAccount.hasApiKey
@@ -2118,6 +2184,14 @@ ApplicationWindow {
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         echoMode: TextInput.Password
                         font.family: Theme.fontFamily
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, apiKeyField, "STEAM WEB API KEY", true,
+                                                      apiKeyField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, apiKeyField, "STEAM WEB API KEY", true,
+                                                      apiKeyField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2206,13 +2280,23 @@ ApplicationWindow {
                     enabled: RetroAchievements !== null && !RetroAchievements.busy
                     TextField {
                         id: retroAchievementsUsernameField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: "RetroAchievements username"
                         text: RetroAchievements ? RetroAchievements.username : ""
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsUsernameField,
+                                                      "RETROACHIEVEMENTS USERNAME", false,
+                                                      retroAchievementsUsernameField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsUsernameField,
+                                                      "RETROACHIEVEMENTS USERNAME", false,
+                                                      retroAchievementsUsernameField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2233,13 +2317,23 @@ ApplicationWindow {
                     enabled: RetroAchievements !== null && !RetroAchievements.busy
                     TextField {
                         id: retroAchievementsKeyField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: RetroAchievements && RetroAchievements.hasApiKey
                                          ? "API key stored securely" : "RetroAchievements Web API key"
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         echoMode: TextInput.Password
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsKeyField,
+                                                      "RETROACHIEVEMENTS API KEY", true,
+                                                      retroAchievementsKeyField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, retroAchievementsKeyField,
+                                                      "RETROACHIEVEMENTS API KEY", true,
+                                                      retroAchievementsKeyField.placeholderText)
+                        }
                         font.family: Theme.fontFamily
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
@@ -2311,7 +2405,7 @@ ApplicationWindow {
                     enabled: Insights !== null && !Insights.busy
                     TextField {
                         id: igdbClientIdField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         placeholderText: "Twitch developer client ID"
                         Accessible.name: placeholderText
@@ -2321,6 +2415,16 @@ ApplicationWindow {
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         font.family: Theme.fontFamily
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbClientIdField,
+                                                      "TWITCH CLIENT ID", false,
+                                                      igdbClientIdField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbClientIdField,
+                                                      "TWITCH CLIENT ID", false,
+                                                      igdbClientIdField.placeholderText)
+                        }
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
                             color: root.alpha(Theme.foreground, 0.045)
@@ -2341,7 +2445,7 @@ ApplicationWindow {
                     enabled: Insights !== null && !Insights.busy
                     TextField {
                         id: igdbSecretField
-                        property bool controllerNavigation: false
+                        property bool controllerNavigation: root.couchMode
                         Layout.fillWidth: true
                         Accessible.name: "Twitch developer client secret"
                         placeholderText: Insights && Insights.hasClientSecret
@@ -2349,6 +2453,16 @@ ApplicationWindow {
                         color: Theme.foreground
                         placeholderTextColor: root.alpha(Theme.foreground, 0.42)
                         echoMode: TextInput.Password
+                        Keys.onReturnPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbSecretField,
+                                                      "TWITCH CLIENT SECRET", true,
+                                                      igdbSecretField.placeholderText)
+                        }
+                        Keys.onEnterPressed: function(event) {
+                            root.handleCouchTextEntry(event, igdbSecretField,
+                                                      "TWITCH CLIENT SECRET", true,
+                                                      igdbSecretField.placeholderText)
+                        }
                         font.family: Theme.fontFamily
                         background: Rectangle {
                             radius: Math.max(5, Theme.cornerRadius)
@@ -2643,6 +2757,21 @@ ApplicationWindow {
                 }
             }
         }
+    }
+
+    CouchKeyboard {
+        id: couchTextEntryKeyboard
+        objectName: "couchTextEntryKeyboard"
+        anchors.fill: parent
+        visible: root.couchTextEntryOpen
+        enabled: visible
+        z: 100
+        title: root.couchTextEntryTitle
+        placeholder: root.couchTextEntryPlaceholder
+        passwordMode: root.couchTextEntryPassword
+        gridObjectName: "couchTextEntryGrid"
+        onAccepted: root.closeCouchTextEntry(true)
+        onCanceled: root.closeCouchTextEntry(false)
     }
 
     Component.onCompleted: {

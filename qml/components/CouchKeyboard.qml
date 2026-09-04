@@ -6,13 +6,36 @@ FocusScope {
     id: root
 
     property string value: ""
+    property string title: "SEARCH YOUR LIBRARY"
+    property string placeholder: "Start typing"
+    property bool passwordMode: false
+    property int maximumLength: 128
+    property string keyboardMode: "upper"
+    property string gridObjectName: "couchKeyboardGrid"
     readonly property int columns: 10
-    readonly property var keys: [
+    readonly property var upperKeys: [
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
         "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
         "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3",
-        "4", "5", "6", "7", "8", "9", "BACKSPACE", "SPACE", "CLEAR", "DONE"
+        "4", "5", "6", "7", "8", "9", ".", "-", "_", "@",
+        "BACKSPACE", "SPACE", "CLEAR", "SHIFT", "SYMBOLS", "DONE"
     ]
+    readonly property var lowerKeys: [
+        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+        "k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
+        "u", "v", "w", "x", "y", "z", "0", "1", "2", "3",
+        "4", "5", "6", "7", "8", "9", ".", "-", "_", "@",
+        "BACKSPACE", "SPACE", "CLEAR", "SHIFT", "SYMBOLS", "DONE"
+    ]
+    readonly property var symbolKeys: [
+        "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*",
+        "+", ",", "-", ".", "/", ":", ";", "<", "=", ">",
+        "?", "@", "[", "]", "^", "_", "{", "|", "}", "~",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        "BACKSPACE", "SPACE", "CLEAR", "LETTERS", "SHIFT", "DONE"
+    ]
+    readonly property var keys: keyboardMode === "symbols" ? symbolKeys
+                                : keyboardMode === "lower" ? lowerKeys : upperKeys
 
     signal valueEdited(string value)
     signal accepted(string value)
@@ -30,6 +53,24 @@ FocusScope {
         keyGrid.forceActiveFocus(Qt.TabFocusReason)
     }
 
+    function appendText(text) {
+        if (text.length > 0 && value.length < maximumLength) {
+            value += text.slice(0, maximumLength - value.length)
+            valueEdited(value)
+        }
+    }
+
+    function displayValue() {
+        if (!passwordMode) {
+            return value
+        }
+        let masked = ""
+        for (let index = 0; index < value.length; ++index) {
+            masked += "•"
+        }
+        return masked
+    }
+
     function activateKey(index) {
         if (index < 0 || index >= keys.length) {
             return
@@ -44,10 +85,29 @@ FocusScope {
         } else if (key === "DONE") {
             accepted(value)
             return
-        } else if (value.length < 80) {
-            value += key
+        } else if (key === "SHIFT") {
+            keyboardMode = keyboardMode === "lower" ? "upper" : "lower"
+        } else if (key === "SYMBOLS") {
+            keyboardMode = "symbols"
+        } else if (key === "LETTERS") {
+            keyboardMode = "upper"
+        } else {
+            appendText(key)
+            return
         }
         valueEdited(value)
+    }
+
+    Keys.priority: Keys.AfterItem
+    Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Backspace) {
+            root.value = root.value.slice(0, -1)
+            root.valueEdited(root.value)
+            event.accepted = true
+        } else if (event.text.length > 0 && event.text.charCodeAt(0) >= 32) {
+            root.appendText(event.text)
+            event.accepted = true
+        }
     }
 
     Rectangle {
@@ -79,7 +139,7 @@ FocusScope {
                     spacing: 3
 
                     Text {
-                        text: "SEARCH YOUR LIBRARY"
+                        text: root.title
                         color: Theme.brightForeground
                         font.family: Theme.fontFamily
                         font.pixelSize: 26
@@ -112,7 +172,9 @@ FocusScope {
                     anchors.leftMargin: 22
                     anchors.rightMargin: 22
                     verticalAlignment: Text.AlignVCenter
-                    text: root.value.length > 0 ? root.value : "Start typing"
+                    text: root.value.length > 0
+                          ? root.displayValue()
+                          : root.placeholder
                     textFormat: Text.PlainText
                     color: root.value.length > 0 ? Theme.brightForeground : Theme.mutedText
                     font.family: Theme.fontFamily
@@ -123,12 +185,12 @@ FocusScope {
 
             GridView {
                 id: keyGrid
-                objectName: "couchKeyboardGrid"
+                objectName: root.gridObjectName
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 model: root.keys
                 cellWidth: width / root.columns
-                cellHeight: height / 4
+                cellHeight: height / Math.ceil(root.keys.length / root.columns)
                 currentIndex: 0
                 clip: true
                 keyNavigationEnabled: false
