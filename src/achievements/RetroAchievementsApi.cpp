@@ -29,12 +29,17 @@ qint64 parseDate(const QJsonObject& achievement) {
   if (value.isEmpty()) {
     return 0;
   }
-  QDateTime parsed = QDateTime::fromString(value, QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+  QDateTime parsed = QDateTime::fromString(value, Qt::ISODate);
   if (!parsed.isValid()) {
-    parsed = QDateTime::fromString(value, Qt::ISODate);
+    parsed = QDateTime::fromString(value, QStringLiteral("yyyy-MM-dd HH:mm:ss"));
   }
-  parsed.setTimeZone(QTimeZone::UTC);
-  return parsed.isValid() ? parsed.toSecsSinceEpoch() : 0;
+  if (!parsed.isValid()) {
+    return 0;
+  }
+  if (parsed.timeSpec() == Qt::LocalTime) {
+    parsed = QDateTime(parsed.date(), parsed.time(), QTimeZone::UTC);
+  }
+  return parsed.toSecsSinceEpoch();
 }
 
 QString badgeUrl(const QString& badgeName, bool unlocked) {

@@ -261,6 +261,7 @@ void Pcsx2GameModel::applyScan(const Pcsx2ScanResult& result) {
     setStatus(QStringLiteral("Could not update PCSX2 games"), m_database.lastError().text());
     return;
   }
+  const qint64 scanTimestamp = QDateTime::currentSecsSinceEpoch();
   QSqlQuery query(m_database);
   bool okay = query.exec(QStringLiteral("UPDATE pcsx2_games SET observed_at = 0"));
   for (const Pcsx2GameRecord& game : result.games) {
@@ -286,10 +287,12 @@ void Pcsx2GameModel::applyScan(const Pcsx2ScanResult& result) {
   }
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('pcsx2', "
-      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "?, ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
       "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(scanTimestamp);
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
-  query.addBindValue(result.roots.isEmpty() ? QStringLiteral("") : result.roots.join(QLatin1Char('\n')));
+  query.addBindValue(result.roots.isEmpty() ? QStringLiteral("")
+                                            : result.roots.join(QLatin1Char('\n')));
   okay = okay && query.exec();
   if (!okay || !m_database.commit()) {
     m_database.rollback();
@@ -298,7 +301,7 @@ void Pcsx2GameModel::applyScan(const Pcsx2ScanResult& result) {
   }
   loadDatabase();
   m_detectedPaths = result.roots;
-  m_lastScan = QDateTime::currentSecsSinceEpoch();
+  m_lastScan = scanTimestamp;
   setStatus(m_pcsx2Detected ? QStringLiteral("Imported %1 PCSX2 game(s)").arg(result.games.size())
                             : QStringLiteral("PCSX2 was not found"),
             result.warnings.join(QLatin1Char('\n')));

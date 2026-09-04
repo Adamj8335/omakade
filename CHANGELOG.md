@@ -20,8 +20,8 @@
 
 ### PCSX2 and Ryujinx
 
-- Added PCSX2 as a game source: imports disc-based games from the native
-  gamelist cache (v32 and v34) for native and Flatpak installs, with cover
+- Added PCSX2 as a game source: imports disc-based games from the current
+  gamelist cache (v34) for native and Flatpak installs, with cover
   art, playtime, last-played, and region metadata, and delegated launching
   through the owning PCSX2 install. Sources are discovered automatically and
   appear once the emulator is detected.

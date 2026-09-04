@@ -45,6 +45,16 @@ QString coverCacheRoot() {
          QStringLiteral("/omakade/covers");
 }
 
+qint64 otherCoverCacheBytes() {
+  qint64 total = 0;
+  QDirIterator iterator(coverCacheRoot() + QStringLiteral("/battlenet"), QDir::Files,
+                        QDirIterator::Subdirectories);
+  while (iterator.hasNext()) {
+    total += QFileInfo(iterator.next()).size();
+  }
+  return total;
+}
+
 QString coverCachePath(const QString& appId) {
   return coverCacheRoot() + QLatin1Char('/') + appId + QStringLiteral(".jpg");
 }
@@ -877,7 +887,8 @@ void SteamGameModel::applyCover(const QString& appId, const QString& path) {
 
 void SteamGameModel::pruneCoverCache() {
   const int limitMb = m_settings == nullptr ? 1024 : m_settings->artworkCacheLimitMb();
-  const qint64 limit = static_cast<qint64>(limitMb) * 1024 * 1024;
+  const qint64 configuredLimit = static_cast<qint64>(limitMb) * 1024 * 1024;
+  const qint64 limit = qMax<qint64>(0, configuredLimit - otherCoverCacheBytes());
   struct CachedFile {
     QString path;
     QDateTime modified;

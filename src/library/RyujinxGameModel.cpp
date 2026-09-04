@@ -262,6 +262,7 @@ void RyujinxGameModel::applyScan(const RyujinxScanResult& result) {
     setStatus(QStringLiteral("Could not update Ryujinx games"), m_database.lastError().text());
     return;
   }
+  const qint64 scanTimestamp = QDateTime::currentSecsSinceEpoch();
   QSqlQuery query(m_database);
   bool okay = query.exec(QStringLiteral("UPDATE ryujinx_games SET observed_at = 0"));
   for (const RyujinxGameRecord& game : result.games) {
@@ -286,10 +287,12 @@ void RyujinxGameModel::applyScan(const RyujinxScanResult& result) {
   }
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('ryujinx', "
-      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "?, ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
       "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(scanTimestamp);
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
-  query.addBindValue(result.roots.isEmpty() ? QStringLiteral("") : result.roots.join(QLatin1Char('\n')));
+  query.addBindValue(result.roots.isEmpty() ? QStringLiteral("")
+                                            : result.roots.join(QLatin1Char('\n')));
   okay = okay && query.exec();
   if (!okay || !m_database.commit()) {
     m_database.rollback();
@@ -298,7 +301,7 @@ void RyujinxGameModel::applyScan(const RyujinxScanResult& result) {
   }
   loadDatabase();
   m_detectedPaths = result.roots;
-  m_lastScan = QDateTime::currentSecsSinceEpoch();
+  m_lastScan = scanTimestamp;
   setStatus(m_ryujinxDetected ? QStringLiteral("Imported %1 Ryujinx game(s)").arg(result.games.size())
                               : QStringLiteral("Ryujinx was not found"),
             result.warnings.join(QLatin1Char('\n')));

@@ -95,6 +95,7 @@ private:
   PendingRefresh m_pending;
   QByteArray m_activeApiKey;
   QString m_pendingAutoRefreshGameId;
+  bool m_detectPending = false;
   bool m_hasApiKey = false;
   bool m_busy = false;
   QString m_statusText;

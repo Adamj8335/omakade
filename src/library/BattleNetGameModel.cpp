@@ -14,6 +14,7 @@
 #include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QScopeGuard>
 #include <QSet>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -51,6 +52,21 @@ constexpr int kMaximumConcurrentCoverDownloads = 4;
 QString coverCacheRoot() {
   return QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) +
          QStringLiteral("/omakade/covers/battlenet");
+}
+
+qint64 otherCoverCacheBytes() {
+  const QString sharedRoot = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) +
+                             QStringLiteral("/omakade/covers");
+  const QString battleNetRoot = coverCacheRoot() + QLatin1Char('/');
+  qint64 total = 0;
+  QDirIterator iterator(sharedRoot, QDir::Files, QDirIterator::Subdirectories);
+  while (iterator.hasNext()) {
+    const QFileInfo info(iterator.next());
+    if (!info.absoluteFilePath().startsWith(battleNetRoot)) {
+      total += info.size();
+    }
+  }
+  return total;
 }
 
 bool safeProductId(const QString& productId) {
@@ -92,7 +108,11 @@ BattleNetGameModel::BattleNetGameModel(const QString& omakadeDatabasePath, AppSe
           QStringLiteral("omakade-battlenet-%1").arg(reinterpret_cast<quintptr>(this))),
       m_settings(settings) {
   connect(&m_scanWatcher, &QFutureWatcher<BattleNetScanResult>::finished, this,
-          [this] { applyScan(m_scanWatcher.result()); });
+          [this] {
+            applyScan(m_scanWatcher.result());
+            m_scanning = false;
+            emit scanningChanged();
+          });
   if (openDatabase(omakadeDatabasePath) && ensureSchema()) {
     loadDatabase();
     loadSourceState();
@@ -160,6 +180,7 @@ QString BattleNetGameModel::statusText() const { return m_statusText; }
 QString BattleNetGameModel::errorText() const { return m_errorText; }
 QStringList BattleNetGameModel::detectedPaths() const { return m_detectedPaths; }
 qint64 BattleNetGameModel::lastScan() const { return m_lastScan; }
+bool BattleNetGameModel::scanning() const { return m_scanning; }
 
 void BattleNetGameModel::toggleFavorite(int row) {
   if (row < 0 || row >= m_games.size() || !m_database.isOpen()) {
@@ -212,6 +233,8 @@ void BattleNetGameModel::refresh() {
     return;
   }
   setStatus(QStringLiteral("Scanning Battle.net library"));
+  m_scanning = true;
+  emit scanningChanged();
   m_scanWatcher.setFuture(QtConcurrent::run(
       [] { return BattleNetScanner::scan(BattleNetScanner::discoverPrefixes()); }));
 }
@@ -250,6 +273,10 @@ bool BattleNetGameModel::ensureSchema() {
     }
   }
   if (!columns.contains(QStringLiteral("game_id"))) {
+    if (!m_database.transaction()) {
+      return false;
+    }
+    auto rollback = qScopeGuard([this] { m_database.rollback(); });
     if (!query.exec(QStringLiteral("ALTER TABLE battlenet_games RENAME TO battlenet_games_legacy")) ||
         !query.exec(QStringLiteral(
             "CREATE TABLE battlenet_games (game_id TEXT PRIMARY KEY, product_id TEXT NOT NULL, "
@@ -268,7 +295,7 @@ bool BattleNetGameModel::ensureSchema() {
     }
     QSqlQuery insert(m_database);
     insert.prepare(QStringLiteral(
-        "INSERT INTO battlenet_games(game_id, product_id, name, launch_code, install_path, "
+        "INSERT OR IGNORE INTO battlenet_games(game_id, product_id, name, launch_code, install_path, "
         "wine_prefix, runner, cover_path, hero_path, last_played, flatpak, favorite, hidden, "
         "observed_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
     while (legacy.next()) {
@@ -286,6 +313,10 @@ bool BattleNetGameModel::ensureSchema() {
     if (!query.exec(QStringLiteral("DROP TABLE battlenet_games_legacy"))) {
       return false;
     }
+    if (!m_database.commit()) {
+      return false;
+    }
+    rollback.dismiss();
   }
   if (!query.exec(QStringLiteral(
           "CREATE TABLE IF NOT EXISTS source_state (source TEXT PRIMARY KEY, last_scan INTEGER, "
@@ -345,12 +376,12 @@ void BattleNetGameModel::loadSourceState() {
 }
 
 void BattleNetGameModel::applyScan(const BattleNetScanResult& result) {
-  m_battleNetDetected = !result.prefixes.isEmpty();
   if (result.incomplete || (result.prefixes.isEmpty() && !m_games.isEmpty())) {
     setStatus(QStringLiteral("Battle.net scan interrupted; kept the cached library"),
               result.warnings.join(QLatin1Char('\n')));
     return;
   }
+  m_battleNetDetected = !result.prefixes.isEmpty();
   m_coverQueue.clear();
   m_pendingCovers.clear();
   if (!m_database.transaction()) {
@@ -384,10 +415,12 @@ void BattleNetGameModel::applyScan(const BattleNetScanResult& result) {
     query.addBindValue(game.flatpak);
     okay = okay && query.exec();
   }
+  const qint64 scanTimestamp = QDateTime::currentSecsSinceEpoch();
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('battlenet', "
-      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "?, ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
       "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(scanTimestamp);
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
   query.addBindValue(result.prefixes.isEmpty() ? QStringLiteral("")
                                                : result.prefixes.join(QLatin1Char('\n')));
@@ -399,7 +432,7 @@ void BattleNetGameModel::applyScan(const BattleNetScanResult& result) {
   }
   loadDatabase();
   m_detectedPaths = result.prefixes;
-  m_lastScan = QDateTime::currentSecsSinceEpoch();
+  m_lastScan = scanTimestamp;
   m_failedCovers.clear();
   requestMissingCovers();
   setStatus(m_battleNetDetected
@@ -598,7 +631,8 @@ void BattleNetGameModel::applyArtwork(const QString& gameId, const QString& path
 
 void BattleNetGameModel::pruneCoverCache() {
   const int limitMb = m_settings == nullptr ? 1024 : m_settings->artworkCacheLimitMb();
-  const qint64 limit = static_cast<qint64>(limitMb) * 1024 * 1024;
+  const qint64 configuredLimit = static_cast<qint64>(limitMb) * 1024 * 1024;
+  const qint64 limit = qMax<qint64>(0, configuredLimit - otherCoverCacheBytes());
   struct CachedFile {
     QString path;
     QDateTime modified;

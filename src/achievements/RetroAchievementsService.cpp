@@ -109,11 +109,12 @@ RetroAchievementsService::RetroAchievementsService(const QString& databasePath,
           &RetroAchievementsService::finishSecretOperation);
   connect(&m_hashWatcher, &QFutureWatcher<std::optional<QByteArray>>::finished, this,
           &RetroAchievementsService::finishHashing);
-  if (m_settings != nullptr && !m_settings->retroAchievementsUsername().isEmpty()) {
-    beginSecretOperation(SecretAction::Detect);
-  } else if (m_settings != nullptr) {
+  if (m_settings != nullptr) {
     connect(m_settings, &AppSettings::retroAchievementsUsernameChanged, this,
             &RetroAchievementsService::startDetectOnUsernameChanged, Qt::QueuedConnection);
+    if (!m_settings->retroAchievementsUsername().isEmpty()) {
+      beginSecretOperation(SecretAction::Detect);
+    }
   }
 }
 
@@ -278,6 +279,20 @@ void RetroAchievementsService::beginSecretOperation(SecretAction action,
 }
 
 void RetroAchievementsService::startDetectOnUsernameChanged() {
+  m_detectPending = true;
+  if (m_hasApiKey) {
+    m_hasApiKey = false;
+    emit accountChanged();
+  }
+  if (m_busy || m_secretWatcher.isRunning()) {
+    return;
+  }
+  m_detectPending = false;
+  if (username().isEmpty()) {
+    setStatus(QStringLiteral("setup"),
+              QStringLiteral("Enter your RetroAchievements username before connecting"));
+    return;
+  }
   beginSecretOperation(SecretAction::Detect);
 }
 
@@ -291,6 +306,10 @@ void RetroAchievementsService::finishSecretOperation() {
     return;
   }
   if (m_secretAction == SecretAction::Detect) {
+    if (m_detectPending) {
+      setBusy(false);
+      return;
+    }
     m_hasApiKey = result.found;
     emit accountChanged();
     setBusy(false);
@@ -604,6 +623,9 @@ void RetroAchievementsService::setBusy(bool busy) {
   }
   m_busy = busy;
   emit busyChanged();
+  if (!m_busy && m_detectPending) {
+    QTimer::singleShot(0, this, &RetroAchievementsService::startDetectOnUsernameChanged);
+  }
   if (!m_busy && !m_pendingAutoRefreshGameId.isEmpty()) {
     const QString gameId = m_pendingAutoRefreshGameId;
     m_pendingAutoRefreshGameId.clear();

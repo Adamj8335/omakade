@@ -263,7 +263,8 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
       }
       // Legacy fallback: gui as a plain file with TitleName (older Ryujinx layouts).
       QFile guiFile(guiPath);
-      if (!metadataFile.exists() && guiFile.open(QIODevice::ReadOnly)) {
+      if (!metadataFile.exists() && guiFile.open(QIODevice::ReadOnly) &&
+          guiFile.size() <= kMaximumJsonBytes) {
         const QJsonObject gui =
             QJsonDocument::fromJson(guiFile.readAll(), &parseError).object();
         if (parseError.error == QJsonParseError::NoError) {
@@ -274,7 +275,7 @@ RyujinxScanResult RyujinxScanner::scan(const QStringList& roots) {
         }
       }
       QFile timeFile(entry.filePath() + QStringLiteral("/time_played"));
-      if (timeFile.open(QIODevice::ReadOnly)) {
+      if (timeFile.open(QIODevice::ReadOnly) && timeFile.size() <= kMaximumJsonBytes) {
         const QJsonObject times =
             QJsonDocument::fromJson(timeFile.readAll(), &parseError).object();
         if (parseError.error == QJsonParseError::NoError) {

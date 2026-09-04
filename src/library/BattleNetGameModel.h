@@ -21,6 +21,7 @@ class BattleNetGameModel final : public QAbstractListModel {
   Q_PROPERTY(QString errorText READ errorText NOTIFY statusChanged)
   Q_PROPERTY(QStringList detectedPaths READ detectedPaths NOTIFY statusChanged)
   Q_PROPERTY(qint64 lastScan READ lastScan NOTIFY statusChanged)
+  Q_PROPERTY(bool scanning READ scanning NOTIFY scanningChanged)
 
 public:
   explicit BattleNetGameModel(const QString& omakadeDatabasePath, AppSettings* settings = nullptr,
@@ -35,6 +36,7 @@ public:
   [[nodiscard]] QString errorText() const;
   [[nodiscard]] QStringList detectedPaths() const;
   [[nodiscard]] qint64 lastScan() const;
+  [[nodiscard]] bool scanning() const;
 
   Q_INVOKABLE void toggleFavorite(int row);
   Q_INVOKABLE void toggleHidden(int row);
@@ -44,6 +46,7 @@ public:
 
 signals:
   void statusChanged();
+  void scanningChanged();
 
 private:
   struct Game {
@@ -83,6 +86,7 @@ private:
   QString m_errorText;
   QStringList m_detectedPaths;
   qint64 m_lastScan = 0;
+  bool m_scanning = false;
   AppSettings* m_settings = nullptr;
   QNetworkAccessManager m_network;
   QHash<QNetworkReply*, QByteArray> m_coverBuffers;

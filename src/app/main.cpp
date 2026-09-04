@@ -253,6 +253,13 @@ int main(int argc, char* argv[]) {
     GameLauncher headlessLauncher;
     const LaunchKey key = LaunchKey::parse(playKey);
     QString error;
+    if (key.source.compare(QStringLiteral("PCSX2"), Qt::CaseInsensitive) == 0 &&
+        preferences.pcsx2AutoEnabled()) {
+      unifiedGames.setSourceEnabled(QStringLiteral("PCSX2"), true);
+    } else if (key.source.compare(QStringLiteral("Ryujinx"), Qt::CaseInsensitive) == 0 &&
+               preferences.ryujinxAutoEnabled()) {
+      unifiedGames.setSourceEnabled(QStringLiteral("Ryujinx"), true);
+    }
     if (PlayRequest::findInstallation(unifiedGames, key, nullptr).isEmpty() && key.isValid()) {
       bool refreshStarted = false;
       if (key.source.compare(QStringLiteral("Steam"), Qt::CaseInsensitive) == 0 &&

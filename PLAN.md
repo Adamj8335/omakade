@@ -1,13 +1,15 @@
 # Omakade product and delivery plan
 
 Implementation status: M0 through M5 are complete. Steam, Lutris, Heroic,
-Faugus, RetroArch, and Battle.net import, launch delegation, source filters, organization,
-settings, release checks, and explicit linking are implemented.
+Faugus, RetroArch, PCSX2, Ryujinx, and Battle.net import, launch delegation,
+source filters, organization, settings, release checks, and explicit linking
+are implemented.
 
 ## Product statement
 
 Omakade is a beautiful, local-first game library built for Omarchy. It brings
-installed games from Steam, Lutris, Heroic, Faugus, RetroArch, and Battle.net into one coherent place.
+installed games from Steam, Lutris, Heroic, Faugus, RetroArch, PCSX2, Ryujinx,
+and Battle.net into one coherent place.
 It owns discovery, presentation, search, achievements, organization, and the
 launch action. Existing platforms continue to own authentication, installation,
 updates, compatibility tools, cloud saves, DRM, and overlays.

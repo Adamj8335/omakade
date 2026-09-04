@@ -2876,7 +2876,7 @@ void CoreTests::retroAchievementsApiBuildsUrlsAndParsesResponses() {
   for (const RetroAchievementsAchievementRecord& achievement : progress.achievements) {
     if (achievement.apiName == QStringLiteral("111")) {
       QVERIFY(achievement.unlocked);
-      QVERIFY(achievement.unlockTime > 0);
+      QCOMPARE(achievement.unlockTime, qint64(1609556645));
       QVERIFY(achievement.iconUrl.endsWith(QStringLiteral("012345.png")));
       foundUnlocked = true;
     } else if (achievement.apiName == QStringLiteral("112")) {
