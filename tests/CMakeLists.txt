@@ -65,6 +65,15 @@ set_tests_properties(omakade_couch_thousand_game_navigation PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1;HYPRLAND_INSTANCE_SIGNATURE="
   TIMEOUT 10
 )
+
+add_test(NAME omakade_couch_owned_navigation
+  COMMAND omakade --couch --couch-navigation-test --owned-layout-test
+          --uninstalled-layout-test --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_owned_navigation PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1;HYPRLAND_INSTANCE_SIGNATURE="
+  TIMEOUT 10
+)
 set_tests_properties(omakade_controller_navigation_wide PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30
@@ -175,6 +184,28 @@ add_test(NAME omakade_couch_text_entry_render
           --render-size=1920x1080
 )
 set_tests_properties(omakade_couch_text_entry_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
+
+add_test(NAME omakade_couch_settings_render
+  COMMAND omakade --couch --owned-layout-test
+          --render-overlay=couch-settings-top
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-settings.png
+          --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_settings_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
+
+add_test(NAME omakade_couch_settings_720p_render
+  COMMAND omakade --couch --owned-layout-test
+          --render-overlay=couch-settings-bottom
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-settings-720p.png
+          --render-size=1280x720
+)
+set_tests_properties(omakade_couch_settings_720p_render PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30
 )

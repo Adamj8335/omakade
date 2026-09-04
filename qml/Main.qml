@@ -1887,10 +1887,17 @@ ApplicationWindow {
         }
 
         Rectangle {
+            id: settingsPanel
             anchors.centerIn: parent
-            width: Math.min(610, parent.width - 48)
-            height: Math.min(760, parent.height - 48)
-            radius: Math.max(8, Theme.cornerRadius)
+            readonly property real uiScale: root.couchMode
+                                                ? Math.max(1, Math.min(1.35,
+                                                                      root.height / 900))
+                                                : 1
+            width: Math.min(root.couchMode ? 1280 : 610,
+                            parent.width - (root.couchMode ? 96 : 48))
+            height: Math.min(root.couchMode ? 900 : 760,
+                             parent.height - (root.couchMode ? 72 : 48))
+            radius: Math.max(root.couchMode ? 14 : 8, Theme.cornerRadius)
             color: root.alpha(Theme.background, 0.98)
             border.color: root.alpha(Theme.foreground, 0.2)
 
@@ -1901,7 +1908,8 @@ ApplicationWindow {
                 objectName: "settingsScroll"
                 readonly property real navigationContentY: contentItem ? contentItem.contentY : 0
                 anchors.fill: parent
-                anchors.margins: 28
+                anchors.margins: root.couchMode ? 42 : 28
+                anchors.bottomMargin: root.couchMode ? 70 : 28
                 rightPadding: 18
                 contentWidth: availableWidth
 
@@ -1913,14 +1921,14 @@ ApplicationWindow {
                     text: "SETTINGS & SOURCES"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 20
+                    font.pixelSize: 20 * settingsPanel.uiScale
                     font.weight: Font.Bold
                 }
                 Text {
                     text: "GAME SOURCES"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Repeater {
@@ -1977,7 +1985,7 @@ ApplicationWindow {
                                 text: modelData.name
                                 color: modelData.enabled ? Theme.accent : Theme.mutedText
                                 font.family: Theme.fontFamily
-                                font.pixelSize: 11
+                                font.pixelSize: 11 * settingsPanel.uiScale
                                 font.weight: Font.Bold
                             }
                             GlassButton {
@@ -2045,7 +2053,7 @@ ApplicationWindow {
                             text: modelData.status + " · " + root.scanTime(modelData.lastScan)
                             color: Theme.foreground
                             font.family: Theme.fontFamily
-                            font.pixelSize: 10
+                            font.pixelSize: 10 * settingsPanel.uiScale
                             wrapMode: Text.Wrap
                         }
                         Text {
@@ -2054,7 +2062,7 @@ ApplicationWindow {
                             text: modelData.paths.join("\n")
                             color: Theme.mutedText
                             font.family: Theme.fontFamily
-                            font.pixelSize: 9
+                            font.pixelSize: 9 * settingsPanel.uiScale
                             wrapMode: Text.WrapAnywhere
                         }
                         Text {
@@ -2063,7 +2071,7 @@ ApplicationWindow {
                             text: modelData.error
                             color: Theme.yellow
                             font.family: Theme.fontFamily
-                            font.pixelSize: 9
+                            font.pixelSize: 9 * settingsPanel.uiScale
                             wrapMode: Text.Wrap
                         }
                     }
@@ -2073,7 +2081,7 @@ ApplicationWindow {
                     text: "Demo library"
                     color: Theme.accent
                     font.family: Theme.fontFamily
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * settingsPanel.uiScale
                 }
                 Repeater {
                     model: [
@@ -2092,14 +2100,14 @@ ApplicationWindow {
                             text: modelData.label
                             color: Theme.mutedText
                             font.family: Theme.fontFamily
-                            font.pixelSize: 10
+                            font.pixelSize: 10 * settingsPanel.uiScale
                         }
                         Text {
                             Layout.fillWidth: true
                             text: modelData.value
                             color: Theme.foreground
                             font.family: Theme.fontFamily
-                            font.pixelSize: 11
+                            font.pixelSize: 11 * settingsPanel.uiScale
                             elide: Text.ElideMiddle
                         }
                     }
@@ -2113,7 +2121,7 @@ ApplicationWindow {
                     text: "OPTIONAL STEAM CONNECTION"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2126,7 +2134,7 @@ ApplicationWindow {
                                             || SteamAccount.state === "rate-limited")
                            ? Theme.yellow : Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -2238,7 +2246,7 @@ ApplicationWindow {
                               ? SteamAccount.ownedGameCount + " OWNED GAMES CACHED" : ""
                         color: Theme.mutedText
                         font.family: Theme.fontFamily
-                        font.pixelSize: 9
+                        font.pixelSize: 9 * settingsPanel.uiScale
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -2247,7 +2255,7 @@ ApplicationWindow {
                     text: "OWNED LIBRARY SYNC REQUIRES PUBLIC STEAM GAME DETAILS"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 8
+                    font.pixelSize: 8 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Rectangle {
@@ -2259,7 +2267,7 @@ ApplicationWindow {
                     text: "OPTIONAL RETROACHIEVEMENTS CONNECTION"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2272,7 +2280,7 @@ ApplicationWindow {
                                                  || RetroAchievements.state === "rate-limited")
                            ? Theme.yellow : Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -2369,7 +2377,7 @@ ApplicationWindow {
                     text: "SUPPORTS NES, SNES, GENESIS, GAME BOY AND OTHER CARTRIDGE SYSTEMS FIRST; DISC-BASED SYSTEMS ARE NOT MATCHED YET"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 8
+                    font.pixelSize: 8 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Rectangle {
@@ -2381,7 +2389,7 @@ ApplicationWindow {
                     text: "OPTIONAL GAME INSIGHTS"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2389,7 +2397,7 @@ ApplicationWindow {
                     text: Insights ? Insights.statusText : "IGDB is unavailable in demo mode."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Text {
@@ -2397,7 +2405,7 @@ ApplicationWindow {
                     text: "TWITCH SETUP · Create Application, not Extension · Redirect: http://localhost · Client type: Confidential · Manage → New Secret"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 9
+                    font.pixelSize: 9 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -2502,7 +2510,7 @@ ApplicationWindow {
                     text: "STREAM WITH SUNSHINE AND MOONLIGHT"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2510,7 +2518,7 @@ ApplicationWindow {
                     text: Sunshine ? Sunshine.statusText : "Sunshine export is unavailable in demo mode."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 Text {
@@ -2518,7 +2526,7 @@ ApplicationWindow {
                     text: "Moonlight shows Sunshine's app list. Omakade can add itself next to Steam Big Picture and one app per installed game with its cover. Sunshine reads the list when it starts, so restart it after changes."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 9
+                    font.pixelSize: 9 * settingsPanel.uiScale
                     wrapMode: Text.Wrap
                 }
                 RowLayout {
@@ -2529,7 +2537,7 @@ ApplicationWindow {
                         text: "OMAKADE IN MOONLIGHT"
                         color: Theme.foreground
                         font.family: Theme.fontFamily
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * settingsPanel.uiScale
                     }
                     GlassButton {
                         objectName: "sunshineOmakadeButton"
@@ -2548,7 +2556,7 @@ ApplicationWindow {
                               : "ONE APP PER INSTALLED GAME"
                         color: Theme.foreground
                         font.family: Theme.fontFamily
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * settingsPanel.uiScale
                     }
                     GlassButton {
                         objectName: "sunshineGamesButton"
@@ -2583,7 +2591,7 @@ ApplicationWindow {
                     text: "LIBRARY COLLECTIONS"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 11
+                    font.pixelSize: 11 * settingsPanel.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -2591,7 +2599,7 @@ ApplicationWindow {
                     text: "Create collections from a game's details."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 10
+                    font.pixelSize: 10 * settingsPanel.uiScale
                 }
                 Repeater {
                     model: Library.collectionNames
@@ -2603,7 +2611,7 @@ ApplicationWindow {
                             text: modelData
                             color: Theme.foreground
                             font.family: Theme.fontFamily
-                            font.pixelSize: 11
+                            font.pixelSize: 11 * settingsPanel.uiScale
                             elide: Text.ElideRight
                         }
                         GlassButton {
@@ -2676,6 +2684,20 @@ ApplicationWindow {
                     }
                 }
             }
+            }
+
+            Text {
+                visible: root.couchMode
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 42
+                anchors.bottomMargin: 24
+                text: Controller.primaryGlyph + "  SELECT     "
+                      + Controller.backGlyph + "  CLOSE"
+                color: Theme.mutedText
+                font.family: Theme.fontFamily
+                font.pixelSize: 12 * settingsPanel.uiScale
+                font.weight: Font.DemiBold
             }
         }
     }

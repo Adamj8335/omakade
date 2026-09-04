@@ -511,18 +511,23 @@ int main(int argc, char* argv[]) {
       // `--render-overlay=settings|picker` opens an overlay so visual checks can cover it.
       const QString overlay =
           optionValue(application.arguments(), QStringLiteral("--render-overlay"));
-      if (overlay == QStringLiteral("settings")) {
+      if (overlay == QStringLiteral("settings") ||
+          overlay == QStringLiteral("couch-settings-top") ||
+          overlay == QStringLiteral("couch-settings-bottom")) {
         quickWindow->setProperty("diagnosticsOpen", true);
-        QTimer::singleShot(400, quickWindow, [quickWindow] {
-          // Scroll to the end so the lower sections land in the capture.
-          auto* scroll = quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
-          QObject* flickable =
-              scroll == nullptr ? nullptr : scroll->property("contentItem").value<QObject*>();
-          if (flickable != nullptr) {
-            flickable->setProperty("contentY", flickable->property("contentHeight").toReal() -
-                                                   scroll->height());
-          }
-        });
+        if (overlay == QStringLiteral("settings") ||
+            overlay == QStringLiteral("couch-settings-bottom")) {
+          QTimer::singleShot(400, quickWindow, [quickWindow] {
+            // Scroll to the end so the lower sections land in the capture.
+            auto* scroll = quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
+            QObject* flickable =
+                scroll == nullptr ? nullptr : scroll->property("contentItem").value<QObject*>();
+            if (flickable != nullptr) {
+              flickable->setProperty("contentY", flickable->property("contentHeight").toReal() -
+                                                     scroll->height());
+            }
+          });
+        }
       } else if (overlay == QStringLiteral("picker")) {
         QMetaObject::invokeMethod(
             quickWindow, "openFilterPicker", Q_ARG(QVariant, QStringLiteral("collection")),
@@ -588,6 +593,8 @@ int main(int argc, char* argv[]) {
             quickWindow->findChild<QQuickItem*>(QStringLiteral("couchFavoriteButton"));
         auto* settings =
             quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSettingsButton"));
+        auto* settingsScroll =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
         auto* search = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSearchButton"));
         auto* browse = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowseButton"));
         auto* browsePanel =
@@ -607,7 +614,8 @@ int main(int argc, char* argv[]) {
             quickWindow->findChild<QQuickItem*>(QStringLiteral("searchField"));
         if (!quickWindow->property("couchMode").toBool() || couch == nullptr ||
             !couch->isVisible() || strip == nullptr || view == nullptr || favorite == nullptr ||
-            settings == nullptr || search == nullptr || browse == nullptr ||
+            settings == nullptr || settingsScroll == nullptr || search == nullptr ||
+            browse == nullptr ||
             browsePanel == nullptr || browseCategories == nullptr || browseOptions == nullptr ||
             keyboard == nullptr || keyboardGrid == nullptr || textEntryKeyboard == nullptr ||
             textEntryGrid == nullptr || desktopSearch == nullptr) {
@@ -620,8 +628,8 @@ int main(int argc, char* argv[]) {
         QTimer::singleShot(50, quickWindow,
                            [quickWindow, &application, &controller, couch, strip, view, favorite,
                             browse, browsePanel, browseCategories, browseOptions, search, settings,
-                            keyboard, keyboardGrid, textEntryKeyboard, textEntryGrid, desktopSearch,
-                            fail] {
+                            settingsScroll, keyboard, keyboardGrid, textEntryKeyboard,
+                            textEntryGrid, desktopSearch, fail] {
           if (!strip->hasActiveFocus() || strip->property("currentIndex").toInt() != 1) {
             fail(QStringLiteral("Controller Right did not advance the couch game strip"));
             return;
@@ -751,9 +759,19 @@ int main(int argc, char* argv[]) {
           }
           sendKey(Qt::Key_Return);
           QTimer::singleShot(80, quickWindow,
-                             [quickWindow, &application, &controller, couch, strip, fail] {
+                             [quickWindow, &application, &controller, couch, strip,
+                              settingsScroll, fail] {
             if (!quickWindow->property("diagnosticsOpen").toBool()) {
               fail(QStringLiteral("Couch Settings did not open"));
+              return;
+            }
+            QQuickItem* settingsStart = quickWindow->activeFocusItem();
+            for (int step = 0; step < 30; ++step) {
+              controller.focusDirectionRequested(Qt::Key_Down);
+            }
+            if (quickWindow->activeFocusItem() == settingsStart ||
+                settingsScroll->property("navigationContentY").toReal() <= 0) {
+              fail(QStringLiteral("Controller did not traverse and scroll couch Settings"));
               return;
             }
             controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);

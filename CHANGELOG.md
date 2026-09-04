@@ -15,6 +15,8 @@
   completion status, collections, and tags.
 - Added 1,000-game couch startup and navigation gates, reconnect coverage, and
   visual checks for reduced motion, light themes, and opaque surfaces.
+- Made the complete Settings and Sources view wide, readable, and controller
+  guided in Couch Mode.
 
 ## 1.5.0
 
