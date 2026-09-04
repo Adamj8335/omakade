@@ -388,6 +388,9 @@ Item {
                     GlassButton {
                         id: playButton
                         objectName: "playButton"
+                        property Item controllerRightTarget: favoriteButton
+                        property Item controllerDownTarget:
+                            gameActions.columns === 2 ? manageButton : null
                         text: root.selectedInstallation.installed === false
                               ? "INSTALL IN STEAM" : "PLAY"
                         iconText: root.selectedInstallation.installed === false ? "↓" : "▶"
@@ -399,6 +402,11 @@ Item {
                     GlassButton {
                         id: favoriteButton
                         objectName: "favoriteButton"
+                        property Item controllerLeftTarget: playButton
+                        property Item controllerRightTarget:
+                            gameActions.columns === 4 ? manageButton : null
+                        property Item controllerDownTarget:
+                            gameActions.columns === 2 ? hideButton : null
                         text: root.game.favorite ? "FAVORITE" : "ADD FAVORITE"
                         iconText: root.game.favorite ? "♥" : "♡"
                         onClicked: root.favoriteRequested()
@@ -407,6 +415,11 @@ Item {
                     GlassButton {
                         id: manageButton
                         objectName: "manageButton"
+                        property Item controllerLeftTarget:
+                            gameActions.columns === 4 ? favoriteButton : null
+                        property Item controllerRightTarget: hideButton
+                        property Item controllerUpTarget:
+                            gameActions.columns === 2 ? playButton : null
                         visible: root.selectedInstallation.source === "Steam"
                                  || root.selectedInstallation.source === "Lutris"
                                  || root.selectedInstallation.source === "Heroic"
@@ -422,6 +435,9 @@ Item {
                     GlassButton {
                         id: hideButton
                         objectName: "hideButton"
+                        property Item controllerLeftTarget: manageButton
+                        property Item controllerUpTarget:
+                            gameActions.columns === 2 ? favoriteButton : null
                         text: root.game.hidden ? "UNHIDE" : "HIDE"
                         onClicked: root.hiddenRequested()
                     }

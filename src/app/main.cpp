@@ -25,6 +25,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QImage>
@@ -746,16 +747,33 @@ int main(int argc, char* argv[]) {
                           fail(QStringLiteral("Game details did not focus Play"));
                           return;
                         }
-                        controller.focusDirectionRequested(Qt::Key_Right);
+                        const auto sendKey = [quickWindow](int key) {
+                          QCoreApplication::postEvent(
+                              quickWindow,
+                              new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier));
+                          QCoreApplication::postEvent(
+                              quickWindow,
+                              new QKeyEvent(QEvent::KeyRelease, key, Qt::NoModifier));
+                          QEventLoop eventLoop;
+                          QTimer::singleShot(30, &eventLoop, &QEventLoop::quit);
+                          eventLoop.exec();
+                        };
+                        sendKey(Qt::Key_Right);
                         if (!favorite->hasActiveFocus()) {
-                          fail(QStringLiteral(
-                              "Controller Right did not move from Play to Favorite"));
+                          QQuickItem* focused = quickWindow->activeFocusItem();
+                          fail(QStringLiteral("Keyboard Right did not move from Play to Favorite; "
+                                              "focused %1")
+                                   .arg(focused ? focused->objectName()
+                                                : QStringLiteral("nothing")));
                           return;
                         }
-                        controller.focusDirectionRequested(Qt::Key_Left);
+                        sendKey(Qt::Key_Left);
                         if (!play->hasActiveFocus()) {
-                          fail(QStringLiteral(
-                              "Controller Left did not return from Favorite to Play"));
+                          QQuickItem* focused = quickWindow->activeFocusItem();
+                          fail(QStringLiteral("Keyboard Left did not return from Favorite to Play; "
+                                              "focused %1")
+                                   .arg(focused ? focused->objectName()
+                                                : QStringLiteral("nothing")));
                           return;
                         }
                         if (gameActions->property("columns").toInt() == 2) {
