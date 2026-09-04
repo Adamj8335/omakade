@@ -8,9 +8,10 @@ Button {
     property bool primary: false
     property bool selected: false
     property bool compact: false
-    property real displayScale: root.Window.window && root.Window.window.couchMode
-                                ? Math.max(1, Math.min(1.2,
-                                                      root.Window.window.height / 900))
+    readonly property var hostWindow: root.Window.window
+    property real displayScale: hostWindow && hostWindow.couchMode
+                                ? Math.max(1, Math.min(2.4,
+                                                      hostWindow.height / 900))
                                 : 1
 
     function alpha(color, value) {

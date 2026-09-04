@@ -16,10 +16,11 @@ ControllerInput::ControllerInput(QObject* parent) : QObject(parent) {
       m_repeatTimer.setInterval(90);
     }
   });
-  connect(&m_initWatcher, &QFutureWatcher<bool>::finished, this, [this] {
-    m_sdlReady = m_initWatcher.result();
+  connect(&m_initWatcher, &QFutureWatcher<InitResult>::finished, this, [this] {
+    const InitResult result = m_initWatcher.result();
+    m_sdlReady = result.ready;
     if (!m_sdlReady) {
-      qWarning() << "Controller input unavailable:" << SDL_GetError();
+      qWarning().noquote() << "Controller input unavailable:" << result.error;
       return;
     }
     openAvailableControllers();
@@ -35,14 +36,17 @@ void ControllerInput::start() {
     // SDL would otherwise catch SIGTERM and SIGINT and turn them into SDL quit events that
     // nothing here reads, so pkill, logout, and service stops could never close Omakade.
     SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
-    return SDL_Init(SDL_INIT_GAMEPAD);
+    if (SDL_Init(SDL_INIT_GAMEPAD)) {
+      return InitResult{.ready = true, .error = {}};
+    }
+    return InitResult{.ready = false, .error = QString::fromUtf8(SDL_GetError())};
   }));
 }
 
 ControllerInput::~ControllerInput() {
   if (m_initWatcher.isRunning()) {
     m_initWatcher.waitForFinished();
-    m_sdlReady = m_initWatcher.result();
+    m_sdlReady = m_initWatcher.result().ready;
   }
   for (SDL_Gamepad* controller : std::as_const(m_controllers)) {
     SDL_CloseGamepad(controller);
@@ -63,7 +67,7 @@ QString ControllerInput::name() const {
                                    : QString::fromUtf8(controllerName);
 }
 
-int ControllerInput::controllerCount() const { return m_controllers.size(); }
+int ControllerInput::controllerCount() const { return static_cast<int>(m_controllers.size()); }
 
 QString ControllerInput::primaryGlyph() const {
   return buttonLabel(SDL_GAMEPAD_BUTTON_SOUTH, QStringLiteral("SOUTH"));
@@ -135,15 +139,19 @@ void ControllerInput::pollEvents() {
 void ControllerInput::openAvailableControllers() {
   int count = 0;
   SDL_JoystickID* ids = SDL_GetGamepads(&count);
+  bool changed = false;
   for (int index = 0; index < count; ++index) {
     if (!m_controllers.contains(ids[index])) {
       if (SDL_Gamepad* controller = SDL_OpenGamepad(ids[index])) {
         m_controllers.insert(ids[index], controller);
+        changed = true;
       }
     }
   }
   SDL_free(ids);
-  emit controllerChanged();
+  if (changed) {
+    emit controllerChanged();
+  }
 }
 
 void ControllerInput::closeController(SDL_JoystickID id) {

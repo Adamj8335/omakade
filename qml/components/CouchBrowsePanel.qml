@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 
 FocusScope {
@@ -18,6 +17,9 @@ FocusScope {
         { label: "COLLECTION", kind: "collection" },
         { label: "TAG", kind: "tag" }
     ]
+    readonly property real uiScale: Math.max(1, Math.min(2,
+                                                         Math.min(width / 1920,
+                                                                  height / 1080)))
 
     signal closed()
     signal filtersChanged()
@@ -155,30 +157,30 @@ FocusScope {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: 72
-        anchors.rightMargin: 72
-        anchors.topMargin: 48
-        anchors.bottomMargin: 44
-        spacing: 24
+        anchors.leftMargin: 72 * root.uiScale
+        anchors.rightMargin: 72 * root.uiScale
+        anchors.topMargin: 48 * root.uiScale
+        anchors.bottomMargin: 44 * root.uiScale
+        spacing: 24 * root.uiScale
 
         RowLayout {
             Layout.fillWidth: true
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 3
+                spacing: 3 * root.uiScale
                 Text {
                     text: "BROWSE YOUR WAY"
                     color: Theme.brightForeground
                     font.family: Theme.fontFamily
-                    font.pixelSize: 30
+                    font.pixelSize: 30 * root.uiScale
                     font.weight: Font.Bold
                 }
                 Text {
                     text: "Choose what appears in the library and how it is ordered."
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 14
+                    font.pixelSize: 14 * root.uiScale
                 }
             }
 
@@ -202,22 +204,22 @@ FocusScope {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: Math.max(12, Theme.cornerRadius * 2)
+            radius: Math.max(12 * root.uiScale, Theme.cornerRadius * 2)
             color: root.alpha(Theme.background, 0.82)
             border.color: root.alpha(Theme.foreground, 0.16)
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 22
-                spacing: 22
+                anchors.margins: 22 * root.uiScale
+                spacing: 22 * root.uiScale
 
                 ListView {
                     id: categoryList
                     objectName: "couchBrowseCategories"
-                    Layout.preferredWidth: 340
+                    Layout.preferredWidth: 340 * root.uiScale
                     Layout.fillHeight: true
                     model: root.categories
-                    spacing: 8
+                    spacing: 8 * root.uiScale
                     clip: true
                     currentIndex: root.categoryIndex
 
@@ -248,8 +250,8 @@ FocusScope {
                         required property int index
                         required property var modelData
                         width: categoryList.width
-                        height: 68
-                        radius: Math.max(7, Theme.cornerRadius)
+                        height: 68 * root.uiScale
+                        radius: Math.max(7 * root.uiScale, Theme.cornerRadius)
                         color: categoryList.currentIndex === index
                                ? root.alpha(Theme.accent, 0.16)
                                : root.alpha(Theme.foreground, 0.04)
@@ -261,13 +263,13 @@ FocusScope {
 
                         Text {
                             anchors.left: parent.left
-                            anchors.leftMargin: 22
+                            anchors.leftMargin: 22 * root.uiScale
                             anchors.verticalCenter: parent.verticalCenter
                             text: modelData.label
                             color: categoryList.currentIndex === index
                                    ? Theme.brightForeground : Theme.foreground
                             font.family: Theme.fontFamily
-                            font.pixelSize: 16
+                            font.pixelSize: 16 * root.uiScale
                             font.weight: Font.DemiBold
                         }
 
@@ -283,7 +285,7 @@ FocusScope {
                 }
 
                 Rectangle {
-                    Layout.preferredWidth: 1
+                    Layout.preferredWidth: Math.max(1, root.uiScale)
                     Layout.fillHeight: true
                     color: root.alpha(Theme.foreground, 0.12)
                 }
@@ -294,7 +296,7 @@ FocusScope {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     model: root.optionModel
-                    spacing: 8
+                    spacing: 8 * root.uiScale
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
 
@@ -320,14 +322,15 @@ FocusScope {
                     }
 
                     delegate: Rectangle {
+                        id: optionDelegate
                         required property int index
                         required property var modelData
                         readonly property bool selected:
                             root.isSelected(root.categories[root.categoryIndex].kind,
                                             modelData.value)
                         width: optionList.width
-                        height: 64
-                        radius: Math.max(7, Theme.cornerRadius)
+                        height: 64 * root.uiScale
+                        radius: Math.max(7 * root.uiScale, Theme.cornerRadius)
                         color: optionList.currentIndex === index
                                ? root.alpha(Theme.accent, 0.15)
                                : selected ? root.alpha(Theme.foreground, 0.075)
@@ -342,8 +345,8 @@ FocusScope {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 22
-                            anchors.rightMargin: 22
+                            anchors.leftMargin: 22 * root.uiScale
+                            anchors.rightMargin: 22 * root.uiScale
 
                             Text {
                                 Layout.fillWidth: true
@@ -351,15 +354,15 @@ FocusScope {
                                 textFormat: Text.PlainText
                                 color: Theme.brightForeground
                                 font.family: Theme.fontFamily
-                                font.pixelSize: 16
+                                font.pixelSize: 16 * root.uiScale
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
                             }
                             Text {
-                                visible: parent.parent.selected
+                                visible: optionDelegate.selected
                                 text: "✓"
                                 color: Theme.accent
-                                font.pixelSize: 22
+                                font.pixelSize: 22 * root.uiScale
                                 font.weight: Font.Bold
                             }
                         }
@@ -384,7 +387,7 @@ FocusScope {
                   + Controller.backGlyph + "  CLOSE"
             color: Theme.mutedText
             font.family: Theme.fontFamily
-            font.pixelSize: 12
+            font.pixelSize: 12 * root.uiScale
             font.weight: Font.DemiBold
         }
     }

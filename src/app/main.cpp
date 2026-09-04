@@ -37,6 +37,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QScreen>
+#include <QSize>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -61,6 +62,26 @@ QString optionValue(const QStringList& arguments, const QString& name) {
     }
   }
   return {};
+}
+
+bool optionSupplied(const QStringList& arguments, const QString& name) {
+  return std::ranges::any_of(arguments, [&name](const QString& argument) {
+    return argument == name || argument.startsWith(name + QLatin1Char('='));
+  });
+}
+
+bool parseRenderSize(const QString& value, QSize* result) {
+  const QStringList dimensions = value.split(QLatin1Char('x'));
+  bool widthValid = false;
+  bool heightValid = false;
+  const int width = dimensions.value(0).toInt(&widthValid);
+  const int height = dimensions.value(1).toInt(&heightValid);
+  if (dimensions.size() != 2 || !widthValid || !heightValid || width <= 0 || height <= 0 ||
+      width > 16384 || height > 16384) {
+    return false;
+  }
+  *result = QSize(width, height);
+  return true;
 }
 
 void runEmptyFilterFocusTest(QQuickWindow* window, QGuiApplication* application) {
@@ -133,6 +154,22 @@ int main(int argc, char* argv[]) {
   // there is one, and `--quit` closes the running window. Sunshine app entries use both.
   const QString playKey = optionValue(application.arguments(), QStringLiteral("--play"));
   const bool quitRequest = application.arguments().contains(QStringLiteral("--quit"));
+  if (optionSupplied(application.arguments(), QStringLiteral("--render-screenshot")) &&
+      screenshotPath.isEmpty()) {
+    qCritical() << "--render-screenshot requires a path";
+    return EXIT_FAILURE;
+  }
+  if (!quitRequest && optionSupplied(application.arguments(), QStringLiteral("--play")) &&
+      playKey.isEmpty()) {
+    qCritical() << "--play requires a launch key";
+    return EXIT_FAILURE;
+  }
+  QSize requestedRenderSize;
+  if (optionSupplied(application.arguments(), QStringLiteral("--render-size")) &&
+      !parseRenderSize(renderSize, &requestedRenderSize)) {
+    qCritical() << "--render-size requires WIDTHxHEIGHT between 1 and 16384";
+    return EXIT_FAILURE;
+  }
   const bool renderMode = !screenshotPath.isEmpty();
   const bool smokeTest = application.arguments().contains(QStringLiteral("--smoke-test"));
   const bool couchNavigationTest =
@@ -148,11 +185,7 @@ int main(int argc, char* argv[]) {
                         application.arguments().contains(QStringLiteral("--demo"));
   const bool benchmarkMode = application.arguments().contains(QStringLiteral("--benchmark"));
   const QString benchmarkMaxOption = QStringLiteral("--benchmark-max-ms");
-  const bool benchmarkLimitSupplied =
-      std::ranges::any_of(application.arguments(), [&benchmarkMaxOption](const QString& argument) {
-        return argument == benchmarkMaxOption ||
-               argument.startsWith(benchmarkMaxOption + QLatin1Char('='));
-      });
+  const bool benchmarkLimitSupplied = optionSupplied(application.arguments(), benchmarkMaxOption);
   bool benchmarkLimitValid = false;
   const int benchmarkMaxMs =
       optionValue(application.arguments(), benchmarkMaxOption).toInt(&benchmarkLimitValid);
@@ -513,9 +546,8 @@ int main(int argc, char* argv[]) {
     rootWindow->showFullScreen();
   }
   if (auto* quickWindow = qobject_cast<QQuickWindow*>(rootWindow)) {
-    const QStringList dimensions = renderSize.split(QLatin1Char('x'));
-    if ((renderMode || navigationTest) && dimensions.size() == 2) {
-      quickWindow->resize(dimensions.at(0).toInt(), dimensions.at(1).toInt());
+    if ((renderMode || navigationTest) && requestedRenderSize.isValid()) {
+      quickWindow->resize(requestedRenderSize);
     }
     if (renderMode) {
       // `--render-overlay=settings|picker` opens an overlay so visual checks can cover it.
@@ -720,9 +752,20 @@ int main(int argc, char* argv[]) {
             fail(QStringLiteral("Controller confirm did not type with the on-screen keyboard"));
             return;
           }
-          sendKey(Qt::Key_Escape);
-          if (couch->property("searchOpen").toBool() || !search->hasActiveFocus()) {
-            fail(QStringLiteral("Controller Back did not cancel couch Search"));
+          sendKey(Qt::Key_F11);
+          QObject* preferences =
+              qmlContext(quickWindow)->contextProperty(QStringLiteral("Preferences")).value<QObject*>();
+          if (quickWindow->property("couchMode").toBool() ||
+              couch->property("searchOpen").toBool() || keyboard->isVisible() ||
+              preferences == nullptr || preferences->property("couchModeEnabled").toBool()) {
+            fail(QStringLiteral("Leaving Couch Mode did not cancel Search cleanly"));
+            return;
+          }
+          const bool activated = QMetaObject::invokeMethod(quickWindow, "activateCouchMode");
+          QCoreApplication::processEvents();
+          if (!activated || !quickWindow->property("couchMode").toBool() ||
+              preferences->property("couchModeEnabled").toBool()) {
+            fail(QStringLiteral("Session Couch activation changed the startup preference"));
             return;
           }
           const bool openedTextEntry = QMetaObject::invokeMethod(
@@ -775,8 +818,8 @@ int main(int argc, char* argv[]) {
           }
           sendKey(Qt::Key_Return);
           QTimer::singleShot(80, quickWindow,
-                             [quickWindow, &application, &controller, couch, strip,
-                              settingsScroll, fail] {
+                             [quickWindow, &application, &controller, couch, settingsScroll,
+                              fail] {
             if (!quickWindow->property("diagnosticsOpen").toBool()) {
               fail(QStringLiteral("Couch Settings did not open"));
               return;
@@ -793,7 +836,7 @@ int main(int argc, char* argv[]) {
             controller.keyRequested(Qt::Key_Escape, Qt::NoModifier);
             QTimer::singleShot(
                 50, quickWindow,
-                [quickWindow, &application, &controller, couch, strip, fail] {
+                [quickWindow, &application, &controller, couch, fail] {
               if (quickWindow->property("diagnosticsOpen").toBool()) {
                 fail(QStringLiteral("Controller Back did not close couch Settings"));
                 return;
@@ -804,7 +847,7 @@ int main(int argc, char* argv[]) {
               QCoreApplication::processEvents();
               controller.keyRequested(Qt::Key_Return, Qt::NoModifier);
               QTimer::singleShot(80, quickWindow,
-                                 [quickWindow, &application, &controller, strip, fail] {
+                                 [quickWindow, &application, &controller, fail] {
                 auto* play =
                     quickWindow->findChild<QQuickItem*>(QStringLiteral("playButton"));
                 auto* favorite =
@@ -1561,8 +1604,7 @@ int main(int argc, char* argv[]) {
                        return;
                      }
                      if (fullscreen) {
-                       if (!QMetaObject::invokeMethod(rootWindow, "setCouchMode",
-                                                      Q_ARG(QVariant, true))) {
+                       if (!QMetaObject::invokeMethod(rootWindow, "activateCouchMode")) {
                          rootWindow->setProperty("couchMode", true);
                          rootWindow->showFullScreen();
                        }

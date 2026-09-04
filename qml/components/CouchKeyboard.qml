@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 
 FocusScope {
@@ -13,6 +12,9 @@ FocusScope {
     property string keyboardMode: "upper"
     property string gridObjectName: "couchKeyboardGrid"
     readonly property int columns: 10
+    readonly property real uiScale: Math.max(1, Math.min(2,
+                                                         Math.min(width / 1920,
+                                                                  height / 1080)))
     readonly property var upperKeys: [
         "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
         "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
@@ -120,37 +122,37 @@ FocusScope {
 
     Rectangle {
         anchors.centerIn: parent
-        width: Math.min(parent.width - 96, 1180)
-        height: Math.min(parent.height - 96, 760)
-        radius: Math.max(14, Theme.cornerRadius * 2)
+        width: Math.min(parent.width - 96 * root.uiScale, 1180 * root.uiScale)
+        height: Math.min(parent.height - 96 * root.uiScale, 760 * root.uiScale)
+        radius: Math.max(14 * root.uiScale, Theme.cornerRadius * 2)
         color: root.alpha(Theme.background, 0.98)
         border.width: 1
         border.color: root.alpha(Theme.foreground, 0.18)
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 42
-            spacing: 22
+            anchors.margins: 42 * root.uiScale
+            spacing: 22 * root.uiScale
 
             RowLayout {
                 Layout.fillWidth: true
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 3
+                    spacing: 3 * root.uiScale
 
                     Text {
                         text: root.title
                         color: Theme.brightForeground
                         font.family: Theme.fontFamily
-                        font.pixelSize: 26
+                        font.pixelSize: 26 * root.uiScale
                         font.weight: Font.Bold
                     }
                     Text {
                         text: "Use the directional pad and confirm button."
                         color: Theme.mutedText
                         font.family: Theme.fontFamily
-                        font.pixelSize: 13
+                        font.pixelSize: 13 * root.uiScale
                     }
                 }
 
@@ -162,16 +164,16 @@ FocusScope {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 72
-                radius: Math.max(8, Theme.cornerRadius)
+                Layout.preferredHeight: 72 * root.uiScale
+                radius: Math.max(8 * root.uiScale, Theme.cornerRadius)
                 color: root.alpha(Theme.foreground, 0.07)
                 border.width: 2
                 border.color: Theme.accent
 
                 Text {
                     anchors.fill: parent
-                    anchors.leftMargin: 22
-                    anchors.rightMargin: 22
+                    anchors.leftMargin: 22 * root.uiScale
+                    anchors.rightMargin: 22 * root.uiScale
                     verticalAlignment: Text.AlignVCenter
                     text: root.value.length > 0
                           ? root.displayValue()
@@ -179,7 +181,7 @@ FocusScope {
                     textFormat: Text.PlainText
                     color: root.value.length > 0 ? Theme.brightForeground : Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 23
+                    font.pixelSize: 23 * root.uiScale
                     elide: Text.ElideRight
                 }
             }
@@ -238,11 +240,11 @@ FocusScope {
                     required property int index
                     required property string modelData
 
-                    width: keyGrid.cellWidth - 10
-                    height: keyGrid.cellHeight - 10
-                    x: 5
-                    y: 5
-                    radius: Math.max(7, Theme.cornerRadius)
+                    width: keyGrid.cellWidth - 10 * root.uiScale
+                    height: keyGrid.cellHeight - 10 * root.uiScale
+                    x: 5 * root.uiScale
+                    y: 5 * root.uiScale
+                    radius: Math.max(7 * root.uiScale, Theme.cornerRadius)
                     color: keyMouse.pressed
                            ? root.alpha(Theme.accent, 0.28)
                            : keyGrid.currentIndex === index
@@ -260,7 +262,7 @@ FocusScope {
                               : modelData
                         color: Theme.brightForeground
                         font.family: Theme.fontFamily
-                        font.pixelSize: modelData.length > 1 ? 13 : 22
+                        font.pixelSize: (modelData.length > 1 ? 13 : 22) * root.uiScale
                         font.weight: Font.DemiBold
                     }
 
@@ -279,20 +281,20 @@ FocusScope {
 
             Row {
                 Layout.alignment: Qt.AlignRight
-                spacing: 18
+                spacing: 18 * root.uiScale
 
                 Text {
                     text: Controller.primaryGlyph + "  TYPE"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * root.uiScale
                     font.weight: Font.DemiBold
                 }
                 Text {
                     text: Controller.backGlyph + "  CANCEL"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
-                    font.pixelSize: 12
+                    font.pixelSize: 12 * root.uiScale
                     font.weight: Font.DemiBold
                 }
             }

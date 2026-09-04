@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 
@@ -26,7 +25,7 @@ FocusScope {
         { label: "RYUJINX", value: "Ryujinx", enabled: Preferences.ryujinxEnabled }
     ].filter(function(option) { return option.enabled === undefined || option.enabled })
     readonly property bool gridFocused: gameStrip.activeFocus
-    readonly property real uiScale: Math.max(0.68, Math.min(1.25,
+    readonly property real uiScale: Math.max(0.68, Math.min(2.0,
                                                            Math.min(width / 1920,
                                                                     height / 1080)))
 
@@ -143,8 +142,19 @@ FocusScope {
                                   : -1
             root.refreshCurrentGame()
         }
-        function onRowsInserted() { root.refreshCurrentGame() }
-        function onRowsRemoved() { root.refreshCurrentGame() }
+        function onRowsInserted() {
+            if (root.currentIndex < 0 && root.libraryModel.rowCount() > 0) {
+                root.currentIndex = 0
+            }
+            root.refreshCurrentGame()
+        }
+        function onRowsRemoved() {
+            root.currentIndex = root.libraryModel.rowCount() > 0
+                                ? Math.max(0, Math.min(root.currentIndex,
+                                                      root.libraryModel.rowCount() - 1))
+                                : -1
+            root.refreshCurrentGame()
+        }
         function onDataChanged() { root.refreshCurrentGame() }
     }
 

@@ -133,8 +133,8 @@ int SunshineIntegration::outputScreenIndex(const QString& configuredOutput,
   if (numeric && index >= 0 && index < screenNames.size()) {
     return index;
   }
-  const int named = screenNames.indexOf(configuredOutput);
-  return named >= 0 ? named : 0;
+  const qsizetype named = screenNames.indexOf(configuredOutput);
+  return named >= 0 ? static_cast<int>(named) : 0;
 }
 
 void SunshineIntegration::detect() {
@@ -163,7 +163,7 @@ QString SunshineIntegration::serviceUnit() {
   // The Arch package installs app-dev.lizardbyte.app.Sunshine.service with a
   // sunshine.service alias that only exists once the unit is enabled, so prefer the real
   // unit name whenever its file is present.
-  const QString packaged = QStringLiteral("app-dev.lizardbyte.app.Sunshine.service");
+  QString packaged = QStringLiteral("app-dev.lizardbyte.app.Sunshine.service");
   for (const QString& directory :
        {QStringLiteral("/usr/lib/systemd/user/"), QStringLiteral("/etc/systemd/user/"),
         QDir::homePath() + QStringLiteral("/.config/systemd/user/"),
@@ -230,12 +230,12 @@ QJsonObject SunshineIntegration::mergeEntries(const QJsonObject& existing,
                                               const QJsonArray& ours) {
   QJsonObject result = existing;
   QJsonArray apps;
-  for (const QJsonValue& value : existing.value(QStringLiteral("apps")).toArray()) {
+  for (const auto& value : existing.value(QStringLiteral("apps")).toArray()) {
     if (!value.isObject() || !isOmakadeEntry(value.toObject())) {
       apps.append(value);
     }
   }
-  for (const QJsonValue& value : ours) {
+  for (const auto& value : ours) {
     apps.append(value);
   }
   result.insert(QStringLiteral("apps"), apps);
@@ -254,7 +254,7 @@ QString SunshineIntegration::exportImage(const QString& imageRoot, const QString
   // The source path is part of the name so a swapped cover gets fresh box art even when
   // the new file is older than the previous export.
   const QString hash = QString::fromLatin1(sha1((name + QChar::Null + source).toUtf8()).left(16));
-  const QString target = imageRoot + QLatin1Char('/') + hash + QStringLiteral(".png");
+  QString target = imageRoot + QLatin1Char('/') + hash + QStringLiteral(".png");
   const QFileInfo targetInfo(target);
   if (targetInfo.exists() &&
       targetInfo.lastModified() >= QFileInfo(source).lastModified()) {
@@ -360,8 +360,8 @@ SunshineIntegration::SyncResult SunshineIntegration::runSync(
     usedImages.insert(image);
     ours.append(gameEntry(title, game.launchKey, prefix, image));
   }
-  result.games = games.size();
-  result.entries = ours.size();
+  result.games = static_cast<int>(games.size());
+  result.entries = static_cast<int>(ours.size());
 
   const QJsonObject merged = mergeEntries(document.object(), ours);
   const bool unchanged = merged == document.object();

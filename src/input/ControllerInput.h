@@ -44,6 +44,11 @@ signals:
   void keyRequested(int key, int modifiers);
 
 private:
+  struct InitResult {
+    bool ready = false;
+    QString error;
+  };
+
   void pollEvents();
   void openAvailableControllers();
   void closeController(SDL_JoystickID id);
@@ -53,7 +58,7 @@ private:
   [[nodiscard]] QString buttonLabel(SDL_GamepadButton button, const QString& fallback) const;
 
   QHash<SDL_JoystickID, SDL_Gamepad*> m_controllers;
-  QFutureWatcher<bool> m_initWatcher;
+  QFutureWatcher<InitResult> m_initWatcher;
   QTimer m_pollTimer;
   QTimer m_repeatTimer;
   int m_axisX = 0;
