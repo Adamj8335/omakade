@@ -24,6 +24,8 @@ Item {
         newCollectionButton.forceActiveFocus()
     }
     property bool navigationEnabled: true
+    readonly property bool achievementSourceIsRetroArch: selectedInstallation.source === "RetroArch"
+    readonly property var achievementAccount: achievementSourceIsRetroArch ? RetroAchievements : SteamAccount
     signal backRequested()
     signal favoriteRequested()
     signal playRequested()
@@ -376,6 +378,8 @@ Item {
                 }
 
                 GridLayout {
+                    id: gameActions
+                    objectName: "gameActions"
                     Layout.fillWidth: true
                     columns: detailsContent.width < 620 ? 2 : 4
                     columnSpacing: 10
@@ -384,6 +388,9 @@ Item {
                     GlassButton {
                         id: playButton
                         objectName: "playButton"
+                        property Item controllerRightTarget: favoriteButton
+                        property Item controllerDownTarget:
+                            gameActions.columns === 2 ? manageButton : null
                         text: root.selectedInstallation.installed === false
                               ? "INSTALL IN STEAM" : "PLAY"
                         iconText: root.selectedInstallation.installed === false ? "↓" : "▶"
@@ -393,22 +400,44 @@ Item {
                     }
 
                     GlassButton {
+                        id: favoriteButton
+                        objectName: "favoriteButton"
+                        property Item controllerLeftTarget: playButton
+                        property Item controllerRightTarget:
+                            gameActions.columns === 4 ? manageButton : null
+                        property Item controllerDownTarget:
+                            gameActions.columns === 2 ? hideButton : null
                         text: root.game.favorite ? "FAVORITE" : "ADD FAVORITE"
                         iconText: root.game.favorite ? "♥" : "♡"
                         onClicked: root.favoriteRequested()
                     }
 
                     GlassButton {
+                        id: manageButton
+                        objectName: "manageButton"
+                        property Item controllerLeftTarget:
+                            gameActions.columns === 4 ? favoriteButton : null
+                        property Item controllerRightTarget: hideButton
+                        property Item controllerUpTarget:
+                            gameActions.columns === 2 ? playButton : null
                         visible: root.selectedInstallation.source === "Steam"
                                  || root.selectedInstallation.source === "Lutris"
                                  || root.selectedInstallation.source === "Heroic"
                                  || root.selectedInstallation.source === "Faugus"
                                  || root.selectedInstallation.source === "RetroArch"
+                                 || root.selectedInstallation.source === "PCSX2"
+                                 || root.selectedInstallation.source === "Ryujinx"
+                                 || root.selectedInstallation.source === "Battle.net"
                         text: "MANAGE IN " + (root.selectedInstallation.source || "LAUNCHER").toUpperCase()
                         onClicked: root.manageRequested()
                     }
 
                     GlassButton {
+                        id: hideButton
+                        objectName: "hideButton"
+                        property Item controllerLeftTarget: manageButton
+                        property Item controllerUpTarget:
+                            gameActions.columns === 2 ? favoriteButton : null
                         text: root.game.hidden ? "UNHIDE" : "HIDE"
                         onClicked: root.hiddenRequested()
                     }
@@ -804,6 +833,7 @@ Item {
                     Layout.topMargin: 12
                     spacing: 9
                     visible: root.selectedInstallation.source === "Steam"
+                             || root.selectedInstallation.source === "RetroArch"
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -846,6 +876,7 @@ Item {
                     Layout.topMargin: 18
                     spacing: 10
                     visible: root.selectedInstallation.source === "Steam"
+                             || root.selectedInstallation.source === "RetroArch"
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -864,9 +895,6 @@ Item {
                             property Item controllerUpTarget:
                                 insightRefreshButton.visible && insightRefreshButton.enabled
                                 ? insightRefreshButton : newCollectionButton
-                            property Item controllerDownTarget:
-                                achievementRefreshButton.visible && achievementRefreshButton.enabled
-                                ? achievementRefreshButton : null
                             property Item controllerRightTarget:
                                 achievementRefreshButton.visible && achievementRefreshButton.enabled
                                 ? achievementRefreshButton : null
@@ -880,22 +908,23 @@ Item {
                             id: achievementRefreshButton
                             objectName: "achievementRefreshButton"
                             property Item controllerUpTarget:
-                                achievementSortButton.visible && achievementSortButton.enabled
-                                ? achievementSortButton
-                                : insightRefreshButton.visible && insightRefreshButton.enabled
-                                  ? insightRefreshButton : newCollectionButton
+                                insightRefreshButton.visible && insightRefreshButton.enabled
+                                ? insightRefreshButton : newCollectionButton
                             property Item controllerLeftTarget:
                                 achievementSortButton.visible && achievementSortButton.enabled
                                 ? achievementSortButton : null
-                            visible: SteamAccount !== null
+                            visible: root.achievementAccount !== null
                             compact: true
-                            text: SteamAccount && SteamAccount.hasApiKey
-                                  ? (SteamAccount.busy ? "REFRESHING" : "REFRESH STEAM")
-                                  : "CONNECT STEAM"
-                            enabled: !SteamAccount || !SteamAccount.busy
+                            text: root.achievementAccount && root.achievementAccount.hasApiKey
+                                  ? (root.achievementAccount.busy ? "REFRESHING"
+                                     : root.achievementSourceIsRetroArch ? "REFRESH RETROACHIEVEMENTS"
+                                     : "REFRESH STEAM")
+                                  : root.achievementSourceIsRetroArch ? "CONNECT RETROACHIEVEMENTS"
+                                                                       : "CONNECT STEAM"
+                            enabled: !root.achievementAccount || !root.achievementAccount.busy
                             onClicked: {
-                                if (SteamAccount.hasApiKey) {
-                                    SteamAccount.refreshAchievements(
+                                if (root.achievementAccount.hasApiKey) {
+                                    root.achievementAccount.refreshAchievements(
                                                 root.selectedInstallation.appId)
                                 } else {
                                     root.connectRequested()
@@ -922,11 +951,12 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        visible: SteamAccount && SteamAccount.statusText.length > 0
-                        text: SteamAccount ? SteamAccount.statusText : ""
-                        color: SteamAccount && (SteamAccount.state === "invalid-key"
-                                                || SteamAccount.state === "private"
-                                                || SteamAccount.state === "rate-limited")
+                        visible: root.achievementAccount && root.achievementAccount.statusText.length > 0
+                        text: root.achievementAccount ? root.achievementAccount.statusText : ""
+                        color: root.achievementAccount && (root.achievementAccount.state === "invalid-key"
+                                                || root.achievementAccount.state === "private"
+                                                || root.achievementAccount.state === "unsupported"
+                                                || root.achievementAccount.state === "rate-limited")
                                ? Theme.yellow : Theme.mutedText
                         font.family: Theme.fontFamily
                         font.pixelSize: 10
@@ -958,9 +988,6 @@ Item {
                                 Accessible.name: title
                                 Accessible.role: Accessible.ListItem
                                 Accessible.focused: activeFocus
-                                property Item controllerUpTarget:
-                                    index < achievementGrid.columns
-                                    ? achievementRefreshButton : null
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 260
                                 Layout.preferredHeight: 82
@@ -1029,7 +1056,8 @@ Item {
                                             text: (unlocked && unlockTime > 0
                                                    ? "UNLOCKED " + Qt.formatDateTime(new Date(unlockTime * 1000), "MMM d, yyyy").toUpperCase() + "  ·  "
                                                    : "")
-                                                  + (rarity > 0 ? rarity.toFixed(1) + "% OF PLAYERS" : "STEAM")
+                                                  + (rarity > 0 ? rarity.toFixed(1) + "% OF PLAYERS"
+                                                     : root.achievementSourceIsRetroArch ? "RETROACHIEVEMENTS" : "STEAM")
                                             color: unlocked ? Theme.accent : root.alpha(Theme.foreground, 0.45)
                                             font.family: Theme.fontFamily
                                             font.pixelSize: 8

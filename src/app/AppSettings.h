@@ -12,12 +12,18 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QString steamId READ steamId WRITE setSteamId NOTIFY steamIdChanged)
   Q_PROPERTY(
       QString igdbClientId READ igdbClientId WRITE setIgdbClientId NOTIFY igdbClientIdChanged)
+  Q_PROPERTY(QString retroAchievementsUsername READ retroAchievementsUsername WRITE
+                 setRetroAchievementsUsername NOTIFY retroAchievementsUsernameChanged)
   Q_PROPERTY(bool steamEnabled READ steamEnabled WRITE setSteamEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool lutrisEnabled READ lutrisEnabled WRITE setLutrisEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool heroicEnabled READ heroicEnabled WRITE setHeroicEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool faugusEnabled READ faugusEnabled WRITE setFaugusEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(
       bool retroArchEnabled READ retroArchEnabled WRITE setRetroArchEnabled NOTIFY sourcesChanged)
+  Q_PROPERTY(bool pcsx2Enabled READ pcsx2Enabled WRITE setPcsx2Enabled NOTIFY sourcesChanged)
+  Q_PROPERTY(bool ryujinxEnabled READ ryujinxEnabled WRITE setRyujinxEnabled NOTIFY sourcesChanged)
+  Q_PROPERTY(
+      bool battleNetEnabled READ battleNetEnabled WRITE setBattleNetEnabled NOTIFY sourcesChanged)
   Q_PROPERTY(bool closeAfterLaunch READ closeAfterLaunch WRITE setCloseAfterLaunch NOTIFY
                  closeAfterLaunchChanged)
   Q_PROPERTY(bool sunshineOmakadeApp READ sunshineOmakadeApp WRITE setSunshineOmakadeApp NOTIFY
@@ -36,6 +42,8 @@ public:
   void setSteamId(const QString& value);
   [[nodiscard]] QString igdbClientId() const;
   void setIgdbClientId(const QString& value);
+  [[nodiscard]] QString retroAchievementsUsername() const;
+  void setRetroAchievementsUsername(const QString& value);
   [[nodiscard]] bool steamEnabled() const;
   void setSteamEnabled(bool value);
   [[nodiscard]] bool lutrisEnabled() const;
@@ -46,6 +54,18 @@ public:
   void setFaugusEnabled(bool value);
   [[nodiscard]] bool retroArchEnabled() const;
   void setRetroArchEnabled(bool value);
+  [[nodiscard]] bool pcsx2Enabled() const;
+  void setPcsx2Enabled(bool value);
+  [[nodiscard]] bool ryujinxEnabled() const;
+  void setRyujinxEnabled(bool value);
+  // True while the user has not written an explicit pcsx2_enabled/ryujinx_enabled key,
+  // letting the app enable the source automatically when its emulator is detected.
+  [[nodiscard]] bool pcsx2AutoEnabled() const;
+  [[nodiscard]] bool ryujinxAutoEnabled() const;
+  void setPcsx2AutoEnabled(bool value);
+  void setRyujinxAutoEnabled(bool value);
+  [[nodiscard]] bool battleNetEnabled() const;
+  void setBattleNetEnabled(bool value);
   [[nodiscard]] bool closeAfterLaunch() const;
   void setCloseAfterLaunch(bool value);
   [[nodiscard]] bool sunshineOmakadeApp() const;
@@ -58,6 +78,7 @@ signals:
   void artworkCacheLimitMbChanged();
   void steamIdChanged();
   void igdbClientIdChanged();
+  void retroAchievementsUsernameChanged();
   void sourcesChanged();
   void closeAfterLaunchChanged();
   void sunshineChanged();
@@ -72,11 +93,17 @@ private:
   int m_artworkCacheLimitMb = 1024;
   QString m_steamId;
   QString m_igdbClientId;
+  QString m_retroAchievementsUsername;
   bool m_steamEnabled = true;
   bool m_lutrisEnabled = true;
   bool m_heroicEnabled = true;
   bool m_faugusEnabled = true;
   bool m_retroArchEnabled = true;
+  bool m_pcsx2Enabled = false;
+  bool m_ryujinxEnabled = false;
+  bool m_pcsx2Auto = true;
+  bool m_ryujinxAuto = true;
+  bool m_battleNetEnabled = true;
   bool m_closeAfterLaunch = false;
   bool m_sunshineOmakadeApp = false;
   bool m_sunshineGameApps = false;

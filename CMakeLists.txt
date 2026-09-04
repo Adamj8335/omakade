@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(Omakade VERSION 1.4.0 LANGUAGES CXX)
+project(Omakade VERSION 1.5.0 LANGUAGES CXX)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
 pkg_check_modules(LIBSECRET REQUIRED IMPORTED_TARGET libsecret-1)
+pkg_check_modules(LIBZIP REQUIRED IMPORTED_TARGET libzip)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +19,12 @@ qt_standard_project_setup(REQUIRES 6.8)
 add_library(omakade_core STATIC
   src/achievements/AchievementModel.cpp
   src/achievements/AchievementModel.h
+  src/achievements/RetroAchievementsApi.cpp
+  src/achievements/RetroAchievementsApi.h
+  src/achievements/RetroAchievementsHasher.cpp
+  src/achievements/RetroAchievementsHasher.h
+  src/achievements/RetroAchievementsService.cpp
+  src/achievements/RetroAchievementsService.h
   src/achievements/SteamAchievementApi.cpp
   src/achievements/SteamAchievementApi.h
   src/achievements/SteamAccountService.cpp
@@ -31,6 +38,8 @@ add_library(omakade_core STATIC
   src/library/LibraryFilterModel.cpp
   src/library/LibraryFilterModel.h
   src/library/GameRoles.h
+  src/library/BattleNetGameModel.cpp
+  src/library/BattleNetGameModel.h
   src/library/FaugusGameModel.cpp
   src/library/FaugusGameModel.h
   src/library/HeroicGameModel.cpp
@@ -39,6 +48,10 @@ add_library(omakade_core STATIC
   src/library/LutrisGameModel.h
   src/library/RetroArchGameModel.cpp
   src/library/RetroArchGameModel.h
+  src/library/Pcsx2GameModel.cpp
+  src/library/Pcsx2GameModel.h
+  src/library/RyujinxGameModel.cpp
+  src/library/RyujinxGameModel.h
   src/library/MockGameModel.cpp
   src/library/MockGameModel.h
   src/library/SteamGameModel.cpp
@@ -66,10 +79,16 @@ add_library(omakade_core STATIC
   src/sources/lutris/LutrisScanner.h
   src/sources/retroarch/RetroArchScanner.cpp
   src/sources/retroarch/RetroArchScanner.h
+  src/sources/pcsx2/Pcsx2Scanner.cpp
+  src/sources/pcsx2/Pcsx2Scanner.h
+  src/sources/ryujinx/RyujinxScanner.cpp
+  src/sources/ryujinx/RyujinxScanner.h
   src/sources/heroic/HeroicScanner.cpp
   src/sources/heroic/HeroicScanner.h
   src/sources/faugus/FaugusScanner.cpp
   src/sources/faugus/FaugusScanner.h
+  src/sources/battlenet/BattleNetScanner.cpp
+  src/sources/battlenet/BattleNetScanner.h
   src/streaming/SunshineIntegration.cpp
   src/streaming/SunshineIntegration.h
   src/theme/OmarchyTheme.cpp
@@ -80,6 +99,7 @@ target_include_directories(omakade_core PUBLIC src)
 target_link_libraries(omakade_core PUBLIC
   PkgConfig::SDL3
   PkgConfig::LIBSECRET
+  PkgConfig::LIBZIP
   Qt6::Concurrent
   Qt6::Core
   Qt6::Gui

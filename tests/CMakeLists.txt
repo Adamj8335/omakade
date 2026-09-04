@@ -37,6 +37,15 @@ set_tests_properties(omakade_controller_navigation_tiled PROPERTIES
   TIMEOUT 30
 )
 
+add_test(NAME omakade_controller_navigation_wide
+  COMMAND omakade --controller-navigation-test --owned-layout-test --uninstalled-layout-test
+          --render-size=1600x900
+)
+set_tests_properties(omakade_controller_navigation_wide PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
+
 add_test(NAME omakade_render_smoke
   COMMAND omakade --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-render.png
           --render-size=820x590

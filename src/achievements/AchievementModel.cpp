@@ -126,7 +126,8 @@ bool AchievementModel::acceptsIconUrl(const QUrl& url) {
   return url.scheme() == QStringLiteral("https") &&
          (host == QStringLiteral("steamcdn-a.akamaihd.net") ||
           host == QStringLiteral("steamstatic.com") ||
-          host.endsWith(QStringLiteral(".steamstatic.com")));
+          host.endsWith(QStringLiteral(".steamstatic.com")) ||
+          host == QStringLiteral("media.retroachievements.org"));
 }
 
 void AchievementModel::load(const QString& appId) {
@@ -140,6 +141,7 @@ void AchievementModel::load(const QString& appId) {
   m_unlocked = 0;
   m_total = 0;
   bool confirmedEmpty = false;
+  QString summarySource;
 
   if (m_database.isOpen()) {
     QSqlQuery summary(m_database);
@@ -149,7 +151,10 @@ void AchievementModel::load(const QString& appId) {
     if (summary.exec() && summary.next()) {
       m_unlocked = summary.value(0).toInt();
       m_total = summary.value(1).toInt();
-      confirmedEmpty = m_total == 0 && summary.value(2).toString() == QStringLiteral("steam-web");
+      summarySource = summary.value(2).toString();
+      confirmedEmpty = m_total == 0 &&
+                       (summarySource == QStringLiteral("steam-web") ||
+                        summarySource == QStringLiteral("retroachievements"));
     }
 
     QSqlQuery query(m_database);
@@ -179,16 +184,18 @@ void AchievementModel::load(const QString& appId) {
   sortAchievements();
 
   if (confirmedEmpty) {
-    m_statusText = QStringLiteral("This game has no Steam achievements.");
+    m_statusText = summarySource == QStringLiteral("retroachievements")
+                       ? QStringLiteral("This game has no RetroAchievements.")
+                       : QStringLiteral("This game has no Steam achievements.");
   } else if (m_total == 0) {
-    m_statusText = QStringLiteral(
-        "No achievement data is cached yet. Open this game in Steam to refresh its local data.");
+    m_statusText =
+        QStringLiteral("No achievement data is cached yet. Use Refresh above to fetch it.");
   } else if (m_achievements.size() < m_total) {
-    m_statusText = QStringLiteral("Steam cached details for %1 of %2 achievements.")
+    m_statusText = QStringLiteral("Cached details for %1 of %2 achievements.")
                        .arg(m_achievements.size())
                        .arg(m_total);
   } else {
-    m_statusText = QStringLiteral("Complete Steam achievement cache");
+    m_statusText = QStringLiteral("Complete achievement cache");
   }
   endResetModel();
   emit summaryChanged();

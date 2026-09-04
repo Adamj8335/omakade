@@ -6,6 +6,8 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <QHash>
+#include <QPair>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QUrl>
@@ -159,9 +161,17 @@ bool RetroArchGameModel::ensureSchema() {
   if (!query.exec(QStringLiteral(
           "CREATE TABLE IF NOT EXISTS retroarch_games (game_id TEXT PRIMARY KEY, name TEXT NOT "
           "NULL, content_path TEXT NOT NULL, core_path TEXT, core_name TEXT, cover_path TEXT, "
-          "hero_path TEXT, playtime_seconds INTEGER NOT NULL DEFAULT 0, last_played INTEGER NOT "
-          "NULL DEFAULT 0, flatpak INTEGER NOT NULL DEFAULT 0, favorite INTEGER NOT NULL DEFAULT "
-          "0, hidden INTEGER NOT NULL DEFAULT 0, observed_at INTEGER NOT NULL)"))) {
+          "hero_path TEXT, system TEXT NOT NULL DEFAULT '', playtime_seconds INTEGER NOT NULL "
+          "DEFAULT 0, last_played INTEGER NOT NULL DEFAULT 0, flatpak INTEGER NOT NULL DEFAULT 0, "
+          "favorite INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0, observed_at "
+          "INTEGER NOT NULL)"))) {
+    return false;
+  }
+  // Added after the initial release; existing installs need the column added explicitly since
+  // CREATE TABLE IF NOT EXISTS above is a no-op once the table already exists.
+  if (!query.exec(QStringLiteral("SELECT system FROM retroarch_games LIMIT 1")) &&
+      !query.exec(QStringLiteral("ALTER TABLE retroarch_games ADD COLUMN system TEXT NOT NULL "
+                                 "DEFAULT ''"))) {
     return false;
   }
   return query.exec(QStringLiteral(
@@ -174,10 +184,21 @@ void RetroArchGameModel::loadDatabase() {
   QSqlQuery query(m_database);
   if (!query.exec(QStringLiteral(
           "SELECT game_id, name, content_path, core_path, core_name, cover_path, hero_path, "
-          "playtime_seconds, last_played, flatpak, favorite, hidden FROM retroarch_games WHERE "
-          "observed_at > 0 ORDER BY name COLLATE NOCASE"))) {
+          "system, playtime_seconds, last_played, flatpak, favorite, hidden FROM retroarch_games "
+          "WHERE observed_at > 0 ORDER BY name COLLATE NOCASE"))) {
     setStatus(QStringLiteral("Could not load cached RetroArch games"), query.lastError().text());
     return;
+  }
+  QHash<QString, QPair<int, int>> achievementSummaries;
+  QSqlQuery achievementsQuery(m_database);
+  if (achievementsQuery.exec(QStringLiteral(
+          "SELECT app_id, unlocked, total FROM achievement_summary WHERE source = "
+          "'retroachievements'"))) {
+    while (achievementsQuery.next()) {
+      achievementSummaries.insert(achievementsQuery.value(0).toString(),
+                                  {achievementsQuery.value(1).toInt(),
+                                   achievementsQuery.value(2).toInt()});
+    }
   }
   while (query.next()) {
     RetroArchGameRecord record{.gameId = query.value(0).toString(),
@@ -187,18 +208,68 @@ void RetroArchGameModel::loadDatabase() {
                                .coreName = query.value(4).toString(),
                                .coverPath = query.value(5).toString(),
                                .heroPath = query.value(6).toString(),
-                               .playtimeSeconds = query.value(7).toLongLong(),
-                               .lastPlayed = query.value(8).toLongLong(),
-                               .flatpak = query.value(9).toBool()};
+                               .system = query.value(7).toString(),
+                               .playtimeSeconds = query.value(8).toLongLong(),
+                               .lastPlayed = query.value(9).toLongLong(),
+                               .flatpak = query.value(10).toBool()};
+    const QPair<int, int> achievements = achievementSummaries.value(record.gameId);
     loaded.append({.retroArch = record,
-                   .favorite = query.value(10).toBool(),
-                   .hidden = query.value(11).toBool(),
+                   .favorite = query.value(11).toBool(),
+                   .hidden = query.value(12).toBool(),
+                   .achievementsUnlocked = achievements.first,
+                   .achievementsTotal = achievements.second,
                    .accentStart = colorFor(record.gameId, 0),
                    .accentEnd = colorFor(record.gameId, 1)});
   }
   beginResetModel();
   m_games = loaded;
   endResetModel();
+}
+
+void RetroArchGameModel::reloadAchievementSummary(const QString& gameId) {
+  if (!m_database.isOpen()) {
+    return;
+  }
+  QSqlQuery query(m_database);
+  query.prepare(QStringLiteral(
+      "SELECT unlocked, total FROM achievement_summary WHERE app_id = ? AND source = "
+      "'retroachievements'"));
+  query.addBindValue(gameId);
+  if (!query.exec()) {
+    return;
+  }
+  const bool found = query.next();
+  const int unlocked = found ? query.value(0).toInt() : 0;
+  const int total = found ? query.value(1).toInt() : 0;
+  for (int row = 0; row < m_games.size(); ++row) {
+    Game& game = m_games[row];
+    if (game.retroArch.gameId != gameId) {
+      continue;
+    }
+    game.achievementsUnlocked = unlocked;
+    game.achievementsTotal = total;
+    emit dataChanged(
+        index(row), index(row),
+        {GameRoles::Progress, GameRoles::AchievementsUnlocked, GameRoles::AchievementsTotal});
+    return;
+  }
+}
+
+void RetroArchGameModel::clearAchievementSummaries() {
+  if (m_games.isEmpty()) {
+    return;
+  }
+  bool changed = false;
+  for (Game& game : m_games) {
+    changed = changed || game.achievementsUnlocked != 0 || game.achievementsTotal != 0;
+    game.achievementsUnlocked = 0;
+    game.achievementsTotal = 0;
+  }
+  if (changed) {
+    emit dataChanged(index(0), index(m_games.size() - 1),
+                     {GameRoles::Progress, GameRoles::AchievementsUnlocked,
+                      GameRoles::AchievementsTotal});
+  }
 }
 
 void RetroArchGameModel::loadSourceState() {
@@ -228,18 +299,20 @@ void RetroArchGameModel::applyScan(const RetroArchScanResult& result) {
     setStatus(QStringLiteral("Could not update RetroArch games"), m_database.lastError().text());
     return;
   }
+  const qint64 scanTimestamp = QDateTime::currentSecsSinceEpoch();
   QSqlQuery query(m_database);
   bool okay = query.exec(QStringLiteral("UPDATE retroarch_games SET observed_at = 0"));
   for (const RetroArchGameRecord& game : result.games) {
     query.prepare(QStringLiteral(
         "INSERT INTO retroarch_games(game_id, name, content_path, core_path, core_name, "
         "cover_path, "
-        "hero_path, playtime_seconds, last_played, flatpak, observed_at) VALUES(?, ?, ?, ?, ?, ?, "
-        "?, ?, ?, ?, strftime('%s', 'now')) ON CONFLICT(game_id) DO UPDATE SET name = "
+        "hero_path, system, playtime_seconds, last_played, flatpak, observed_at) VALUES(?, ?, ?, "
+        "?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now')) ON CONFLICT(game_id) DO UPDATE SET name = "
         "excluded.name, content_path = excluded.content_path, core_path = excluded.core_path, "
         "core_name = excluded.core_name, cover_path = excluded.cover_path, hero_path = "
-        "excluded.hero_path, playtime_seconds = excluded.playtime_seconds, last_played = "
-        "excluded.last_played, flatpak = excluded.flatpak, observed_at = excluded.observed_at"));
+        "excluded.hero_path, system = excluded.system, playtime_seconds = "
+        "excluded.playtime_seconds, last_played = excluded.last_played, flatpak = "
+        "excluded.flatpak, observed_at = excluded.observed_at"));
     query.addBindValue(game.gameId);
     query.addBindValue(game.title);
     query.addBindValue(game.contentPath);
@@ -247,6 +320,7 @@ void RetroArchGameModel::applyScan(const RetroArchScanResult& result) {
     query.addBindValue(game.coreName);
     query.addBindValue(game.coverPath);
     query.addBindValue(game.heroPath);
+    query.addBindValue(game.system);
     query.addBindValue(game.playtimeSeconds);
     query.addBindValue(game.lastPlayed);
     query.addBindValue(game.flatpak);
@@ -254,8 +328,9 @@ void RetroArchGameModel::applyScan(const RetroArchScanResult& result) {
   }
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('retroarch', "
-      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "?, ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
       "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(scanTimestamp);
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
   query.addBindValue(result.roots.isEmpty() ? QStringLiteral("")
                                             : result.roots.join(QLatin1Char('\n')));
@@ -267,7 +342,7 @@ void RetroArchGameModel::applyScan(const RetroArchScanResult& result) {
   }
   loadDatabase();
   m_detectedPaths = result.roots;
-  m_lastScan = QDateTime::currentSecsSinceEpoch();
+  m_lastScan = scanTimestamp;
   setStatus(m_retroArchDetected
                 ? QStringLiteral("Imported %1 RetroArch game(s)").arg(result.games.size())
                 : QStringLiteral("RetroArch was not found"),
@@ -289,8 +364,13 @@ QVariant RetroArchGameModel::valueForRole(const Game& game, int role) const {
   case GameRoles::Hours:
     return record.playtimeSeconds / 3600;
   case GameRoles::Progress:
+    return game.achievementsTotal > 0
+               ? (game.achievementsUnlocked * 100) / game.achievementsTotal
+               : 0;
   case GameRoles::AchievementsUnlocked:
+    return game.achievementsUnlocked;
   case GameRoles::AchievementsTotal:
+    return game.achievementsTotal;
   case GameRoles::Year:
     return 0;
   case GameRoles::Favorite:

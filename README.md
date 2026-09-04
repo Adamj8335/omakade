@@ -1,6 +1,6 @@
 # Omakade
 
-[![CI](https://github.com/tsouth89/omakade/actions/workflows/ci.yml/badge.svg)](https://github.com/tsouth89/omakade/actions/workflows/ci.yml)
+[![CI](https://github.com/btsouth/omakade/actions/workflows/ci.yml/badge.svg)](https://github.com/btsouth/omakade/actions/workflows/ci.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-8cd3cb.svg)](COPYRIGHT)
 
 **Your games, beautifully together.**
@@ -10,7 +10,7 @@
 [Watch the 18-second demo](https://btsouth.github.io/omakade/assets/omakade-demo.mp4)
 
 Omakade is a fast, local-first game library built for Omarchy. It brings
-installed Steam, Lutris, Heroic, Faugus, RetroArch, Epic, GOG, and Amazon games
+installed Steam, Lutris, Heroic, Faugus, RetroArch, Battle.net, Epic, GOG, and Amazon games
 into one quiet, cover-focused home that follows the active Omarchy theme.
 
 [Project homepage](https://btsouth.github.io/omakade/) ·
@@ -19,12 +19,17 @@ into one quiet, cover-focused home that follows the active Omarchy theme.
 > Omakade is an independent community project. It is not an official Omarchy
 > application.
 
-## Current release
+## Current main branch
+
+The latest tagged release is 1.5.0. This section follows `main` and may include
+changes made after the latest release.
 
 Omakade includes:
 
-- Native and Flatpak Steam, Lutris, Heroic, Faugus, and RetroArch discovery,
-  including Steam non-Steam shortcuts and games sideloaded into Heroic
+- Native and Flatpak Steam, Lutris, Heroic, Faugus, RetroArch, PCSX2, and
+  Ryujinx discovery,
+  including Steam non-Steam shortcuts and games sideloaded into Heroic, plus
+  Battle.net games from Wine, Proton, and Bottles prefixes
 - One-click details and delegated launching through the owning platform
 - Omarchy palette, font, transparency, and live theme updates
 - Search, favorites, hidden games, sorting, and source filters
@@ -32,6 +37,7 @@ Omakade includes:
 - Optional close-after-launch behavior
 - Collections, tags, completion states, and smart organization filters
 - Local Steam achievements plus optional Web API enrichment
+- Optional RetroAchievements progress for supported RetroArch systems
 - Optional Steam owned-library sync with installed and ready-to-install views
 - Optional IGDB critic aggregates and game-length estimates
 - Local, downloaded, and user-selected cover artwork
@@ -66,22 +72,22 @@ verify the package, and install it. If Omakade is already installed, `pacman -U`
 upgrades it in place without removing your settings or library data:
 
 ```bash
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.4.0/omakade-1.4.0-1-x86_64.pkg.tar.zst
-curl -fLO https://github.com/tsouth89/omakade/releases/download/v1.4.0/SHA256SUMS
+curl -fLO https://github.com/btsouth/omakade/releases/download/v1.5.0/omakade-1.5.0-1-x86_64.pkg.tar.zst
+curl -fLO https://github.com/btsouth/omakade/releases/download/v1.5.0/SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.4.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.5.0-1-x86_64.pkg.tar.zst
 ```
 
 ### Install or upgrade from a browser download
 
-1. Open the [latest release](https://github.com/tsouth89/omakade/releases/latest).
-2. Under **Assets**, download `omakade-1.4.0-1-x86_64.pkg.tar.zst` and
+1. Open the [latest release](https://github.com/btsouth/omakade/releases/latest).
+2. Under **Assets**, download `omakade-1.5.0-1-x86_64.pkg.tar.zst` and
    `SHA256SUMS` into the same folder.
 3. Open a terminal in that folder and run:
 
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.4.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./omakade-1.5.0-1-x86_64.pkg.tar.zst
 ```
 
 Launch Omakade from the application launcher or run `omakade` in a terminal.
@@ -102,6 +108,10 @@ RetroArch games come from its configured playlists. Omakade uses local
 RetroArch thumbnails and runtime logs, then launches each game with its assigned
 core. Entries without a core association remain visible and explain how to fix
 launching after you press Play.
+
+Battle.net games come from the Battle.net Agent database inside a Wine, Proton,
+or Bottles prefix. Omakade launches each title through that prefix's Battle.net
+client. Wine, umu-launcher, or Bottles must be installed to play.
 
 ### Stream with Sunshine and Moonlight
 
@@ -134,6 +144,7 @@ Requirements:
   Controls, SQL, and Test, plus the SVG and image format plugins
 - SDL 3
 - libsecret
+- libzip
 
 ```bash
 cmake --preset dev

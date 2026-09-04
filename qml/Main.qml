@@ -28,9 +28,22 @@ ApplicationWindow {
                                             || (HeroicLibrary ? HeroicLibrary.scanning : false)
                                             || (FaugusLibrary ? FaugusLibrary.scanning : false)
                                             || (RetroArchLibrary ? RetroArchLibrary.scanning : false)
+                                            || (Pcsx2Library ? Pcsx2Library.scanning : false)
+                                            || (RyujinxLibrary ? RyujinxLibrary.scanning : false)
+                                            || (BattleNetLibrary ? BattleNetLibrary.scanning : false)
     readonly property int ownedGameCount: SteamAccount
                                           ? SteamAccount.ownedGameCount
                                           : OwnedGameCountOverride
+    readonly property Item sourceRowEndButton:
+        ryujinxSourceButton.visible && ryujinxSourceButton.enabled ? ryujinxSourceButton
+      : pcsx2SourceButton.visible && pcsx2SourceButton.enabled ? pcsx2SourceButton
+      : retroArchSourceButton.visible && retroArchSourceButton.enabled ? retroArchSourceButton
+      : faugusSourceButton.visible && faugusSourceButton.enabled ? faugusSourceButton
+      : heroicSourceButton.visible && heroicSourceButton.enabled ? heroicSourceButton
+      : lutrisSourceButton.visible && lutrisSourceButton.enabled ? lutrisSourceButton
+      : battleNetSourceButton.visible && battleNetSourceButton.enabled ? battleNetSourceButton
+      : steamSourceButton.visible && steamSourceButton.enabled ? steamSourceButton
+      : allSourcesButton
 
     function isWithin(item, container) {
         while (item) {
@@ -122,6 +135,10 @@ ApplicationWindow {
                 && event.key !== Qt.Key_Left && event.key !== Qt.Key_Right) {
             return
         }
+        if (root.activeFocusItem
+                && root.activeFocusItem.controllerNavigation === false) {
+            return
+        }
         root.focusSpatial(container, event.key)
         event.accepted = true
     }
@@ -147,6 +164,13 @@ ApplicationWindow {
         }
         const currentCenter = current.mapToItem(container, current.width / 2,
                                                 current.height / 2)
+        const currentLeft = currentCenter.x - current.width / 2
+        const currentRight = currentCenter.x + current.width / 2
+        const currentTop = currentCenter.y - current.height / 2
+        const currentBottom = currentCenter.y + current.height / 2
+        // Use rectangle edges to decide direction. Comparing centers alone treats a wider button
+        // on the next row as being to the right of the current button when the two actually
+        // overlap horizontally.
         let best = null
         let bestScore = Number.MAX_VALUE
         let candidate = current.nextItemInFocusChain(true)
@@ -159,23 +183,36 @@ ApplicationWindow {
                                                    candidate.height / 2)
                 const dx = center.x - currentCenter.x
                 const dy = center.y - currentCenter.y
+                const candidateLeft = center.x - candidate.width / 2
+                const candidateRight = center.x + candidate.width / 2
+                const candidateTop = center.y - candidate.height / 2
+                const candidateBottom = center.y + candidate.height / 2
                 let primary = 0
                 let cross = 0
+                let crossGap = 0
                 if (key === Qt.Key_Up) {
-                    primary = -dy
+                    primary = currentTop - candidateBottom
                     cross = Math.abs(dx)
+                    crossGap = Math.max(0, Math.max(currentLeft, candidateLeft)
+                                           - Math.min(currentRight, candidateRight))
                 } else if (key === Qt.Key_Down) {
-                    primary = dy
+                    primary = candidateTop - currentBottom
                     cross = Math.abs(dx)
+                    crossGap = Math.max(0, Math.max(currentLeft, candidateLeft)
+                                           - Math.min(currentRight, candidateRight))
                 } else if (key === Qt.Key_Left) {
-                    primary = -dx
+                    primary = currentLeft - candidateRight
                     cross = Math.abs(dy)
+                    crossGap = Math.max(0, Math.max(currentTop, candidateTop)
+                                           - Math.min(currentBottom, candidateBottom))
                 } else if (key === Qt.Key_Right) {
-                    primary = dx
+                    primary = candidateLeft - currentRight
                     cross = Math.abs(dy)
+                    crossGap = Math.max(0, Math.max(currentTop, candidateTop)
+                                           - Math.min(currentBottom, candidateBottom))
                 }
-                if (primary > 3) {
-                    const score = primary + cross * 2.5
+                if (primary >= -1) {
+                    const score = Math.max(0, primary) + crossGap * 2.5 + cross * 0.01
                     if (score < bestScore) {
                         best = candidate
                         bestScore = score
@@ -198,6 +235,9 @@ ApplicationWindow {
         if (HeroicLibrary && Preferences.heroicEnabled) HeroicLibrary.refresh()
         if (FaugusLibrary && Preferences.faugusEnabled) FaugusLibrary.refresh()
         if (RetroArchLibrary && Preferences.retroArchEnabled) RetroArchLibrary.refresh()
+        if (Pcsx2Library && Preferences.pcsx2Enabled) Pcsx2Library.refresh()
+        if (RyujinxLibrary && Preferences.ryujinxEnabled) RyujinxLibrary.refresh()
+        if (BattleNetLibrary && Preferences.battleNetEnabled) BattleNetLibrary.refresh()
     }
 
     function focusAboveGrid() {
@@ -286,6 +326,14 @@ ApplicationWindow {
             }
             if (Insights) {
                 Insights.loadSteam(selectedInstallation.appId)
+            }
+        } else if (!DemoMode && selectedInstallation.source === "RetroArch") {
+            Achievements.load(selectedInstallation.appId)
+            if (RetroAchievements) {
+                RetroAchievements.refreshAchievementsIfStale(selectedInstallation.appId)
+            }
+            if (Insights) {
+                Insights.loadSteam("")
             }
         } else {
             Achievements.load("")
@@ -402,7 +450,8 @@ ApplicationWindow {
     function manageSelected() {
         if (Launcher.manage(selectedInstallation.source, selectedInstallation.appId,
                             selectedInstallation.flatpak || false,
-                            selectedInstallation.runner || "")) {
+                            selectedInstallation.runner || "",
+                            selectedInstallation.launchTarget || "")) {
             showToast("Opening " + selectedInstallation.source)
         } else {
             showToast(Launcher.lastError)
@@ -418,6 +467,14 @@ ApplicationWindow {
             }
             if (Insights) {
                 Insights.loadSteam(installation.appId)
+            }
+        } else if (!DemoMode && installation.source === "RetroArch") {
+            Achievements.load(installation.appId)
+            if (RetroAchievements) {
+                RetroAchievements.refreshAchievementsIfStale(installation.appId)
+            }
+            if (Insights) {
+                Insights.loadSteam("")
             }
         } else {
             Achievements.load("")
@@ -713,6 +770,7 @@ ApplicationWindow {
                     GlassButton {
                         id: allModeButton
                         objectName: "allModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "ALL"
                         compact: true
                         selected: Library.mode === 0
@@ -724,6 +782,7 @@ ApplicationWindow {
                     GlassButton {
                         id: favoritesModeButton
                         objectName: "favoritesModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "FAVORITES"
                         compact: true
                         selected: Library.mode === 1
@@ -735,6 +794,7 @@ ApplicationWindow {
                     GlassButton {
                         id: recentModeButton
                         objectName: "recentModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "RECENT"
                         compact: true
                         selected: Library.mode === 2
@@ -746,6 +806,7 @@ ApplicationWindow {
                     GlassButton {
                         id: hiddenModeButton
                         objectName: "hiddenModeButton"
+                        property Item controllerDownTarget: root.sourceRowEndButton
                         text: "HIDDEN"
                         compact: true
                         visible: !DemoMode
@@ -761,8 +822,8 @@ ApplicationWindow {
                     id: searchField
                     objectName: "searchField"
                     property bool controllerNavigation: false
-                    Layout.preferredWidth: Math.min(300, root.width * 0.26)
-                    Layout.minimumWidth: 190
+                    Layout.preferredWidth: root.width < 900 ? 150 : Math.min(300, root.width * 0.26)
+                    Layout.minimumWidth: root.width < 900 ? 150 : 190
                     Layout.preferredHeight: 38
                     placeholderText: "Search games"
                     color: Theme.foreground
@@ -857,7 +918,7 @@ ApplicationWindow {
                 GlassButton {
                     id: narrowHiddenModeButton
                     objectName: "narrowHiddenModeButton"
-                    property Item controllerDownTarget: retroArchSourceButton
+                    property Item controllerDownTarget: root.sourceRowEndButton
                     text: "HIDDEN"
                     compact: true
                     visible: !DemoMode
@@ -874,9 +935,43 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 spacing: 12
 
-                Row {
-                    spacing: 5
+                Flickable {
+                    id: sourceFlickable
+                    objectName: "sourceFlickable"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 80
+                    Layout.preferredHeight: sourceButtonsRow.implicitHeight
                     visible: !DemoMode
+                    clip: true
+                    contentWidth: sourceButtonsRow.implicitWidth
+                    contentHeight: sourceButtonsRow.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    function reveal(item) {
+                        if (!item || !root.isWithin(item, sourceButtonsRow)
+                                || contentWidth <= width) {
+                            return
+                        }
+                        const position = item.mapToItem(sourceButtonsRow, 0, 0)
+                        const margin = 5
+                        if (position.x < contentX + margin) {
+                            contentX = Math.max(0, position.x - margin)
+                        } else if (position.x + item.width > contentX + width - margin) {
+                            contentX = Math.min(contentWidth - width,
+                                                position.x + item.width - width + margin)
+                        }
+                    }
+
+                    Connections {
+                        target: root
+                        function onActiveFocusItemChanged() {
+                            sourceFlickable.reveal(root.activeFocusItem)
+                        }
+                    }
+
+                    Row {
+                    id: sourceButtonsRow
+                    spacing: 5
                     GlassButton {
                         id: allSourcesButton
                         objectName: "allSourcesButton"
@@ -900,6 +995,18 @@ ApplicationWindow {
                         selected: Library.sourceFilter === "Steam"
                         onClicked: {
                             Library.sourceFilter = "Steam"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
+                    GlassButton {
+                        id: battleNetSourceButton
+                        objectName: "battleNetSourceButton"
+                        text: "BATTLE.NET"
+                        compact: true
+                        visible: Preferences.battleNetEnabled
+                        selected: Library.sourceFilter === "Battle.net"
+                        onClicked: {
+                            Library.sourceFilter = "Battle.net"
                             libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
                         }
                     }
@@ -942,6 +1049,7 @@ ApplicationWindow {
                     GlassButton {
                         id: retroArchSourceButton
                         objectName: "retroArchSourceButton"
+                        property Item controllerRightTarget: pcsx2SourceButton
                         text: "RETROARCH"
                         compact: true
                         visible: Preferences.retroArchEnabled
@@ -950,6 +1058,36 @@ ApplicationWindow {
                             Library.sourceFilter = "RetroArch"
                             libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
                         }
+                    }
+                    GlassButton {
+                        id: pcsx2SourceButton
+                        objectName: "pcsx2SourceButton"
+                        property Item controllerLeftTarget: retroArchSourceButton
+                        property Item controllerRightTarget: ryujinxSourceButton
+                        property Item controllerDownTarget: statusFilterButton
+                        text: "PCSX2"
+                        compact: true
+                        visible: Preferences.pcsx2Enabled
+                        selected: Library.sourceFilter === "PCSX2"
+                        onClicked: {
+                            Library.sourceFilter = "PCSX2"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
+                    GlassButton {
+                        id: ryujinxSourceButton
+                        objectName: "ryujinxSourceButton"
+                        property Item controllerLeftTarget: pcsx2SourceButton
+                        property Item controllerDownTarget: statusFilterButton
+                        text: "RYUJINX"
+                        compact: true
+                        visible: Preferences.ryujinxEnabled
+                        selected: Library.sourceFilter === "Ryujinx"
+                        onClicked: {
+                            Library.sourceFilter = "Ryujinx"
+                            libraryView.currentIndex = Library.rowCount() > 0 ? 0 : -1
+                        }
+                    }
                     }
                 }
 
@@ -974,7 +1112,7 @@ ApplicationWindow {
                     font.pixelSize: 9
                 }
                 Text {
-                    visible: root.width >= 1100 && (SteamLibrary ? SteamLibrary.scanning : false)
+                    visible: root.width >= 1100 && root.libraryScanning
                     text: "SYNCING"
                     color: Theme.accent
                     font.family: Theme.fontFamily
@@ -986,7 +1124,7 @@ ApplicationWindow {
                     id: sortButton
                     objectName: "sortButton"
                     property Item controllerLeftTarget: root.width < 1040
-                                                         ? retroArchSourceButton
+                                                         ? root.sourceRowEndButton
                                                          : hiddenModeButton
                     property Item controllerRightTarget: rescanButton
                     compact: true
@@ -1131,7 +1269,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 libraryModel: Library
-                scanning: SteamLibrary ? SteamLibrary.scanning : false
+                scanning: root.libraryScanning
                 filtersActive: root.organizationFiltersActive || Library.searchText !== ""
                 onClearFiltersRequested: root.clearLibraryFilters()
                 emptyTitle: root.emptyTitleForFilters() !== "" ? root.emptyTitleForFilters()
@@ -1141,6 +1279,12 @@ ApplicationWindow {
                             ? "Faugus was not found"
                             : Library.sourceFilter === "RetroArch" && RetroArchLibrary && !RetroArchLibrary.retroArchDetected
                             ? "RetroArch was not found"
+                            : Library.sourceFilter === "PCSX2" && Pcsx2Library && !Pcsx2Library.pcsx2Detected
+                            ? "PCSX2 was not found"
+                            : Library.sourceFilter === "Ryujinx" && RyujinxLibrary && !RyujinxLibrary.ryujinxDetected
+                            ? "Ryujinx was not found"
+                            : Library.sourceFilter === "Battle.net" && BattleNetLibrary && !BattleNetLibrary.battleNetDetected
+                            ? "Battle.net was not found"
                             : Library.sourceFilter === "Lutris" && LutrisLibrary && !LutrisLibrary.lutrisDetected
                             ? "Lutris was not found"
                             : Library.sourceFilter === "Steam" && SteamLibrary && !SteamLibrary.steamDetected
@@ -1157,18 +1301,26 @@ ApplicationWindow {
                               ? FaugusLibrary.errorText
                               : Library.sourceFilter === "RetroArch" && RetroArchLibrary && RetroArchLibrary.errorText.length > 0
                               ? RetroArchLibrary.errorText
+                              : Library.sourceFilter === "PCSX2" && Pcsx2Library && Pcsx2Library.errorText.length > 0
+                              ? Pcsx2Library.errorText
+                              : Library.sourceFilter === "Ryujinx" && RyujinxLibrary && RyujinxLibrary.errorText.length > 0
+                              ? RyujinxLibrary.errorText
                               : Library.sourceFilter === "Heroic" && HeroicLibrary && HeroicLibrary.errorText.length > 0
                               ? HeroicLibrary.errorText
                               : Library.sourceFilter === "Lutris" && LutrisLibrary && LutrisLibrary.errorText.length > 0
                               ? LutrisLibrary.errorText
+                              : Library.sourceFilter === "Battle.net" && BattleNetLibrary && BattleNetLibrary.errorText.length > 0
+                              ? BattleNetLibrary.errorText
                               : SteamLibrary && SteamLibrary.errorText.length > 0
                                 ? SteamLibrary.errorText
-                                : "Install a game in Steam, Lutris, Heroic, Faugus, or RetroArch, then rescan your library."
+                                : "Install a game in Steam, Lutris, Heroic, Faugus, RetroArch, PCSX2, Ryujinx, or Battle.net, then rescan your library."
                 onGameActivated: index => root.openGame(index)
                 onFavoriteToggled: index => Library.toggleFavorite(index)
                 onCoverRequested: function(source, appId) {
                     if (source === "Steam" && SteamLibrary) {
                         SteamLibrary.requestCover(appId)
+                    } else if (source === "Battle.net" && BattleNetLibrary) {
+                        BattleNetLibrary.requestCover(appId)
                     }
                 }
                 onRefreshRequested: {
@@ -1642,6 +1794,11 @@ ApplicationWindow {
                           error: SteamLibrary ? SteamLibrary.errorText : "",
                           paths: SteamLibrary ? SteamLibrary.detectedPaths : [],
                           lastScan: SteamLibrary ? SteamLibrary.lastScan : 0 },
+                        { name: "BATTLE.NET", enabled: Preferences.battleNetEnabled,
+                          status: BattleNetLibrary ? BattleNetLibrary.statusText : "Unavailable",
+                          error: BattleNetLibrary ? BattleNetLibrary.errorText : "",
+                          paths: BattleNetLibrary ? BattleNetLibrary.detectedPaths : [],
+                          lastScan: BattleNetLibrary ? BattleNetLibrary.lastScan : 0 },
                         { name: "LUTRIS", enabled: Preferences.lutrisEnabled,
                           status: LutrisLibrary ? LutrisLibrary.statusText : "Unavailable",
                           error: LutrisLibrary ? LutrisLibrary.errorText : "",
@@ -1661,7 +1818,17 @@ ApplicationWindow {
                           status: RetroArchLibrary ? RetroArchLibrary.statusText : "Unavailable",
                           error: RetroArchLibrary ? RetroArchLibrary.errorText : "",
                           paths: RetroArchLibrary ? RetroArchLibrary.detectedPaths : [],
-                          lastScan: RetroArchLibrary ? RetroArchLibrary.lastScan : 0 }
+                          lastScan: RetroArchLibrary ? RetroArchLibrary.lastScan : 0 },
+                        { name: "PCSX2", enabled: Preferences.pcsx2Enabled,
+                          status: Pcsx2Library ? Pcsx2Library.statusText : "Unavailable",
+                          error: Pcsx2Library ? Pcsx2Library.errorText : "",
+                          paths: Pcsx2Library ? Pcsx2Library.detectedPaths : [],
+                          lastScan: Pcsx2Library ? Pcsx2Library.lastScan : 0 },
+                        { name: "RYUJINX", enabled: Preferences.ryujinxEnabled,
+                          status: RyujinxLibrary ? RyujinxLibrary.statusText : "Unavailable",
+                          error: RyujinxLibrary ? RyujinxLibrary.errorText : "",
+                          paths: RyujinxLibrary ? RyujinxLibrary.detectedPaths : [],
+                          lastScan: RyujinxLibrary ? RyujinxLibrary.lastScan : 0 }
                     ]
                     ColumnLayout {
                         required property var modelData
@@ -1687,6 +1854,10 @@ ApplicationWindow {
                                         Preferences.steamEnabled = !Preferences.steamEnabled
                                         nowEnabled = Preferences.steamEnabled
                                         if (Preferences.steamEnabled) SteamLibrary.refresh()
+                                    } else if (modelData.name === "BATTLE.NET") {
+                                        Preferences.battleNetEnabled = !Preferences.battleNetEnabled
+                                        nowEnabled = Preferences.battleNetEnabled
+                                        if (Preferences.battleNetEnabled && BattleNetLibrary) BattleNetLibrary.refresh()
                                     } else if (modelData.name === "LUTRIS") {
                                         Preferences.lutrisEnabled = !Preferences.lutrisEnabled
                                         nowEnabled = Preferences.lutrisEnabled
@@ -1699,6 +1870,14 @@ ApplicationWindow {
                                         Preferences.faugusEnabled = !Preferences.faugusEnabled
                                         nowEnabled = Preferences.faugusEnabled
                                         if (Preferences.faugusEnabled) FaugusLibrary.refresh()
+                                    } else if (modelData.name === "PCSX2") {
+                                        Preferences.pcsx2Enabled = !Preferences.pcsx2Enabled
+                                        nowEnabled = Preferences.pcsx2Enabled
+                                        if (Preferences.pcsx2Enabled) Pcsx2Library.refresh()
+                                    } else if (modelData.name === "RYUJINX") {
+                                        Preferences.ryujinxEnabled = !Preferences.ryujinxEnabled
+                                        nowEnabled = Preferences.ryujinxEnabled
+                                        if (Preferences.ryujinxEnabled) RyujinxLibrary.refresh()
                                     } else {
                                         Preferences.retroArchEnabled = !Preferences.retroArchEnabled
                                         nowEnabled = Preferences.retroArchEnabled
@@ -1715,9 +1894,12 @@ ApplicationWindow {
                                 enabled: modelData.enabled
                                 onClicked: {
                                     if (modelData.name === "STEAM") SteamLibrary.refresh()
+                                    else if (modelData.name === "BATTLE.NET" && BattleNetLibrary) BattleNetLibrary.refresh()
                                     else if (modelData.name === "LUTRIS") LutrisLibrary.refresh()
                                     else if (modelData.name === "HEROIC") HeroicLibrary.refresh()
                                     else if (modelData.name === "FAUGUS") FaugusLibrary.refresh()
+                                    else if (modelData.name === "PCSX2") Pcsx2Library.refresh()
+                                    else if (modelData.name === "RYUJINX") RyujinxLibrary.refresh()
                                     else RetroArchLibrary.refresh()
                                 }
                             }
@@ -1911,6 +2093,108 @@ ApplicationWindow {
                 Text {
                     Layout.fillWidth: true
                     text: "OWNED LIBRARY SYNC REQUIRES PUBLIC STEAM GAME DETAILS"
+                    color: Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 8
+                    wrapMode: Text.Wrap
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: root.alpha(Theme.foreground, 0.12)
+                }
+                Text {
+                    text: "OPTIONAL RETROACHIEVEMENTS CONNECTION"
+                    color: Theme.brightForeground
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: RetroAchievements
+                          ? RetroAchievements.statusText
+                          : "RetroAchievements is unavailable in demo mode."
+                    color: RetroAchievements && (RetroAchievements.state === "invalid-key"
+                                                 || RetroAchievements.state === "unsupported"
+                                                 || RetroAchievements.state === "rate-limited")
+                           ? Theme.yellow : Theme.mutedText
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: RetroAchievements !== null && !RetroAchievements.busy
+                    TextField {
+                        id: retroAchievementsUsernameField
+                        property bool controllerNavigation: false
+                        Layout.fillWidth: true
+                        placeholderText: "RetroAchievements username"
+                        text: RetroAchievements ? RetroAchievements.username : ""
+                        color: Theme.foreground
+                        placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                        font.family: Theme.fontFamily
+                        background: Rectangle {
+                            radius: Math.max(5, Theme.cornerRadius)
+                            color: root.alpha(Theme.foreground, 0.045)
+                            border.width: retroAchievementsUsernameField.activeFocus ? 2 : 1
+                            border.color: retroAchievementsUsernameField.activeFocus
+                                          ? Theme.accent
+                                          : root.alpha(Theme.foreground, 0.15)
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "SAVE USERNAME"
+                        onClicked: RetroAchievements.setUsername(retroAchievementsUsernameField.text)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: RetroAchievements !== null && !RetroAchievements.busy
+                    TextField {
+                        id: retroAchievementsKeyField
+                        property bool controllerNavigation: false
+                        Layout.fillWidth: true
+                        placeholderText: RetroAchievements && RetroAchievements.hasApiKey
+                                         ? "API key stored securely" : "RetroAchievements Web API key"
+                        color: Theme.foreground
+                        placeholderTextColor: root.alpha(Theme.foreground, 0.42)
+                        echoMode: TextInput.Password
+                        font.family: Theme.fontFamily
+                        background: Rectangle {
+                            radius: Math.max(5, Theme.cornerRadius)
+                            color: root.alpha(Theme.foreground, 0.045)
+                            border.width: retroAchievementsKeyField.activeFocus ? 2 : 1
+                            border.color: retroAchievementsKeyField.activeFocus
+                                          ? Theme.accent
+                                          : root.alpha(Theme.foreground, 0.15)
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        text: "SAVE KEY"
+                        onClicked: {
+                            RetroAchievements.storeApiKey(retroAchievementsKeyField.text)
+                            retroAchievementsKeyField.clear()
+                        }
+                    }
+                    GlassButton {
+                        compact: true
+                        visible: RetroAchievements ? RetroAchievements.hasApiKey : false
+                        text: "REMOVE"
+                        onClicked: RetroAchievements.removeApiKey()
+                    }
+                }
+                GlassButton {
+                    compact: true
+                    text: "GET A KEY FROM RETROACHIEVEMENTS"
+                    onClicked: Qt.openUrlExternally("https://retroachievements.org/settings")
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "SUPPORTS NES, SNES, GENESIS, GAME BOY AND OTHER CARTRIDGE SYSTEMS FIRST; DISC-BASED SYSTEMS ARE NOT MATCHED YET"
                     color: Theme.mutedText
                     font.family: Theme.fontFamily
                     font.pixelSize: 8
@@ -2146,12 +2430,12 @@ ApplicationWindow {
                     GlassButton {
                         compact: true
                         text: "PROJECT"
-                        onClicked: Qt.openUrlExternally("https://github.com/tsouth89/omakade")
+                        onClicked: Qt.openUrlExternally("https://github.com/btsouth/omakade")
                     }
                     GlassButton {
                         compact: true
                         text: "REPORT ISSUE"
-                        onClicked: Qt.openUrlExternally("https://github.com/tsouth89/omakade/issues/new/choose")
+                        onClicked: Qt.openUrlExternally("https://github.com/btsouth/omakade/issues/new/choose")
                     }
                     Item { Layout.fillWidth: true }
                 }

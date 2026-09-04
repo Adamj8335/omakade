@@ -227,6 +227,7 @@ void FaugusGameModel::applyScan(const FaugusScanResult& result) {
     setStatus(QStringLiteral("Could not update Faugus games"), m_database.lastError().text());
     return;
   }
+  const qint64 scanTimestamp = QDateTime::currentSecsSinceEpoch();
   QSqlQuery query(m_database);
   bool okay = query.exec(QStringLiteral("UPDATE faugus_games SET observed_at = 0"));
   for (const FaugusGameRecord& game : result.games) {
@@ -250,8 +251,9 @@ void FaugusGameModel::applyScan(const FaugusScanResult& result) {
   }
   query.prepare(QStringLiteral(
       "INSERT INTO source_state(source, last_scan, last_error, paths) VALUES('faugus', "
-      "strftime('%s', 'now'), ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
+      "?, ?, ?) ON CONFLICT(source) DO UPDATE SET last_scan = "
       "excluded.last_scan, last_error = excluded.last_error, paths = excluded.paths"));
+  query.addBindValue(scanTimestamp);
   query.addBindValue(result.warnings.join(QLatin1Char('\n')));
   query.addBindValue(result.roots.isEmpty() ? QStringLiteral("")
                                             : result.roots.join(QLatin1Char('\n')));
@@ -263,7 +265,7 @@ void FaugusGameModel::applyScan(const FaugusScanResult& result) {
   }
   loadDatabase();
   m_detectedPaths = result.roots;
-  m_lastScan = QDateTime::currentSecsSinceEpoch();
+  m_lastScan = scanTimestamp;
   setStatus(m_faugusDetected ? QStringLiteral("Imported %1 Faugus game(s)").arg(result.games.size())
                              : QStringLiteral("Faugus was not found"),
             result.warnings.join(QLatin1Char('\n')));

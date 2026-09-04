@@ -1,12 +1,58 @@
 # Changelog
 
-## Unreleased
+## 1.5.0
+
+### RetroAchievements
+
+- Added optional RetroAchievements support for RetroArch games, including
+  compatible ROM hashing, achievement progress, unlock details, rarity, and
+  account-aware caching.
+- Kept network, hashing, and database work off the interface thread and handled
+  sign-out, stale data, unsupported systems, and malformed responses safely.
+
+### Battle.net
+
+- Added Battle.net as a library source. Omakade finds the Windows Battle.net
+  client in Wine, Proton, and Bottles prefixes, imports installed games from
+  `product.db`, and launches them through Battle.net.
+- Downloads missing Battle.net covers and banners from Lutris's public artwork
+  hosts, including Heroes of the Storm.
+
+### PCSX2 and Ryujinx
+
+- Added PCSX2 as a game source: imports disc-based games from the current
+  gamelist cache (v34) for native and Flatpak installs, with cover
+  art, playtime, last-played, and region metadata, and delegated launching
+  through the owning PCSX2 install. Sources are discovered automatically and
+  appear once the emulator is detected.
+- Added Ryujinx as a game source: discovers XCI, NSP, and NRO games from the
+  configured game directories for native and Flatpak installs, with custom
+  titles, playtime, and last-played metadata, and delegated launching.
+- Added per-source filter chips, status rows, and rescan controls for both
+  emulators in Settings.
 
 ### Steam
 
 - Imported non-Steam shortcuts from `shortcuts.vdf`, including Wine/Proton
   games added to Steam, and launched them with the 64-bit shortcut ID Steam
   expects.
+- Kept cached shortcuts available when `shortcuts.vdf` is temporarily
+  unreadable.
+
+### Interface and reliability
+
+- Improved game-details layouts across narrow, standard, and ultrawide windows,
+  including cover sizing, action widths, and the insights grid.
+- Fixed keyboard and controller movement between Play, Favorite, Manage, and
+  Hide in both two-column and four-column layouts.
+- Preserved cached launcher games when an optional source is unavailable and
+  expanded automated coverage for the new integrations and navigation paths.
+- Updated project, support, download, and package links after the repository
+  account rename.
+
+Thanks to @karem505 for PCSX2 and Ryujinx, @HowieDuhzit for
+RetroAchievements, @Nitemaeric for Battle.net, @Aweiward for Steam non-Steam
+shortcuts, and @jeanmrx1 for the responsive game-details improvements.
 
 ## 1.4.0
 

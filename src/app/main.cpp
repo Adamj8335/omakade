@@ -1,4 +1,5 @@
 #include "achievements/AchievementModel.h"
+#include "achievements/RetroAchievementsService.h"
 #include "achievements/SteamAccountService.h"
 #include "app/AppSettings.h"
 #include "app/SingleInstance.h"
@@ -6,11 +7,14 @@
 #include "launch/GameLauncher.h"
 #include "launch/PlayRequest.h"
 #include "streaming/SunshineIntegration.h"
+#include "library/BattleNetGameModel.h"
 #include "library/FaugusGameModel.h"
 #include "library/HeroicGameModel.h"
 #include "library/LibraryFilterModel.h"
 #include "library/LutrisGameModel.h"
 #include "library/MockGameModel.h"
+#include "library/Pcsx2GameModel.h"
+#include "library/RyujinxGameModel.h"
 #include "library/RetroArchGameModel.h"
 #include "library/SteamGameModel.h"
 #include "library/UnifiedGameModel.h"
@@ -21,6 +25,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QImage>
@@ -166,11 +171,17 @@ int main(int argc, char* argv[]) {
   std::unique_ptr<HeroicGameModel> heroicGames;
   std::unique_ptr<FaugusGameModel> faugusGames;
   std::unique_ptr<RetroArchGameModel> retroArchGames;
+  std::unique_ptr<Pcsx2GameModel> pcsx2Games;
+  std::unique_ptr<RyujinxGameModel> ryujinxGames;
+  std::unique_ptr<BattleNetGameModel> battleNetGames;
   SteamGameModel* steamLibrary = nullptr;
   LutrisGameModel* lutrisLibrary = nullptr;
   HeroicGameModel* heroicLibrary = nullptr;
   FaugusGameModel* faugusLibrary = nullptr;
   RetroArchGameModel* retroArchLibrary = nullptr;
+  Pcsx2GameModel* pcsx2Library = nullptr;
+  RyujinxGameModel* ryujinxLibrary = nullptr;
+  BattleNetGameModel* battleNetLibrary = nullptr;
   QString libraryDatabasePath;
   if (demoMode || stressMode || navigationTest) {
     games =
@@ -188,6 +199,13 @@ int main(int argc, char* argv[]) {
     faugusLibrary = faugusGames.get();
     retroArchGames = std::make_unique<RetroArchGameModel>(steamLibrary->databasePath());
     retroArchLibrary = retroArchGames.get();
+    pcsx2Games = std::make_unique<Pcsx2GameModel>(steamLibrary->databasePath());
+    pcsx2Library = pcsx2Games.get();
+    ryujinxGames = std::make_unique<RyujinxGameModel>(steamLibrary->databasePath());
+    ryujinxLibrary = ryujinxGames.get();
+    battleNetGames =
+        std::make_unique<BattleNetGameModel>(steamLibrary->databasePath(), &preferences);
+    battleNetLibrary = battleNetGames.get();
   }
   if (navigationTest) {
     libraryDatabasePath = QStringLiteral(":memory:");
@@ -206,12 +224,24 @@ int main(int argc, char* argv[]) {
   if (retroArchGames != nullptr) {
     unifiedGames.addSourceModel(retroArchGames.get());
   }
+  if (pcsx2Games != nullptr) {
+    unifiedGames.addSourceModel(pcsx2Games.get());
+  }
+  if (ryujinxGames != nullptr) {
+    unifiedGames.addSourceModel(ryujinxGames.get());
+  }
+  if (battleNetGames != nullptr) {
+    unifiedGames.addSourceModel(battleNetGames.get());
+  }
   const auto applySourcePreferences = [&] {
     unifiedGames.setSourceEnabled(QStringLiteral("Steam"), preferences.steamEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Lutris"), preferences.lutrisEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Heroic"), preferences.heroicEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("Faugus"), preferences.faugusEnabled());
     unifiedGames.setSourceEnabled(QStringLiteral("RetroArch"), preferences.retroArchEnabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("PCSX2"), preferences.pcsx2Enabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("Ryujinx"), preferences.ryujinxEnabled());
+    unifiedGames.setSourceEnabled(QStringLiteral("Battle.net"), preferences.battleNetEnabled());
   };
   applySourcePreferences();
   QObject::connect(&preferences, &AppSettings::sourcesChanged, &unifiedGames,
@@ -223,6 +253,13 @@ int main(int argc, char* argv[]) {
     GameLauncher headlessLauncher;
     const LaunchKey key = LaunchKey::parse(playKey);
     QString error;
+    if (key.source.compare(QStringLiteral("PCSX2"), Qt::CaseInsensitive) == 0 &&
+        preferences.pcsx2AutoEnabled()) {
+      unifiedGames.setSourceEnabled(QStringLiteral("PCSX2"), true);
+    } else if (key.source.compare(QStringLiteral("Ryujinx"), Qt::CaseInsensitive) == 0 &&
+               preferences.ryujinxAutoEnabled()) {
+      unifiedGames.setSourceEnabled(QStringLiteral("Ryujinx"), true);
+    }
     if (PlayRequest::findInstallation(unifiedGames, key, nullptr).isEmpty() && key.isValid()) {
       bool refreshStarted = false;
       if (key.source.compare(QStringLiteral("Steam"), Qt::CaseInsensitive) == 0 &&
@@ -244,6 +281,20 @@ int main(int argc, char* argv[]) {
       } else if (key.source.compare(QStringLiteral("RetroArch"), Qt::CaseInsensitive) == 0 &&
                  retroArchLibrary != nullptr && preferences.retroArchEnabled()) {
         retroArchLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("PCSX2"), Qt::CaseInsensitive) == 0 &&
+                 pcsx2Library != nullptr &&
+                 (preferences.pcsx2Enabled() || preferences.pcsx2AutoEnabled())) {
+        pcsx2Library->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Ryujinx"), Qt::CaseInsensitive) == 0 &&
+                 ryujinxLibrary != nullptr &&
+                 (preferences.ryujinxEnabled() || preferences.ryujinxAutoEnabled())) {
+        ryujinxLibrary->refresh();
+        refreshStarted = true;
+      } else if (key.source.compare(QStringLiteral("Battle.net"), Qt::CaseInsensitive) == 0 &&
+                 battleNetLibrary != nullptr && preferences.battleNetEnabled()) {
+        battleNetLibrary->refresh();
         refreshStarted = true;
       }
       if (refreshStarted) {
@@ -318,6 +369,7 @@ int main(int argc, char* argv[]) {
   }
   std::unique_ptr<SteamAccountService> steamAccount;
   std::unique_ptr<GameInsightsService> gameInsights;
+  std::unique_ptr<RetroAchievementsService> retroAchievements;
   if (steamLibrary != nullptr) {
     steamAccount =
         std::make_unique<SteamAccountService>(steamLibrary->databasePath(), &preferences);
@@ -329,6 +381,20 @@ int main(int argc, char* argv[]) {
                      &SteamGameModel::reloadOwnedGames);
     gameInsights =
         std::make_unique<GameInsightsService>(steamLibrary->databasePath(), &preferences);
+  }
+  if (retroArchLibrary != nullptr) {
+    retroAchievements = std::make_unique<RetroAchievementsService>(steamLibrary->databasePath(),
+                                                                    &preferences);
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsUpdated,
+                     &achievements,
+                     [&achievements](const QString& gameId) { achievements.load(gameId); });
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsUpdated,
+                     retroArchLibrary, &RetroArchGameModel::reloadAchievementSummary);
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsCleared,
+                     retroArchLibrary, &RetroArchGameModel::clearAchievementSummaries);
+    QObject::connect(retroAchievements.get(), &RetroAchievementsService::achievementsCleared,
+                     &achievements,
+                     [&achievements] { achievements.load(achievements.appId()); });
   }
   GameLauncher launcher;
   std::unique_ptr<SunshineIntegration> sunshine;
@@ -364,11 +430,16 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty(QStringLiteral("HeroicLibrary"), heroicLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("FaugusLibrary"), faugusLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("RetroArchLibrary"), retroArchLibrary);
+  engine.rootContext()->setContextProperty(QStringLiteral("Pcsx2Library"), pcsx2Library);
+  engine.rootContext()->setContextProperty(QStringLiteral("RyujinxLibrary"), ryujinxLibrary);
+  engine.rootContext()->setContextProperty(QStringLiteral("BattleNetLibrary"), battleNetLibrary);
   engine.rootContext()->setContextProperty(QStringLiteral("Launcher"), &launcher);
   engine.rootContext()->setContextProperty(QStringLiteral("Preferences"), &preferences);
   engine.rootContext()->setContextProperty(QStringLiteral("Controller"), &controller);
   engine.rootContext()->setContextProperty(QStringLiteral("Achievements"), &achievements);
   engine.rootContext()->setContextProperty(QStringLiteral("SteamAccount"), steamAccount.get());
+  engine.rootContext()->setContextProperty(QStringLiteral("RetroAchievements"),
+                                           retroAchievements.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Insights"), gameInsights.get());
   engine.rootContext()->setContextProperty(QStringLiteral("Sunshine"), sunshine.get());
   engine.rootContext()->setContextProperty(QStringLiteral("DemoMode"),
@@ -505,6 +576,8 @@ int main(int argc, char* argv[]) {
                          : QStringLiteral("hiddenModeButton"));
               auto* allSources =
                   quickWindow->findChild<QQuickItem*>(QStringLiteral("allSourcesButton"));
+              auto* sourceFlickable =
+                  quickWindow->findChild<QQuickItem*>(QStringLiteral("sourceFlickable"));
               auto* retroArchSource =
                   quickWindow->findChild<QQuickItem*>(QStringLiteral("retroArchSourceButton"));
               auto* statusFilter =
@@ -519,10 +592,21 @@ int main(int argc, char* argv[]) {
                   quickWindow->findChild<QQuickItem*>(QStringLiteral("settingsScroll"));
               if (sort == nullptr || rescan == nullptr || settings == nullptr ||
                   allMode == nullptr || hiddenMode == nullptr || allSources == nullptr ||
+                  sourceFlickable == nullptr ||
                   retroArchSource == nullptr || statusFilter == nullptr || tagFilter == nullptr ||
                   installedAvailability == nullptr || readyAvailability == nullptr ||
                   settingsScroll == nullptr) {
                 fail(QStringLiteral("Controller navigation test could not find toolbar controls"));
+                return;
+              }
+              const auto withinWindow = [quickWindow](QQuickItem* item) {
+                const QPointF topLeft = item->mapToScene(QPointF(0, 0));
+                return topLeft.x() >= 0 && topLeft.y() >= 0 &&
+                       topLeft.x() + item->width() <= quickWindow->width() &&
+                       topLeft.y() + item->height() <= quickWindow->height();
+              };
+              if (!withinWindow(settings) || !withinWindow(sort) || !withinWindow(rescan)) {
+                fail(QStringLiteral("Library toolbar controls extend outside the window"));
                 return;
               }
               controller.toolbarRequested();
@@ -536,7 +620,14 @@ int main(int argc, char* argv[]) {
                   fail(QStringLiteral("Controller Left did not reach source filters when tiled"));
                   return;
                 }
-                for (int step = 0; step < 5; ++step) {
+                const QPointF sourcePosition =
+                    retroArchSource->mapToItem(sourceFlickable, QPointF(0, 0));
+                if (sourcePosition.x() < 0 ||
+                    sourcePosition.x() + retroArchSource->width() > sourceFlickable->width()) {
+                  fail(QStringLiteral("Focused source filter was not revealed"));
+                  return;
+                }
+                for (int step = 0; step < 6; ++step) {
                   controller.focusDirectionRequested(Qt::Key_Left);
                 }
                 controller.focusDirectionRequested(Qt::Key_Up);
@@ -570,7 +661,7 @@ int main(int argc, char* argv[]) {
                 fail(QStringLiteral("Controller Down did not reach source filters"));
                 return;
               }
-              for (int step = 0; step < 5; ++step) {
+              for (int step = 0; step < 6; ++step) {
                 controller.focusDirectionRequested(Qt::Key_Left);
               }
               if (!allSources->hasActiveFocus()) {
@@ -649,15 +740,88 @@ int main(int argc, char* argv[]) {
                       QTimer::singleShot(100, quickWindow, [quickWindow, &application, &controller, fail] {
                         auto* play =
                             quickWindow->findChild<QQuickItem*>(QStringLiteral("playButton"));
+                        auto* favorite =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("favoriteButton"));
+                        auto* manage =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("manageButton"));
+                        auto* hide =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("hideButton"));
+                        auto* gameActions =
+                            quickWindow->findChild<QQuickItem*>(QStringLiteral("gameActions"));
                         if (!quickWindow->property("detailOpen").toBool() || play == nullptr ||
-                            !play->hasActiveFocus()) {
+                            favorite == nullptr || manage == nullptr || hide == nullptr ||
+                            gameActions == nullptr || !play->hasActiveFocus()) {
                           fail(QStringLiteral("Game details did not focus Play"));
+                          return;
+                        }
+                        const auto sendKey = [quickWindow](int key) {
+                          QCoreApplication::postEvent(
+                              quickWindow,
+                              new QKeyEvent(QEvent::KeyPress, key, Qt::NoModifier));
+                          QCoreApplication::postEvent(
+                              quickWindow,
+                              new QKeyEvent(QEvent::KeyRelease, key, Qt::NoModifier));
+                          QEventLoop eventLoop;
+                          QTimer::singleShot(30, &eventLoop, &QEventLoop::quit);
+                          eventLoop.exec();
+                        };
+                        sendKey(Qt::Key_Right);
+                        if (!favorite->hasActiveFocus()) {
+                          QQuickItem* focused = quickWindow->activeFocusItem();
+                          fail(QStringLiteral("Keyboard Right did not move from Play to Favorite; "
+                                              "focused %1")
+                                   .arg(focused ? focused->objectName()
+                                                : QStringLiteral("nothing")));
+                          return;
+                        }
+                        sendKey(Qt::Key_Left);
+                        if (!play->hasActiveFocus()) {
+                          QQuickItem* focused = quickWindow->activeFocusItem();
+                          fail(QStringLiteral("Keyboard Left did not return from Favorite to Play; "
+                                              "focused %1")
+                                   .arg(focused ? focused->objectName()
+                                                : QStringLiteral("nothing")));
+                          return;
+                        }
+                        if (gameActions->property("columns").toInt() == 2) {
+                          controller.focusDirectionRequested(Qt::Key_Down);
+                          if (!manage->hasActiveFocus()) {
+                            fail(
+                                QStringLiteral("Controller Down did not move from Play to Manage"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          if (!hide->hasActiveFocus()) {
+                            fail(QStringLiteral(
+                                "Controller Right did not move from Manage to Hide"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Up);
+                          if (!favorite->hasActiveFocus()) {
+                            fail(
+                                QStringLiteral("Controller Up did not move from Hide to Favorite"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                        } else {
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          controller.focusDirectionRequested(Qt::Key_Right);
+                          if (!hide->hasActiveFocus()) {
+                            fail(QStringLiteral("Controller Right did not traverse game actions"));
+                            return;
+                          }
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                          controller.focusDirectionRequested(Qt::Key_Left);
+                        }
+                        if (!play->hasActiveFocus()) {
+                          fail(QStringLiteral("Controller could not reverse through game actions"));
                           return;
                         }
                         controller.keyRequested(Qt::Key_Up, Qt::NoModifier);
                         QTimer::singleShot(
-                            50, quickWindow,
-                            [quickWindow, &application, &controller, play, fail] {
+                            50, quickWindow, [quickWindow, &application, &controller, play, fail] {
                               QQuickItem* movedUp = quickWindow->activeFocusItem();
                               if (movedUp == nullptr) {
                                 fail(QStringLiteral("Keyboard Up cleared detail focus"));
@@ -778,11 +942,18 @@ int main(int argc, char* argv[]) {
                                                       "sorting"));
                                                   return;
                                                 }
-                                                controller.focusDirectionRequested(Qt::Key_Down);
+                                                controller.focusDirectionRequested(Qt::Key_Right);
                                                 if (!achievementRefresh->hasActiveFocus()) {
                                                   fail(QStringLiteral(
-                                                      "Controller Down did not reach Steam "
+                                                      "Controller Right did not reach Steam "
                                                       "achievement refresh"));
+                                                  return;
+                                                }
+                                                controller.focusDirectionRequested(Qt::Key_Left);
+                                                if (!achievementSort->hasActiveFocus()) {
+                                                  fail(QStringLiteral("Controller Left did not "
+                                                                      "return to achievement "
+                                                                      "sorting"));
                                                   return;
                                                 }
                                                 const qreal initialContentY =
@@ -792,11 +963,14 @@ int main(int argc, char* argv[]) {
                                                 QQuickItem* firstAchievement =
                                                     quickWindow->activeFocusItem();
                                                 if (firstAchievement == nullptr ||
-                                                    firstAchievement->objectName() !=
-                                                        QStringLiteral("achievementCard0")) {
+                                                    !firstAchievement->objectName().startsWith(
+                                                        QStringLiteral("achievementCard"))) {
                                                   fail(QStringLiteral(
-                                                      "Controller Down did not enter the "
-                                                      "achievement list"));
+                                                           "Controller Down did not enter the "
+                                                           "achievement list; focused %1")
+                                                           .arg(firstAchievement
+                                                                    ? firstAchievement->objectName()
+                                                                    : QStringLiteral("nothing")));
                                                   return;
                                                 }
                                                 controller.focusDirectionRequested(Qt::Key_Down);
@@ -998,6 +1172,34 @@ int main(int argc, char* argv[]) {
   }
   if (retroArchLibrary != nullptr && preferences.retroArchEnabled()) {
     QTimer::singleShot(600, retroArchLibrary, &RetroArchGameModel::refresh);
+  }
+  // Sources start disabled and switch on once their emulator is detected, unless
+  // the user wrote an explicit pcsx2_enabled/ryujinx_enabled key. Scans only run
+  // while the source is enabled or still eligible for automatic detection.
+  if (pcsx2Library != nullptr &&
+      (preferences.pcsx2Enabled() || preferences.pcsx2AutoEnabled())) {
+    QTimer::singleShot(650, pcsx2Library, &Pcsx2GameModel::refresh);
+    QObject::connect(pcsx2Library, &Pcsx2GameModel::statusChanged, pcsx2Library,
+                     [&preferences, pcsx2Library] {
+                       if (pcsx2Library->pcsx2Detected() && preferences.pcsx2AutoEnabled()) {
+                         preferences.setPcsx2AutoEnabled(false);
+                         preferences.setPcsx2Enabled(true);
+                       }
+                     });
+  }
+  if (ryujinxLibrary != nullptr &&
+      (preferences.ryujinxEnabled() || preferences.ryujinxAutoEnabled())) {
+    QTimer::singleShot(700, ryujinxLibrary, &RyujinxGameModel::refresh);
+    QObject::connect(ryujinxLibrary, &RyujinxGameModel::statusChanged, ryujinxLibrary,
+                     [&preferences, ryujinxLibrary] {
+                       if (ryujinxLibrary->ryujinxDetected() && preferences.ryujinxAutoEnabled()) {
+                         preferences.setRyujinxAutoEnabled(false);
+                         preferences.setRyujinxEnabled(true);
+                       }
+                     });
+  }
+  if (battleNetLibrary != nullptr && preferences.battleNetEnabled()) {
+    QTimer::singleShot(750, battleNetLibrary, &BattleNetGameModel::refresh);
   }
 
   if (smokeTest && !renderMode) {
