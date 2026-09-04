@@ -9,6 +9,8 @@
 - Added persistent Couch Mode startup, `omakade --couch`, F11 and controller
   Start switching, and automatic Couch Mode for Sunshine sessions.
 - Added controller-driven library search with an on-screen keyboard.
+- Added a couch-native browser for views, sorting, availability, sources,
+  completion status, collections, and tags.
 
 ## 1.5.0
 

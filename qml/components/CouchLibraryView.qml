@@ -13,6 +13,18 @@ FocusScope {
     property var pendingCurrent: null
     property bool searchOpen: false
     property string searchInitial: ""
+    property bool browseOpen: false
+    readonly property var sourceOptions: [
+        { label: "ALL SOURCES", value: "" },
+        { label: "STEAM", value: "Steam", enabled: Preferences.steamEnabled },
+        { label: "BATTLE.NET", value: "Battle.net", enabled: Preferences.battleNetEnabled },
+        { label: "LUTRIS", value: "Lutris", enabled: Preferences.lutrisEnabled },
+        { label: "HEROIC", value: "Heroic", enabled: Preferences.heroicEnabled },
+        { label: "FAUGUS", value: "Faugus", enabled: Preferences.faugusEnabled },
+        { label: "RETROARCH", value: "RetroArch", enabled: Preferences.retroArchEnabled },
+        { label: "PCSX2", value: "PCSX2", enabled: Preferences.pcsx2Enabled },
+        { label: "RYUJINX", value: "Ryujinx", enabled: Preferences.ryujinxEnabled }
+    ].filter(function(option) { return option.enabled === undefined || option.enabled })
     readonly property bool gridFocused: gameStrip.activeFocus
     readonly property real uiScale: Math.max(0.68, Math.min(1.25,
                                                            Math.min(width / 1920,
@@ -48,7 +60,7 @@ FocusScope {
     }
 
     function toggleControls() {
-        if (searchOpen) {
+        if (searchOpen || browseOpen) {
             return
         }
         if (gameStrip.activeFocus) {
@@ -69,6 +81,23 @@ FocusScope {
         couchKeyboard.value = searchInitial
         searchOpen = true
         Qt.callLater(couchKeyboard.focusKeyboard)
+    }
+
+    function openBrowse() {
+        browseOpen = true
+        Qt.callLater(couchBrowse.focusPanel)
+    }
+
+    function closeBrowse() {
+        browseOpen = false
+        currentIndex = libraryModel.rowCount() > 0
+                       ? Math.max(0, Math.min(currentIndex,
+                                             libraryModel.rowCount() - 1))
+                       : -1
+        refreshCurrentGame()
+        Qt.callLater(function() {
+            browseButton.forceActiveFocus(Qt.TabFocusReason)
+        })
     }
 
     function closeSearch(accepted) {
@@ -260,6 +289,17 @@ FocusScope {
                 selected: root.libraryModel.mode === 2
                 onClicked: root.selectMode(2)
                 KeyNavigation.left: favoritesButton
+                KeyNavigation.right: browseButton
+                KeyNavigation.down: favoriteButton
+            }
+            GlassButton {
+                id: browseButton
+                objectName: "couchBrowseButton"
+                text: "BROWSE"
+                compact: true
+                displayScale: Math.max(1, root.uiScale * 1.18)
+                onClicked: root.openBrowse()
+                KeyNavigation.left: recentButton
                 KeyNavigation.right: searchButton
                 KeyNavigation.down: favoriteButton
             }
@@ -274,7 +314,7 @@ FocusScope {
                 compact: true
                 displayScale: Math.max(1, root.uiScale * 1.18)
                 onClicked: root.openSearch()
-                KeyNavigation.left: recentButton
+                KeyNavigation.left: browseButton
                 KeyNavigation.right: settingsButton
                 KeyNavigation.down: favoriteButton
             }
@@ -726,6 +766,23 @@ FocusScope {
             root.closeSearch(true)
         }
         onCanceled: root.closeSearch(false)
+    }
+
+    CouchBrowsePanel {
+        id: couchBrowse
+        objectName: "couchBrowsePanel"
+        anchors.fill: parent
+        visible: root.browseOpen
+        enabled: visible
+        z: 50
+        libraryModel: root.libraryModel
+        sourceOptions: root.sourceOptions
+
+        onFiltersChanged: {
+            root.currentIndex = root.libraryModel.rowCount() > 0 ? 0 : -1
+            root.refreshCurrentGame()
+        }
+        onClosed: root.closeBrowse()
     }
 
     Component.onCompleted: {

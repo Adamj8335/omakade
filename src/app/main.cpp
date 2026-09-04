@@ -524,6 +524,10 @@ int main(int argc, char* argv[]) {
         if (auto* couch = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchLibrary"))) {
           QMetaObject::invokeMethod(couch, "openSearch");
         }
+      } else if (overlay == QStringLiteral("couch-browse")) {
+        if (auto* couch = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchLibrary"))) {
+          QMetaObject::invokeMethod(couch, "openBrowse");
+        }
       }
       QTimer::singleShot(900, quickWindow, [quickWindow, screenshotPath, &application] {
         const QImage screenshot = quickWindow->grabWindow();
@@ -560,13 +564,21 @@ int main(int argc, char* argv[]) {
         auto* settings =
             quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSettingsButton"));
         auto* search = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchSearchButton"));
+        auto* browse = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowseButton"));
+        auto* browsePanel =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowsePanel"));
+        auto* browseCategories =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowseCategories"));
+        auto* browseOptions =
+            quickWindow->findChild<QQuickItem*>(QStringLiteral("couchBrowseOptions"));
         auto* keyboard = quickWindow->findChild<QQuickItem*>(QStringLiteral("couchKeyboard"));
         auto* keyboardGrid =
             quickWindow->findChild<QQuickItem*>(QStringLiteral("couchKeyboardGrid"));
         if (!quickWindow->property("couchMode").toBool() || couch == nullptr ||
             !couch->isVisible() || strip == nullptr || view == nullptr || favorite == nullptr ||
-            settings == nullptr || search == nullptr || keyboard == nullptr ||
-            keyboardGrid == nullptr) {
+            settings == nullptr || search == nullptr || browse == nullptr ||
+            browsePanel == nullptr || browseCategories == nullptr || browseOptions == nullptr ||
+            keyboard == nullptr || keyboardGrid == nullptr) {
           fail(QStringLiteral("Couch navigation test could not find the couch controls"));
           return;
         }
@@ -575,7 +587,8 @@ int main(int argc, char* argv[]) {
         controller.keyRequested(Qt::Key_Right, Qt::NoModifier);
         QTimer::singleShot(50, quickWindow,
                            [quickWindow, &application, &controller, couch, strip, view, favorite,
-                            search, settings, keyboard, keyboardGrid, fail] {
+                            browse, browsePanel, browseCategories, browseOptions, search, settings,
+                            keyboard, keyboardGrid, fail] {
           if (!strip->hasActiveFocus() || strip->property("currentIndex").toInt() != 1) {
             fail(QStringLiteral("Controller Right did not advance the couch game strip"));
             return;
@@ -612,6 +625,35 @@ int main(int argc, char* argv[]) {
           for (int step = 0; step < 3; ++step) {
             sendKey(Qt::Key_Right);
           }
+          if (!browse->hasActiveFocus()) {
+            fail(QStringLiteral("Controller could not reach couch Browse"));
+            return;
+          }
+          sendKey(Qt::Key_Return);
+          if (!couch->property("browseOpen").toBool() || !browsePanel->isVisible() ||
+              !browseCategories->hasActiveFocus()) {
+            fail(QStringLiteral("Couch Browse did not open with category focus"));
+            return;
+          }
+          sendKey(Qt::Key_Right);
+          if (!browseOptions->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Right did not reach couch Browse options"));
+            return;
+          }
+          sendKey(Qt::Key_Down);
+          sendKey(Qt::Key_Return);
+          QObject* library =
+              qmlContext(quickWindow)->contextProperty(QStringLiteral("Library")).value<QObject*>();
+          if (library == nullptr || library->property("mode").toInt() != 1) {
+            fail(QStringLiteral("Couch Browse did not apply the selected library view"));
+            return;
+          }
+          sendKey(Qt::Key_Escape);
+          if (couch->property("browseOpen").toBool() || !browse->hasActiveFocus()) {
+            fail(QStringLiteral("Controller Back did not close couch Browse"));
+            return;
+          }
+          sendKey(Qt::Key_Right);
           if (!search->hasActiveFocus()) {
             fail(QStringLiteral("Controller could not reach couch Search"));
             return;

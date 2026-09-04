@@ -69,6 +69,37 @@ set_tests_properties(omakade_couch_render PROPERTIES
   TIMEOUT 30
 )
 
+foreach(couch_case IN ITEMS 720p 1440p ultrawide 4k)
+  if(couch_case STREQUAL "720p")
+    set(couch_size 1280x720)
+  elseif(couch_case STREQUAL "1440p")
+    set(couch_size 2560x1440)
+  elseif(couch_case STREQUAL "ultrawide")
+    set(couch_size 2560x1080)
+  else()
+    set(couch_size 3840x2160)
+  endif()
+  add_test(NAME omakade_couch_render_${couch_case}
+    COMMAND omakade --couch
+            --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-${couch_case}.png
+            --render-size=${couch_size}
+  )
+  set_tests_properties(omakade_couch_render_${couch_case} PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+    TIMEOUT 30
+  )
+endforeach()
+
+add_test(NAME omakade_couch_render_200_percent
+  COMMAND omakade --couch
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-200-percent.png
+          --render-size=1280x720
+)
+set_tests_properties(omakade_couch_render_200_percent PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1;QT_SCALE_FACTOR=2"
+  TIMEOUT 30
+)
+
 add_test(NAME omakade_couch_detail_render
   COMMAND omakade --couch --uninstalled-layout-test
           --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-detail.png
@@ -86,6 +117,17 @@ add_test(NAME omakade_couch_keyboard_render
           --render-size=1920x1080
 )
 set_tests_properties(omakade_couch_keyboard_render PROPERTIES
+  ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
+  TIMEOUT 30
+)
+
+add_test(NAME omakade_couch_browse_render
+  COMMAND omakade --couch
+          --render-overlay=couch-browse
+          --render-screenshot=${CMAKE_CURRENT_BINARY_DIR}/omakade-couch-browse.png
+          --render-size=1920x1080
+)
+set_tests_properties(omakade_couch_browse_render PROPERTIES
   ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;QT_FORCE_STDERR_LOGGING=1"
   TIMEOUT 30
 )

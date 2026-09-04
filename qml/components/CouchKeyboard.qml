@@ -19,7 +19,7 @@ FocusScope {
     signal canceled()
 
     Accessible.name: "On-screen keyboard"
-    Accessible.role: Accessible.Keyboard
+    Accessible.role: Accessible.Pane
 
     function alpha(color, amount) {
         return Qt.rgba(color.r, color.g, color.b, amount)
