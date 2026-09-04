@@ -18,6 +18,12 @@
 - Made the complete Settings and Sources view wide, readable, and controller
   guided in Couch Mode.
 
+### Release engineering
+
+- Added native aarch64 CI and release packages alongside x86_64.
+- Added per-architecture SBOMs, vulnerability scanning, checksums, and
+  provenance attestations.
+
 ## 1.5.0
 
 ### RetroAchievements

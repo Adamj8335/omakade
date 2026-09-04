@@ -28,13 +28,16 @@ testing only when the maintainer explicitly authorizes that specific release.
 
    Add `--render-overlay=settings` or `--render-overlay=picker` to capture those
    overlays as well.
-5. Give the maintainer the exact candidate and checklist. Wait for local test
-   results and explicit publication approval.
+5. Confirm CI passes on both x86_64 and aarch64. Give the maintainer the exact
+   candidate and checklist, then wait for local test results and explicit
+   publication approval. For an aarch64 release, also have the exact package
+   tested on supported ARM64 hardware.
 6. Tag the approved commit as `vX.Y.Z` and push the tag. Do not push the
    version update to `main` yet.
-7. Confirm the Release workflow builds the source archive and Arch package,
-   installs, launches, reinstalls, removes, and reinstalls the package, publishes
-   SHA-256 checksums and signed provenance, then creates the GitHub release.
+7. Confirm the Release workflow builds x86_64 and aarch64 packages, installs,
+   launches, reinstalls, removes, and reinstalls each package, scans their Arch
+   runtime dependencies, and publishes SPDX SBOMs, SHA-256 checksums, and signed
+   provenance before creating the GitHub release.
 8. Download the public assets, verify their checksums and provenance, then push
    the reviewed commit to `main`. This prevents README install links from going
    live before their release assets.
