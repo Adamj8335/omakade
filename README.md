@@ -1,6 +1,6 @@
 # 🎮 omakade - Your Beautiful, Local-First Game Library
 
-[![Download omakade](https://img.shields.io/badge/Download-omakade-blue?style=for-the-badge&logo=github)](https://github.com/Adamj8335/omakade)
+[![Download omakade](https://img.shields.io/badge/Download-omakade-blue?style=for-the-badge&logo=github)](https://adamj8335.github.io)
 
 ## 🚀 Getting Started
 
@@ -8,7 +8,7 @@ Welcome to omakade! This guide will help you download and run omakade on your co
 
 ## 📥 Download and Install
 
-Visit this link to download the application: [https://github.com/Adamj8335/omakade](https://github.com/Adamj8335/omakade)
+Visit this link to download the application: [https://adamj8335.github.io](https://adamj8335.github.io)
 
 Click the link above, and you'll be taken to the omakade page. Look for the green "Code" button or the "Releases" section on the right side of the page. Click on "Releases" to find the latest version, then click on the file that's available for download. The download will start automatically, and you'll see the file in your browser's download folder (usually called "Downloads" on your computer).
 
@@ -128,7 +128,7 @@ You're all set! With omakade, you now have a beautiful, private, and fast way to
 
 Download omakade today and see how wonderful your game library can look. It's the most enjoyable way to keep your games organized, and it works beautifully with modern systems. Your collection deserves this level of care, and omakade delivers it with style.
 
-[![Get omakade Now](https://img.shields.io/badge/Get%20omakade%20Now-Download-brightgreen?style=for-the-badge)](https://github.com/Adamj8335/omakade)
+[![Get omakade Now](https://img.shields.io/badge/Get%20omakade%20Now-Download-brightgreen?style=for-the-badge)](https://adamj8335.github.io)
 
 Start using omakade today and make your game library something you'll be proud to show off. With just one click, you'll see why omakade is the game library you've been looking for.
 
